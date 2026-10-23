@@ -1,0 +1,60 @@
+"""Starts isolated services and synthetic providers, then runs real browser flow."""
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import time
+import httpx
+
+root = Path(__file__).resolve().parents[1]
+children = []
+with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
+    env = {**os.environ, "RELAY_SECRET": "fixture-owner-secret", "RELAY_DB": tmp + "/relay.db", "RELAY_UPLOAD_DIR": tmp + "/uploads", "LOOP_CONFIG": tmp + "/config.json", "LOOP_CACHE_DIR": tmp + "/cache", "RELAY_BRAIN_FILE": tmp + "/brain", "RELAY_URL": "http://127.0.0.1:8089/relay", "PORT": "8089", "LUNE_TEST_REQUESTS": tmp + "/requests.jsonl"}
+    # All E2E destinations are loopback fixtures; do not initialize ambient proxies.
+    env = {k: v for k, v in env.items() if not k.upper().endswith("_PROXY")}
+    output = Path(env.get("LUNE_TEST_OUTPUT", tmp + "/screenshots"))
+    output.mkdir(parents=True, exist_ok=True)
+    env["LUNE_TEST_OUTPUT"] = str(output)
+    log = open(tmp + "/services.log", "w+")
+    try:
+        children.append(subprocess.Popen([sys.executable, "-m", "uvicorn", "provider_fixture:app", "--app-dir", "tests", "--port", "8766", "--no-access-log"], cwd=root, env=env, stdout=log, stderr=log))
+        children.append(subprocess.Popen([sys.executable, "tests/mcp_fixture.py"], cwd=root, env=env, stdout=log, stderr=log))
+        children.append(subprocess.Popen([sys.executable, "scripts/run_lune.py"], cwd=root, env=env, stdout=log, stderr=log, start_new_session=True))
+        with httpx.Client(trust_env=False) as client:
+            for _ in range(100):
+                try:
+                    if client.get("http://127.0.0.1:8089/relay/lune/rooms", headers={"Authorization": "Bearer fixture-owner-secret"}).status_code == 200 and client.get("http://127.0.0.1:3020/healthz").status_code == 200:
+                        break
+                except httpx.HTTPError:
+                    pass
+                time.sleep(.1)
+            else:
+                raise RuntimeError("test services did not start")
+        subprocess.run([env.get("CODEX_PRIMARY_RUNTIME_NODE", "node"), "tests/browser.cjs"], cwd=root, env=env, check=True, timeout=90)
+        requests = [json.loads(line) for line in Path(env["LUNE_TEST_REQUESTS"]).read_text().splitlines()]
+        group = [r for r in requests if "GROUP_UI_MARKER" in json.dumps(r, ensure_ascii=False)]
+        assert len(group) >= 2
+        for r in group:
+            assert "PRIVATE_UI_MARKER" not in json.dumps(r), "private chat or memory leaked to group"
+        claude = next(r for r in group if r["model"] == "fixture-claude")
+        projection = json.dumps(claude)
+        assert projection.index("GROUP_UI_MARKER") < projection.index("TEST_GPT"), "group turn order"
+        assert any("ATTACHMENT_BODY_MARKER" in json.dumps(r) for r in requests)
+        assert any(m.get("role") == "tool" and "TOOL_RESULT_MARKER" in m.get("content", "") for r in requests for m in r["messages"])
+        print("E2E PASS: real HTTP + SSE + SQLite + both provider adapters + MCP + UI; synthetic credentials only")
+    except Exception:
+        log.flush()
+        print(Path(tmp + "/services.log").read_text()[-9000:])
+        subprocess.run([sys.executable, "-c", "import sys,asyncio;sys.path.insert(0,'examples');import api_loop as l;l.CURRENT_AGENT.set('gpt');\ntry: print(asyncio.run(l.run_model([{'role':'user','content':'diagnostic'}],None,stream=False)))\nexcept Exception as e: print(type(e).__name__,getattr(e,'detail',str(e)))"], cwd=root, env=env)
+        raise
+    finally:
+        for child in reversed(children):
+            child.terminate()
+        for child in children:
+            try:
+                child.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                child.kill()
+        log.close()

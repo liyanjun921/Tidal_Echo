@@ -426,6 +426,8 @@ async def handle_stream_delta(kind: str, body: dict) -> dict:
             "done": False,
             "ts": draft["ts"],
             "api_session": draft["meta"].get("api_session") or "",
+            "agent_id": draft["meta"].get("agent_id") or "",
+            "run_id": draft["meta"].get("run_id") or "",
         })
         return {"ok": True, "stream_id": stream_id, "draft": True}
 
@@ -528,7 +530,8 @@ def minimax_tts_mp3(text: str) -> bytes:
     clean = (text or "").strip()
     if not clean:
         raise HTTPException(status_code=400, detail="empty text")
-    clean = clean[:900]
+    if len(clean) > 900:
+        raise HTTPException(status_code=422, detail="单次朗读最多 900 字符，请分段朗读")
     url = f"{MINIMAX_API_BASE.rstrip('/')}/v1/t2a_v2"
     if MINIMAX_GROUP_ID:
         url += f"?GroupId={MINIMAX_GROUP_ID}"
@@ -632,7 +635,12 @@ def check_auth(request: Request) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    lune_runtime["init"]()
     yield
+    for task in list(lune_runtime["tasks"].values()):
+        task.cancel()
+    if lune_runtime["tasks"]:
+        await asyncio.gather(*list(lune_runtime["tasks"].values()), return_exceptions=True)
 
 
 app = FastAPI(lifespan=lifespan)
@@ -665,6 +673,16 @@ async def channel_out(request: Request):
     check_auth(request)
     body = await request.json()
     kind = body.get("type", "reply")
+    run_id = str(body.get("run_id") or "")
+    if run_id:
+        with db() as conn:
+            run = conn.execute("SELECT state FROM lune_runs WHERE id=?", (run_id,)).fetchone()
+            if not run or run["state"] not in {"pending", "running"}:
+                raise HTTPException(status_code=409, detail="generation is no longer active")
+            if kind == "reply" or (kind == "reply_delta" and body.get("done")):
+                prior = conn.execute("SELECT id FROM messages WHERE direction='out' AND kind='reply' AND json_extract(meta,'$.run_id')=? AND json_extract(meta,'$.agent_id')=?", (run_id, body.get("agent_id", ""))).fetchone()
+                if prior:
+                    return {"id": prior["id"], "saved": True, "duplicate": True}
     if kind in ("thinking_delta", "reply_delta"):
         return await handle_stream_delta(kind, body)
     if kind == "react":
@@ -820,7 +838,7 @@ async def app_tts(request: Request):
     """Generate MiniMax speech for an AI reply. The frontend falls back if unavailable."""
     check_auth(request)
     body = await request.json()
-    audio = minimax_tts_mp3(body.get("text") or "")
+    audio = await asyncio.to_thread(minimax_tts_mp3, body.get("text") or "")
     return Response(
         content=audio,
         media_type="audio/mpeg",
@@ -1048,6 +1066,13 @@ async def loop_proxy_delete(request: Request, path: str):
     check_auth(request)
     return loop_json("/loop/" + path, method="DELETE")
 
+
+try:
+    from .lune import register as register_lune
+except ImportError:
+    from lune import register as register_lune
+
+lune_runtime = register_lune(app, globals())
 
 if __name__ == "__main__":
     import uvicorn

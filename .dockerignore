@@ -1,0 +1,16 @@
+.git
+.venv
+venv
+node_modules
+**/__pycache__
+**/*.pyc
+**/.env
+**/*.db*
+**/uploads
+**/loop_cache
+**/api_loop.config.json
+**/persona.md
+**/*.pem
+**/*.key
+tests
+tmp

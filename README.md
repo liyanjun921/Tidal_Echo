@@ -1,3 +1,9 @@
+# Luné / OURSPACE · V0.4 整合分支
+
+本分支基于 Tidal Echo 的 relay / API loop，接入 Luné V0.3 水光液态玻璃界面，新增 GPT、Claude 私聊与三人群聊、服务端记忆隔离和独立模型配置。直接从 [本版状态与测试](docs/LUNE_V04.md) 和 [部署及 iPhone 使用](docs/LUNE_DEPLOY.md) 开始。网页入口为 `web/index.html`，双进程启动入口为 `scripts/run_lune.py`，Docker 构建使用 `Dockerfile.lune`。真实供应商、MiniMax、锁屏通知与真机 Safari 尚待部署后验收。
+
+下方保留上游说明；其原始网页保存在 `web/tidal-original/`。许可证为 AGPL-3.0，沿用 LICENSE 与 NOTICE。
+
 # Companion Channel · 你和你的 AI 伴侣的私密通道
 
 一个**私密 1:1 聊天通道**：把「你手机上的 PWA」和「你电脑上跑的 AI 伴侣」连起来。

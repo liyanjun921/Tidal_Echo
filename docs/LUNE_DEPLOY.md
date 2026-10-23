@@ -1,0 +1,58 @@
+# Luné 部署与 iPhone 使用
+
+本版把网页和 relay 合并为一个同站服务，内部 api_loop 只监听服务器本机。用户在 iPhone Safari 打开 HTTPS 地址即可使用，不需要在 iPhone 安装 Node、运行脚本或使用 Replit。
+
+## 服务器入口
+
+支持 Python 3.12 或 Docker 的持久服务器。纯静态网页托管只能展示 UI，无法独立运行本版 SQLite、模型中转和 MCP。
+
+推荐数据目录 `/data`，必须是持久卷。最少设置：
+
+```dotenv
+RELAY_SECRET=请替换为随机生成的长连接密钥
+PORT=8080
+RELAY_DB=/data/relay.db
+RELAY_UPLOAD_DIR=/data/uploads
+LOOP_CONFIG=/data/api_loop.config.json
+LOOP_CACHE_DIR=/data/loop_cache
+RELAY_BRAIN_FILE=/data/brain_target
+RELAY_AI_NAME=Luné
+RELAY_APP_PATH=/
+```
+
+容器构建文件是 `Dockerfile.lune`。运行时挂载持久目录到 `/data`，注入以上变量，仅将 8080 接到支持 SSE 的 HTTPS 反向代理；不对外开放内部 3020 端口。代理转发 `/relay/app/stream` 时关闭缓冲，空闲超时至少 10 分钟。访问日志不要记录查询字符串，因为 EventSource 的连接密钥会放在 token 参数中。
+
+开发环境可用 Python：
+
+```sh
+python -m venv .venv
+.venv/bin/pip install -r backend/requirements.txt -r examples/requirements.txt
+# 将所需环境变量注入进程；不要把实际密钥写进仓库
+.venv/bin/python scripts/run_lune.py
+```
+
+进程入口 `scripts/run_lune.py` 会启动网页/relay 和内部 api_loop，并在任意一方退出时结束另一方。单实例、单 worker 运行；SQLite 和内存任务表不支持直接横向扩容。Docker 配置文件已提供，但本次环境没有 Docker 引擎，因此镜像构建尚未实测；相同 Python 双进程启动方式已完成浏览器联调。
+
+## 手机配置
+
+1. Safari 打开自己的 HTTPS 地址，点设置，API 地址保留 `/relay`，输入服务器连接密钥。
+2. 分别展开 GPT、Claude 设置，填写自己的 API Base URL、固定模型 ID、API Key 和接口格式。OpenAI 兼容一般填包含 `/v1` 的基础地址；不要填完整 `/chat/completions`。Anthropic 可填服务基础地址或以 `/v1` 结尾的基础地址。中转站格式以其接口说明为准。
+3. 保存，再选择“测试已保存配置”。测试会请求一次模型，可能产生少量用量。密钥框清空表示已交给服务端，不表示保存失败。
+4. 从 Safari 分享菜单选择“添加到主屏幕”；从主屏幕打开，检查键盘、附件和返回操作。
+5. 在各自私聊开始对话；群聊默认各回一次，支持 `@GPT` / `@Claude`。记忆页可新建，用户消息旁可保存原文出处。
+
+## 可选服务
+
+MiniMax 朗读在服务器注入 `MINIMAX_API_KEY`、`MINIMAX_MODEL`、`MINIMAX_VOICE_ZH`；根据所用账户/API 再填写 `MINIMAX_API_BASE` 和 `MINIMAX_GROUP_ID`。不要把这些值放到公开 HTML 或代码里。设置后用真实短消息验证朗读、停止和 iPhone 音频播放。
+
+Web Push 需要一对 VAPID 密钥，公钥填 `VAPID_PUBLIC_KEY`，私钥 PEM 内容或文件路径填 `VAPID_PRIVATE_PEM`，并填写自己的 `VAPID_SUBJECT`。在 HTTPS 主屏幕应用内点“开启消息通知”，允许通知，再点测试，最后锁屏验证实际送达。未配置时会明确提示，不能把按钮存在当作通知已接通。
+
+MCP 设置支持无需额外请求头的 HTTP 服务。需要令牌、stdio 或复杂请求头时，使用保留的上游设置界面 `/tidal-original/`，或在私有 `api_loop.config.json` 配置 `mcp_servers`；API loop 继承上游 HTTP/stdio、headers/env 和重连能力。仅连接自己授权的服务；模型会得到所启用工具的调用权限。
+
+## 更新与备份
+
+完整备份至少包含 `/data/relay.db`（使用 SQLite 在线备份或停止服务后拷贝）、`/data/uploads/`、`/data/api_loop.config.json` 以及 VAPID 私钥。JSON 导出适合查看/迁移文本，不能替代完整恢复备份。
+
+更新网页应递增 `web/sw.js` 中的 CACHE 版本。发布前检查没有携带真实 `.env`、配置、数据库、上传内容或私钥；仓库和 Docker 上下文已有对应忽略规则。
+
+待实机验收：iPhone Safari/主屏幕应用键盘和安全区、真实供应商流式中断、识图、MiniMax、通知锁屏送达、第三方 MCP 鉴权及持久卷重启恢复。
