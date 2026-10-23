@@ -122,9 +122,9 @@
     $('#messageInput').addEventListener('input',e=>{e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,130)+'px'});
     $('#messageInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();$('#chatForm').requestSubmit()}});
     $('#backToHome').addEventListener('click',()=>setScreen(isMobile()?'home':'chat'));
-    
+
     $$('[data-nav]').forEach(b=>b.addEventListener('click',()=>setScreen(b.dataset.nav)));
-    
+
     $('#composerPlus').addEventListener('click',()=>{if(relay.enabled)$('#attachmentInput').click();else relay.settings()});
     $('#micButton').addEventListener('click',startVoice);
     $$('#memoryFilters [data-filter]').forEach(b=>b.addEventListener('click',()=>{memoryFilter=b.dataset.filter;$$('#memoryFilters .filter').forEach(x=>x.classList.toggle('active',x===b));renderMemories()}));
