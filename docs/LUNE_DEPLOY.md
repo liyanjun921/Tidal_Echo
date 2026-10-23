@@ -47,7 +47,7 @@ MiniMax 朗读在服务器注入 `MINIMAX_API_KEY`、`MINIMAX_MODEL`、`MINIMAX_
 
 Web Push 需要一对 VAPID 密钥，公钥填 `VAPID_PUBLIC_KEY`，私钥 PEM 内容或文件路径填 `VAPID_PRIVATE_PEM`，并填写自己的 `VAPID_SUBJECT`。在 HTTPS 主屏幕应用内点“开启消息通知”，允许通知，再点测试，最后锁屏验证实际送达。未配置时会明确提示，不能把按钮存在当作通知已接通。
 
-MCP 设置支持无需额外请求头的 HTTP 服务。需要令牌、stdio 或复杂请求头时，使用保留的上游设置界面 `/tidal-original/`，或在私有 `api_loop.config.json` 配置 `mcp_servers`；API loop 继承上游 HTTP/stdio、headers/env 和重连能力。仅连接自己授权的服务；模型会得到所启用工具的调用权限。
+MCP 设置支持 HTTP 服务及可选 Authorization 请求头，界面可查看连接状态、重连和移除。需要 stdio 或复杂请求头时，使用保留的上游设置界面 `/tidal-original/`，或在私有 `api_loop.config.json` 配置 `mcp_servers`；API loop 继承上游 HTTP/stdio、headers/env 和重连能力。仅连接自己授权的服务；模型会得到所启用工具的调用权限。
 
 ## 更新与备份
 

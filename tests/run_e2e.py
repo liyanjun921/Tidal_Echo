@@ -32,7 +32,10 @@ with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
                 time.sleep(.1)
             else:
                 raise RuntimeError("test services did not start")
-        subprocess.run([env.get("CODEX_PRIMARY_RUNTIME_NODE", "node"), "tests/browser.cjs"], cwd=root, env=env, check=True, timeout=90)
+        if "--http-only" in sys.argv:
+            subprocess.run([sys.executable, "tests/http_flow.py"], cwd=root, env=env, check=True, timeout=90)
+        else:
+            subprocess.run([env.get("CODEX_PRIMARY_RUNTIME_NODE", "node"), "tests/browser.cjs"], cwd=root, env=env, check=True, timeout=90)
         requests = [json.loads(line) for line in Path(env["LUNE_TEST_REQUESTS"]).read_text().splitlines()]
         group = [r for r in requests if "GROUP_UI_MARKER" in json.dumps(r, ensure_ascii=False)]
         assert len(group) >= 2
@@ -43,7 +46,7 @@ with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
         assert projection.index("GROUP_UI_MARKER") < projection.index("TEST_GPT"), "group turn order"
         assert any("ATTACHMENT_BODY_MARKER" in json.dumps(r) for r in requests)
         assert any(m.get("role") == "tool" and "TOOL_RESULT_MARKER" in m.get("content", "") for r in requests for m in r["messages"])
-        print("E2E PASS: real HTTP + SSE + SQLite + both provider adapters + MCP + UI; synthetic credentials only")
+        print("E2E PASS: real HTTP + SQLite + both provider adapters + MCP; synthetic credentials only; " + ("UI checked separately" if "--http-only" in sys.argv else "browser UI included"))
     except Exception:
         log.flush()
         print(Path(tmp + "/services.log").read_text()[-9000:])

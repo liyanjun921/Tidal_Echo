@@ -1,6 +1,6 @@
-# Luné / OURSPACE · V0.4 整合分支
+# Luné / OURSPACE · V0.5 Echo × dwell 重做
 
-本分支基于 Tidal Echo 的 relay / API loop，接入 Luné V0.3 水光液态玻璃界面，新增 GPT、Claude 私聊与三人群聊、服务端记忆隔离和独立模型配置。直接从 [本版状态与测试](docs/LUNE_V04.md) 和 [部署及 iPhone 使用](docs/LUNE_DEPLOY.md) 开始。网页入口为 `web/index.html`，双进程启动入口为 `scripts/run_lune.py`，Docker 构建使用 `Dockerfile.lune`。真实供应商、MiniMax、锁屏通知与真机 Safari 尚待部署后验收。
+本分支以 Tidal Echo 的 relay / API loop 为底座，参考 fang-claude / dwell 的 UI 结构与功能文档，重新实现聊天主屏、抽屉导航、分层页面和双行输入区。Luné 旧版本只保留灰白蓝色调、水光背景与液态玻璃材质。包含 GPT / Claude 私聊、三人群聊、隔离记忆，以及可实际保存的待办、日历、日记、悄悄话、共读批注等生活页。直接从 [本版状态与测试](docs/LUNE_V05.md) 和 [部署及 iPhone 使用](docs/LUNE_DEPLOY.md) 开始。网页入口为 `web/index.html`，双进程启动入口为 `scripts/run_lune.py`，Docker 构建使用 `Dockerfile.lune`。私人预览仅展示界面与本机保存；真实供应商、MiniMax、锁屏通知与真机 Safari 尚待部署后验收。
 
 下方保留上游说明；其原始网页保存在 `web/tidal-original/`。许可证为 AGPL-3.0，沿用 LICENSE 与 NOTICE。
 

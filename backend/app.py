@@ -636,6 +636,7 @@ def check_auth(request: Request) -> None:
 async def lifespan(app: FastAPI):
     init_db()
     lune_runtime["init"]()
+    workspace_runtime["init"]()
     yield
     for task in list(lune_runtime["tasks"].values()):
         task.cancel()
@@ -1073,6 +1074,11 @@ except ImportError:
     from lune import register as register_lune
 
 lune_runtime = register_lune(app, globals())
+try:
+    from .workspace import register as register_workspace
+except ImportError:
+    from workspace import register as register_workspace
+workspace_runtime = register_workspace(app, globals())
 
 if __name__ == "__main__":
     import uvicorn

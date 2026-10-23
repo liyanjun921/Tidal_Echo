@@ -17,6 +17,10 @@ from pathlib import Path
 
 import httpx
 from fastapi import HTTPException, Request
+try:
+    from .workspace import validate as validate_workspace, view as workspace_view
+except ImportError:
+    from workspace import validate as validate_workspace, view as workspace_view
 
 ROOMS = {"gpt": ["gpt"], "claude": ["claude"], "group": ["gpt", "claude"]}
 SCOPES = {"shared", "gpt", "claude", "group"}
@@ -291,7 +295,8 @@ def register(app, relay):
         with connect() as c:
             msgs = c.execute("SELECT * FROM messages WHERE json_extract(meta,'$.api_session') IN ('lune-gpt','lune-claude','lune-group') ORDER BY id").fetchall()
             mem = c.execute("SELECT * FROM lune_memories WHERE deleted=0").fetchall()
-        return {"format": "lune-v04", "exported_at": now(), "messages": [relay["app_payload"](m) for m in relay["rows_to_messages"](msgs)], "memories": [dict(r) for r in mem], "media_note": "附件内容需另备份服务器 uploads 目录；本 JSON 只含附件索引"}
+            workspace = c.execute("SELECT * FROM lune_workspace WHERE deleted=0").fetchall()
+        return {"format": "lune-v04", "exported_at": now(), "messages": [relay["app_payload"](m) for m in relay["rows_to_messages"](msgs)], "memories": [dict(r) for r in mem], "workspace": [workspace_view(r) for r in workspace], "media_note": "附件内容需另备份服务器 uploads 目录；本 JSON 只含附件索引"}
 
     @app.post("/lune/import")
     async def restore(request: Request):
@@ -309,6 +314,15 @@ def register(app, relay):
         if not isinstance(source, dict):
             raise HTTPException(422, "备份内容格式不正确")
         messages, memories = source.get("messages", {}), source.get("memories", [])
+        workspace = source.get("workspace", [])
+        if not isinstance(workspace, list) or len(workspace) > 2000:
+            raise HTTPException(422, "生活页备份格式不正确")
+        validated_workspace = [(str(item.get("id", "")), validate_workspace(item)) for item in workspace if isinstance(item, dict) and not item.get("demo")]
+        workspace_keys = [mid for mid, _ in validated_workspace]
+        if any(not mid for mid in workspace_keys) or len(set(workspace_keys)) != len(workspace_keys):
+            raise HTTPException(422, "生活页备份编号缺失或重复")
+        if any(not isinstance(item, dict) for item in workspace):
+            raise HTTPException(422, "生活页条目格式不正确")
         normalized = []
 
         def imported_meta(message):
@@ -385,7 +399,18 @@ def register(app, relay):
                 ts = now()
                 values = (*values[:3], source_ids.get(str(original_source)))
                 c.execute("INSERT INTO lune_memories VALUES(?,?,?,?,?,?,?,?,?)", (uuid.uuid4().hex, *values, ts, ts, 1, 0))
+            workspace_ids = {old_id: uuid.uuid4().hex for old_id, _ in validated_workspace}
+            for old_id, item in sorted(validated_workspace, key=lambda x: x[1]["kind"] == "annotation"):
+                ts = now()
+                if item["kind"] == "annotation":
+                    original_book = item["data"]["book_id"]
+                    book_id = workspace_ids.get(original_book, original_book)
+                    book = c.execute("SELECT scope FROM lune_workspace WHERE id=? AND kind='book' AND deleted=0", (book_id,)).fetchone()
+                    if not book or book["scope"] != item["scope"]:
+                        raise HTTPException(422, "批注缺少对应范围的书籍")
+                    item["data"]["book_id"] = book_id
+                c.execute("INSERT INTO lune_workspace VALUES(?,?,?,?,?,?,?,?,?,?,0)", (workspace_ids[old_id], item["kind"], item["scope"], item["title"], item["content"], json.dumps(item["data"], ensure_ascii=False), "imported", ts, ts, 1))
             c.execute("INSERT INTO lune_imports VALUES(?,?)", (digest, now()))
-        return {"ok": True, "messages": len(normalized), "memories": len(validated_mem)}
+        return {"ok": True, "messages": len(normalized), "memories": len(validated_mem), "workspace": len(validated_workspace)}
 
     return {"tasks": tasks, "init": lambda: init(db_path)}

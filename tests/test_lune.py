@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "examples"))
 from fastapi.testclient import TestClient
 from backend import app as relay
 from backend.lune import memory_context
+from backend.workspace import whisper_context
 import api_loop as loop
 from lune_anthropic import request_body
 
@@ -25,8 +26,9 @@ class OwnerDataTests(unittest.TestCase):
     def setUp(self):
         relay.init_db()
         relay.lune_runtime["init"]()
+        relay.workspace_runtime["init"]()
         with relay.db() as c:
-            for table in ("messages", "lune_runs", "lune_memories", "lune_memory_revisions", "lune_imports"):
+            for table in ("messages", "lune_runs", "lune_memories", "lune_memory_revisions", "lune_imports", "lune_workspace"):
                 c.execute("DELETE FROM " + table)
         self.context = TestClient(relay.app)
         self.client = self.context.__enter__()
@@ -178,6 +180,87 @@ class OwnerDataTests(unittest.TestCase):
             self.assertTrue(loop.attach_allowed(Path(relay.UPLOAD_DIR) / "note.txt"))
         finally:
             loop.CURRENT_AGENT.reset(token)
+
+    def record(self, kind="todo", scope="gpt", **kwargs):
+        r = self.client.post("/lune/workspace", json={"kind": kind, "scope": scope, "title": "entry", "content": scope + "_WORKSPACE", "data": {}, **kwargs})
+        self.assertEqual(r.status_code, 200, r.text)
+        return r.json()["item"]
+
+    def active_run(self, room="gpt"):
+        with relay.db() as c:
+            c.execute("INSERT INTO lune_runs VALUES(?,?,?,?,?,?,?,?,?)", ("fixture-run", room, "fixture-nonce", 1, '["gpt"]', "running", "", "2026-10-23", "2026-10-23"))
+        return {"agent_id": "gpt", "room": "lune-" + room, "run_id": "fixture-run"}
+
+    def test_workspace_versions_book_scope_and_deletion_cascade(self):
+        book = self.record("book", "gpt", content="A paragraph")
+        ann = self.record("annotation", "gpt", data={"book_id": book["id"], "quote": "paragraph"})
+        moved = self.client.patch("/lune/workspace/" + book["id"], json={**book, "scope": "group"})
+        self.assertEqual(moved.status_code, 200, moved.text)
+        self.assertEqual(self.client.patch("/lune/workspace/" + book["id"], json=book).status_code, 409)
+        rows = self.client.get("/lune/workspace").json()["items"]
+        self.assertEqual(next(r for r in rows if r["id"] == ann["id"])["scope"], "group")
+        self.assertEqual(self.client.delete("/lune/workspace/" + book["id"], params={"version": 1}).status_code, 409)
+        self.assertEqual(self.client.delete("/lune/workspace/" + book["id"], params={"version": 2}).status_code, 200)
+        self.assertEqual(self.client.get("/lune/workspace").json()["items"], [])
+
+    def test_workspace_assistant_scope_and_cancel_gate(self):
+        for scope in ("shared", "gpt", "claude", "group"):
+            self.record(scope=scope)
+        ctx = self.active_run("group")
+        def call(**body):
+            return self.client.post("/lune/assistant/workspace", json={**ctx, **body})
+        r = call(action="list", kind="todo")
+        self.assertEqual({i["scope"] for i in r.json()["items"]}, {"shared", "group"})
+        private = next(i for i in self.client.get("/lune/workspace").json()["items"] if i["scope"] == "gpt")
+        self.assertEqual(call(**{**private, "action": "update", "scope": "group"}).status_code, 403)
+        self.assertEqual(call(action="create", kind="todo", scope="claude", title="bad").status_code, 403)
+        created = call(action="create", kind="todo", scope="group", title="saved", data={"owner": "gpt"})
+        self.assertEqual(created.status_code, 200, created.text)
+        self.assertEqual(created.json()["item"]["author"], "gpt")
+        with relay.db() as c:
+            c.execute("UPDATE lune_runs SET state='cancelled'")
+        self.assertEqual(call(action="create", kind="todo", scope="group", title="late").status_code, 409)
+
+    def test_whispers_are_only_projected_into_their_room(self):
+        for scope in ("shared", "gpt", "claude", "group"):
+            self.record("whisper", scope)
+        private = whisper_context(relay.DB_PATH, "lune-gpt", "gpt")
+        group = whisper_context(relay.DB_PATH, "lune-group", "gpt")
+        self.assertIn("gpt_WORKSPACE", private)
+        self.assertNotIn("claude_WORKSPACE", private)
+        self.assertNotIn("group_WORKSPACE", private)
+        self.assertIn("group_WORKSPACE", group)
+        self.assertIn("shared_WORKSPACE", group)
+        self.assertNotIn("gpt_WORKSPACE", group)
+        self.assertEqual(whisper_context(relay.DB_PATH, "lune-claude", "gpt"), "")
+
+    def test_workspace_backup_remaps_book_and_annotation_and_rolls_back_bad_import(self):
+        book = self.record("book", content="READING_MARKER")
+        self.record("annotation", data={"book_id": book["id"], "quote": "READING"})
+        backup = self.client.get("/lune/export").json()
+        r = self.client.post("/lune/import", json=backup)
+        self.assertEqual(r.status_code, 200, r.text)
+        rows = self.client.get("/lune/workspace").json()["items"]
+        imported_book = next(x for x in rows if x["kind"] == "book" and x["author"] == "imported")
+        imported_ann = next(x for x in rows if x["kind"] == "annotation" and x["author"] == "imported")
+        self.assertNotEqual(imported_book["id"], book["id"])
+        self.assertEqual(imported_ann["data"]["book_id"], imported_book["id"])
+        self.assertTrue(self.client.post("/lune/import", json=backup).json()["duplicate"])
+        bad = {"format": "lune-v04", "messages": [{"text": "ROLLBACK", "from": "human", "meta": {"api_session": "lune-gpt"}}], "workspace": [{"id": "bad-ann", "kind": "annotation", "scope": "gpt", "title": "bad", "content": "", "data": {"book_id": "missing", "quote": "q"}}]}
+        self.assertEqual(self.client.post("/lune/import", json=bad).status_code, 422)
+        with relay.db() as c:
+            self.assertEqual(c.execute("SELECT COUNT(*) FROM messages WHERE text='ROLLBACK'").fetchone()[0], 0)
+
+    def test_workspace_auth_validation_and_old_room_search(self):
+        self.assertEqual(self.client.get("/lune/workspace", headers={"Authorization": "Bearer wrong"}).status_code, 401)
+        self.assertEqual(self.client.patch("/lune/workspace/x", json=[]).status_code, 422)
+        self.assertEqual(self.client.post("/lune/assistant/workspace", json=[]).status_code, 422)
+        self.assertEqual(self.client.post("/lune/workspace", json={"kind": "event", "scope": "gpt", "title": "x", "data": {"date": "2026-02-30"}}).status_code, 422)
+        old = relay.save_message("in", "user", "old SEARCH_MARKER", {"api_session": "lune-gpt"})
+        for i in range(110):
+            relay.save_message("in", "user", "SEARCH_MARKER", {"api_session": "lune-claude"})
+        r = self.client.get("/lune/rooms/gpt/search", params={"q": "search_marker"})
+        self.assertEqual([x["id"] for x in r.json()["messages"]], [old["id"]])
 
 
 class AnthropicContractTests(unittest.TestCase):
