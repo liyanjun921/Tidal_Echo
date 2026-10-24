@@ -46,6 +46,10 @@ with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
         assert projection.index("GROUP_UI_MARKER") < projection.index("TEST_GPT"), "group turn order"
         assert any("ATTACHMENT_BODY_MARKER" in json.dumps(r) for r in requests)
         assert any(m.get("role") == "tool" and "TOOL_RESULT_MARKER" in m.get("content", "") for r in requests for m in r["messages"])
+        if env.get("LUNE_PASSIVE_MODEL_CACHE"):
+            native = [r for r in requests if "〔历史证据〕" in json.dumps(r, ensure_ascii=False)]
+            assert native, "native recall never reached an actual provider HTTP request"
+            assert any("我喜欢蓝色鸢尾" in json.dumps(r, ensure_ascii=False) for r in native)
         print("E2E PASS: real HTTP + SQLite + both provider adapters + MCP; synthetic credentials only; " + ("UI checked separately" if "--http-only" in sys.argv else "browser UI included"))
     except Exception:
         log.flush()

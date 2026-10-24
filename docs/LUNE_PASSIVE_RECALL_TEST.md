@@ -1,5 +1,7 @@
 # 原版 Latent Passive Recall 实测 · 2026-10-24
 
+> 这是正式接入前的独立探针记录。“没有开启 Luné”的描述仅指当时状态；随后已完成 [V0.8 正式聊天链路接入](LUNE_V08.md)。下面的联想结果与限制仍保留，不用接入成功掩盖召回质量问题。
+
 测试对象为用户仓库 `liyanjun921/Latent-memory` 的固定提交 `835250d080c02d9553d3b96d9a2753773a4a0c3c`，同时确认当时远程 main 仍指向该提交。测试前后源码无修改。本次没有用 Luné V0.7 的简化召回代替它，也没有开启 Luné 的原版 Passive Recall 功能。
 
 实际运行的是 Latent 自己的 `PassiveRecallService`、`FactIndex`、`FactCooldown`、原生 `latent_passive_recall` JSON-RPC 工具处理入口与 `PassiveRecallAdapter`。工具入口在进程内调用；不把它冒充公网 HTTP/真实聊天客户端验收。

@@ -143,6 +143,8 @@ class OwnerDataTests(unittest.TestCase):
             finally:
                 loop.CURRENT_AGENT.reset(a)
                 loop.CURRENT_RUN.reset(r)
+                from latent_process import close_native
+                await close_native()
         msgs, _ = asyncio.run(build())
         text = json.dumps(msgs)
         self.assertLess(text.index("CURRENT_GROUP_USER"), text.index("FIRST_GROUP_REPLY"))

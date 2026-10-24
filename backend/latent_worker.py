@@ -1,7 +1,7 @@
 """Bounded private worker using an independently installed Latent engine.
 
 Receives only a pre-authorized snapshot on stdin, never a database path or keys.
-No model API, embedding service, native write tools or hidden hooks are enabled.
+Native Passive Recall is host-only; embeddings run locally, with no chat API.
 """
 import json
 from pathlib import Path
@@ -48,9 +48,6 @@ def run(payload):
             results += [{"id": by_id[mid], "text": index.chunks[by_id[mid]], "meta": index.meta[by_id[mid]], "score": 0.0} for mid in seen - existing]
             results.sort(key=lambda r: (r["meta"].get("timestamp", 0), r["meta"]["record_id"]))
             results = results[:50]
-    elif query and payload.get("auto_recall"):
-        # Native read-only candidate path; ordinary automatic checks do not boost weights.
-        results = index.retrieve_candidates(query, topN=4)
     else:
         results = []
     rows = [{"id": r["meta"]["record_id"], "text": r["text"], "status": r["meta"]["status"],
@@ -63,16 +60,26 @@ def run(payload):
             threads.append(auto_close_thread(1, payload.get("tail_started", time.time()),
                                              tail, now=payload.get("tail_ended", time.time())))
         opening = SessionRecall(index, topN=2, thread_store=threads, time_context=tc).on_session_start() or ""
-    return {"matches": rows, "text": format_recall_block(results, time_context=tc) or "",
-            "opening": opening, "weights": {m["record_id"]: index.weights[i] for i, m in enumerate(index.meta)}}
+    output = {"matches": rows, "text": format_recall_block(results, time_context=tc) or "",
+              "opening": opening, "weights": {m["record_id"]: index.weights[i] for i, m in enumerate(index.meta)}}
+    if payload["operation"] == "passive_check" or (payload["operation"] == "context" and payload.get("auto_recall")):
+        from latent_passive import recall
+        output.update(recall(payload, index))
+    return output
 
 
 if __name__ == "__main__":
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
     sys.path.insert(0, str(Path(sys.argv[1]) / "src"))
-    try:
-        payload = json.load(sys.stdin)
-        print(json.dumps(run(payload), ensure_ascii=False))
-    except Exception:
-        # Never echo private content, source errors, or request arguments.
-        print(json.dumps({"error": "Latent 运行失败，请检查独立安装的固定版本"}, ensure_ascii=False))
-        sys.exit(1)
+    def respond(payload):
+        try:
+            value = run(payload)
+        except Exception:
+            value = {"error": "Latent 运行失败，请检查固定源码、本地向量安装与私人目录"}
+        sys.stdout.buffer.write(json.dumps(value, ensure_ascii=False).encode() + b"\n")
+        sys.stdout.buffer.flush()
+    if "--serve" in sys.argv:
+        for line in sys.stdin.buffer:
+            respond(json.loads(line.decode("utf-8")))
+    else:
+        respond(json.loads(sys.stdin.buffer.read().decode("utf-8")))

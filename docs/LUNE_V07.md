@@ -1,5 +1,7 @@
 # Luné V0.7 · Latent 记忆接入
 
+> 历史版本：这里记录的简化逐轮召回与零向量依赖已由 [V0.8 原版 Passive Recall](LUNE_V08.md) 替换。当前安装、依赖与运行方式以 V0.8 为准；以下保留当时实现与测试记录。
+
 本版实际使用 Latent 的 `MemoryIndex`（BM25 / 字符 bigram / 关系排序）、只读候选入口、`SessionRecall`、会话快照与格式化函数。它是独立 Python 工作进程；没有把同名的自写检索冒充 Latent，也没有把全库 MCP 直接暴露给两个模型。
 
 来源为用户的 `liyanjun921/Latent-memory`，固定提交 `835250d080c02d9553d3b96d9a2753773a4a0c3c`。Latent 的 PolyForm Internal Use 许可证与 Luné 的 AGPL 分开保留。此仓库、预览和镜像均不包含第三方源码；安装助手在运行端另行获取原版源码，不修改、不重标许可证。版本升级需要重新核对接口与测试。

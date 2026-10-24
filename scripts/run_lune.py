@@ -18,6 +18,10 @@ if os.environ.get("LUNE_LATENT_AUTO_SETUP") == "1":
     source = Path(os.environ.get("LUNE_LATENT_SOURCE") or Path(os.environ.get("RELAY_DB", "relay.db")).resolve().parent / "lune-private" / "latent-source")
     install(source)
     os.environ["LUNE_LATENT_SOURCE"] = str(source)
+    cache = Path(os.environ.get("LUNE_PASSIVE_MODEL_CACHE") or source.parent / "latent-models")
+    if not (cache / "lune-passive-ready.json").is_file():
+        subprocess.run([sys.executable, "scripts/setup_latent.py", "--destination", str(source), "--vectors", "--model-cache", str(cache)], check=True)
+    os.environ["LUNE_PASSIVE_MODEL_CACHE"] = str(cache)
 os.environ.setdefault("RELAY_URL", "http://127.0.0.1:" + os.environ.get("PORT", "8080") + "/relay")
 children = []
 

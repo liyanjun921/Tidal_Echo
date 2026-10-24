@@ -653,6 +653,11 @@ async def lifespan(app: FastAPI):
         task.cancel()
     if lune_runtime["tasks"]:
         await asyncio.gather(*list(lune_runtime["tasks"].values()), return_exceptions=True)
+    try:
+        from .latent_process import close_native
+    except ImportError:
+        from latent_process import close_native
+    await close_native()
 
 
 app = FastAPI(lifespan=lifespan)

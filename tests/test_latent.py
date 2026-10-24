@@ -144,6 +144,8 @@ class LatentTests(unittest.TestCase):
                 return await fixtures.loop.build_messages("周五画展", [], before_id=msg["id"], session_id="lune-gpt")
             finally:
                 fixtures.loop.CURRENT_AGENT.reset(token)
+                from latent_process import close_native
+                await close_native()
         messages, _ = asyncio.run(build())
         self.assertIn("周五一起看画展", json.dumps(messages, ensure_ascii=False))
         self.assertIn("记忆协议", messages[1]["content"])

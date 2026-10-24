@@ -579,10 +579,12 @@ async def build_messages(
 ) -> tuple[list[dict[str, Any]], bool]:
     """→ (messages, had_images). History images are only re-sent for the newest history_images human rows."""
     messages: list[dict[str, Any]] = [{"role": "system", "content": persona_text()}]
+    passive_text = ""
     agent = CURRENT_AGENT.get()
     if agent:
-        projection = await LatentEngine(RELAY_DB).context(session_id, agent, text, before_id)
-        CURRENT_MEMORY.set({k: v for k, v in projection.items() if k != "text"})
+        projection = await LatentEngine(RELAY_DB).context(session_id, agent, text, before_id, CURRENT_RUN.get())
+        passive_text = projection.get("passive_text", "")
+        CURRENT_MEMORY.set({k: v for k, v in projection.items() if k not in {"text", "passive_text"}})
         messages.append({"role": "system", "content": MEMORY_RULES})
         memories = projection["text"] if projection["engine"] != "basic" else memory_context(RELAY_DB, session_id, agent, text)
         if memories:
@@ -634,6 +636,8 @@ async def build_messages(
     parts, notes = await attachment_parts(atts, with_images=with_images)
     had_images = had_images or bool(parts)
     messages.append({"role": "user", "content": user_content(text, notes, parts) or "(空消息)"})
+    if passive_text:
+        messages.append({"role": "system", "content": passive_text})
     for row in following:
         speaker = row["meta"].get("agent_id")
         if row.get("direction") == "out" and row.get("text"):
@@ -1408,6 +1412,8 @@ async def lifespan(_: FastAPI):
     try:
         yield
     finally:
+        from latent_process import close_native
+        await close_native()
         await mcp_manager.stop_all()
 
 
