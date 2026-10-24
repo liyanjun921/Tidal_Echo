@@ -35,6 +35,8 @@ python -m venv .venv
 
 免费、不绑卡的 Render / Netlify 比较与实际内存证据见 [免费部署评估](LUNE_FREE_HOSTING.md)。当前容器持久卷方案不能直接当作免费云端方案使用。
 
+用户已有可持续开机的 Windows 电脑时，优先参考 [Windows 双击启动与 iPhone 私人访问](LUNE_WINDOWS.md)：复用完整后端和持久卷，避免云服务器费用与存储迁移；首次本机安装和手机联调仍需完成。
+
 ### 容器部署配置
 
 已提供 `compose.lune.yaml` 和 `lune.env.example`。运行端准备私人 `.env` 中的连接密钥后，执行 `docker compose -f compose.lune.yaml up -d --build`。网页端不需要装 Docker 或 Node。容器将 SQLite、上传、模型设置、Latent 源码、向量缓存、冷却状态及完整档案放在同一个 `/data` 持久卷内，仅在服务器回环地址发布 8080；HTTPS 反代接入该端口。普通更新保留此卷。

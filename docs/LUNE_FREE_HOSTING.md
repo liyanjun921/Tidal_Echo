@@ -50,7 +50,7 @@ python scripts/profile_lune_memory.py --output /tmp/lune-memory-profile
 
 ### A. Netlify 网页 + 用户已有电脑运行完整后端
 
-保留目前原版 Latent、本地 BGE、SQLite 与文件目录，可免新增云服务器账单。电脑需要在使用时开机并提供经过鉴权的 HTTPS 入口；主动消息与后台任务仅在电脑运行期间执行。手机继续只打开网页。是否有可用电脑尚未确认，HTTPS 入口与访问稳定性尚未验收；不把此候选当作已部署。
+用户现已确认有可一直开机的 Windows 电脑，优先选择本路线。保留目前原版 Latent、本地 BGE、SQLite 与文件目录，可免新增云服务器账单。电脑需要在使用时开机并提供经过鉴权的 HTTPS 入口；主动消息与后台任务仅在电脑运行期间执行。手机继续打开网页，私人连接需要手机 Tailscale 客户端。已提供 [Windows 启动入口与私人 HTTPS 接入](LUNE_WINDOWS.md)，首次 Windows 安装、镜像构建、HTTPS 与 iPhone 访问稳定性尚未验收；不把准备完成当作已部署。
 
 ### B. Netlify 网页 / 持久存储 + Render Free 按需计算
 
@@ -72,7 +72,7 @@ python scripts/profile_lune_memory.py --output /tmp/lune-memory-profile
 - 完整 HTTP 流程通过，覆盖原版 Passive Recall 的实际请求注入与冷却、10 工具、归档、自审 / 事实、导入、备份、人格文件流程、回填、续接检查点，以及同目录重启恢复。
 - 完成当前实现的内存采样，发现 Render Free 无法直接承载的证据；新增可复现的采样脚本。
 - 没有创建付费资源、绑定银行卡、修改现有生产站点或删减功能；没有宣称免费云端完整上线。
-- 需要先明确能否使用已有电脑，再在 A 与仍需工程验证的 B 之间选择。若只接受手机 + 云端，B 仍需完成上述适配与实测，无法先承诺长期免费、全天在线、完整原版三者兼得。
+- 用户已确认使用自己的 Windows 电脑，优先 A。B 保留为需要工程验证的备选。若未来改为只接受手机 + 云端，仍需重新核对免费条件与完成适配、实测。
 
 ## 官方依据
 

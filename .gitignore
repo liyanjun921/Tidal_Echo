@@ -3,6 +3,7 @@
 relay.env
 .env
 **/.env
+.lune-local/
 !**/.env.example
 # VAPID / TLS private keys
 *.pem
