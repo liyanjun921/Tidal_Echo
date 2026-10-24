@@ -42,6 +42,9 @@ async def openai(request: Request):
     if "WORKSPACE_TRIGGER" in str(last_user) and not any(m["role"] == "tool" for m in body["messages"]):
         wants_tool, tool_name = True, "lune_workspace"
         arguments = json.dumps({"action": "create", "kind": "todo", "scope": "group", "title": "HTTP_TOOL_SAVED", "content": "Synthetic tool verification", "data": {"owner": "gpt", "done": False}})
+    if "MEMORY_WRITE_TRIGGER" in str(last_user) and not any(m["role"] == "tool" for m in body["messages"]):
+        wants_tool, tool_name = True, "lune_memory"
+        arguments = json.dumps({"action": "remember", "quote": "我喜欢蓝色鸢尾。", "title": "HTTP_MEMORY_SAVED"})
     if any(m["role"] == "tool" for m in body["messages"]):
         reply = "TEST_GPT：TOOL_RESULT_MARKER 工具结果已收到。"
     if not body.get("stream"):

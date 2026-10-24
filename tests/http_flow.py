@@ -46,6 +46,20 @@ with httpx.Client(base_url="http://127.0.0.1:8089/relay", headers={"Authorizatio
     saved = next(x for x in records if x["title"] == "HTTP_TOOL_SAVED")
     assert saved["scope"] == "group" and saved["author"] == "gpt", saved
     assert any(x["title"] == "HTTP_TOOL_SAVED" for x in c.get("/lune/export").json()["workspace"])
+    if c.get("/lune/memory/status").json()["installed"]:
+        assert post("/lune/memory/check", {})["ok"]
+        send("gpt", "记住：我喜欢蓝色鸢尾。 MEMORY_WRITE_TRIGGER")
+        memories = c.get("/lune/memories").json()["memories"]
+        remembered = next(m for m in memories if m["title"] == "HTTP_MEMORY_SAVED")
+        assert remembered["scope"] == "gpt" and remembered["source_message_id"]
+        assert any(m["id"] == remembered["id"] for m in post("/lune/memory/search", {"view": "gpt", "query": "蓝色鸢尾"})["matches"])
+        assert not any(m["id"] == remembered["id"] for m in post("/lune/memory/search", {"view": "group", "query": "蓝色鸢尾"})["matches"])
+        send("gpt", "蓝色鸢尾")
+        response = c.get("/lune/rooms/gpt/messages").json()["messages"]
+        latest = next(m for m in reversed(response) if m["from"] == "ai" and m["kind"] == "reply")
+        assert latest["meta"]["api"]["memory"]["engine"] == "latent"
+        assert remembered["id"] in latest["meta"]["api"]["memory"]["ids"]
+        print("Latent HTTP PASS: model tool → canonical write → real retrieval → automatic request-only recall; group isolated")
     for provider, model in (("minimax", "speech-02-hd"), ("elevenlabs", "eleven_multilingual_v2")):
         config = c.get("/lune/speech").json()
         r = c.patch("/lune/speech", json={"provider": provider, "version": config["version"], "providers": {provider: {"key": "synthetic-voice-key", "voice_id": "fixture_voice", "model": model, "base_url": "http://127.0.0.1:8766"}}})

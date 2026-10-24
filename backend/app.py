@@ -1103,6 +1103,11 @@ except ImportError:
 
 lune_runtime = register_lune(app, globals())
 try:
+    from .lune_memory import register as register_memory
+except ImportError:
+    from lune_memory import register as register_memory
+register_memory(app, globals())
+try:
     from .workspace import register as register_workspace
 except ImportError:
     from workspace import register as register_workspace

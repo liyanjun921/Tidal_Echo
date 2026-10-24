@@ -13,6 +13,11 @@ if not os.environ.get("RELAY_SECRET"):
 for key in ("RELAY_DB", "LOOP_CONFIG"):
     if os.environ.get(key):
         Path(os.environ[key]).parent.mkdir(parents=True, exist_ok=True)
+if os.environ.get("LUNE_LATENT_AUTO_SETUP") == "1":
+    from setup_latent import install
+    source = Path(os.environ.get("LUNE_LATENT_SOURCE") or Path(os.environ.get("RELAY_DB", "relay.db")).resolve().parent / "lune-private" / "latent-source")
+    install(source)
+    os.environ["LUNE_LATENT_SOURCE"] = str(source)
 os.environ.setdefault("RELAY_URL", "http://127.0.0.1:" + os.environ.get("PORT", "8080") + "/relay")
 children = []
 

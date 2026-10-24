@@ -1,4 +1,6 @@
-# Luné / OURSPACE · V0.6 订阅连接
+# Luné / OURSPACE · V0.7 Latent 记忆
+
+接入独立安装的 Latent 原生检索与换窗召回，Luné 继续管理有范围、来源和版本的记忆。新增每轮请求内召回、受控原话写入、事实变迁、错误撤回、未完事项、所有者检索与修改记录、状态及变迁链备份。未打包 Latent 源码，不调用云端向量服务。详见 [记忆接入与实测边界](docs/LUNE_V07.md)。
 
 GPT 新增官方 ChatGPT 订阅授权与 Responses 适配；Claude 预留官方 CLI / tmux 桥接模式。API / 订阅独立切换，订阅错误不自动调用 API Key。首次授权需电脑本地回调或连接助手，真实账户尚待授权验收；Claude 运行时尚未接通。详见 [订阅连接与验证](docs/LUNE_V06.md)。
 

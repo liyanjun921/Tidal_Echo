@@ -16,3 +16,12 @@ it does not rewrite the license text that accompanied historical revisions.
 
 Copyright and attribution notices belonging to third-party material, if any,
 remain applicable to that material.
+
+Optional Latent runtime
+-----------------------
+Luné V0.7 can invoke a separately installed Latent-memory runtime from
+https://github.com/liyanjun921/Latent-memory at revision
+835250d080c02d9553d3b96d9a2753773a4a0c3c. That runtime has its own
+PolyForm Internal Use License 1.0.0 and is not included or relicensed here.
+The adapter, owner controls and canonical SQLite storage in this repository
+are independent Luné additions. Retain the runtime's own notices and license.
