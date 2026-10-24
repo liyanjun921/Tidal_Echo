@@ -25,6 +25,9 @@ services:
       LUNE_PASSIVE_MODEL_CACHE: /data/lune-private/latent-models
       LUNE_PASSIVE_STATE_DIR: /data/lune-private/passive-state
       LUNE_LATENT_FULL_DIR: /data/lune-private/latent-full
+      LUNE_OMBRE_AUTO_SETUP: "1"
+      LUNE_OMBRE_SOURCE: /data/lune-private/ombre/source
+      LUNE_OMBRE_DIR: /data/lune-private/ombre
     volumes:
       - lune_data:/data
     healthcheck:

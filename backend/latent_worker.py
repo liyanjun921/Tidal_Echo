@@ -10,6 +10,9 @@ import time
 
 
 def run(payload):
+    if payload.get('operation') == 'embed':
+        from latent_passive import native_provider
+        return {'vectors': [[float(v) for v in row] for row in native_provider(payload['model_cache']).embed(payload['input'])]}
     if payload.get("operation") == "full":
         from latent_full_worker import dispatch
         return dispatch(payload)

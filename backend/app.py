@@ -1133,6 +1133,12 @@ except ImportError:
     from lune_native import register as register_native
 native_runtime = register_native(app, globals())
 
+try:
+    from .lune_ombre import register as register_ombre
+except ImportError:
+    from lune_ombre import register as register_ombre
+register_ombre(app, globals())
+
 if __name__ == "__main__":
     import uvicorn
 

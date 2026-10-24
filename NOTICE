@@ -25,3 +25,11 @@ https://github.com/liyanjun921/Latent-memory at revision
 PolyForm Internal Use License 1.0.0 and is not included or relicensed here.
 The adapter, owner controls and canonical SQLite storage in this repository
 are independent Luné additions. Retain the runtime's own notices and license.
+
+Optional Ombre Brain runtime
+---------------------------
+Luné V0.10 invokes a separately installed, unmodified Ombre Brain 3.6.14
+from https://github.com/liyanjun921/Ombre-Brain at revision
+115d831d979bf67efc7150f976e2cb34c333c935. Ombre Brain is MIT licensed;
+its LICENSE, AUTHORS.md and NOTICE.md remain with that installation.
+The host integration does not replace the original attribution or license.

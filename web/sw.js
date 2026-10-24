@@ -2,9 +2,9 @@
    IMPORTANT: bump CACHE on every front-end change, or installed clients keep the
    old shell (the precached index.html won't refresh until the SW reinstalls). */
 const AI_NAME = "Luné";
-const CACHE = "lune-v09-full-latent-2";
+const CACHE = "lune-v010-ombre-2";
 const PRECACHE = [
-  "./index.html", "./styles.css", "./connection.css", "./app.js", "./relay-client.js", "./rich-text.js", "./memory.js", "./native-memory.js",
+  "./index.html", "./styles.css", "./connection.css", "./app.js", "./relay-client.js", "./rich-text.js", "./memory.js", "./native-memory.js", "./ombre-memory.js",
   "./assets/water-light.webp", "./assets/lily-water.webp",
   "./assets/water-light-thumb.webp", "./assets/lily-water-thumb.webp",
 ];
@@ -26,7 +26,7 @@ self.addEventListener("activate", (e) => {
 });
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
-  if (url.pathname.startsWith("/relay/") || e.request.headers.has("Authorization") || url.searchParams.has("token")) return;
+  if (url.pathname.startsWith("/relay/") || url.pathname.startsWith("/ombre/") || e.request.headers.has("Authorization") || url.searchParams.has("token")) return;
   if (e.request.mode === "navigate") {
     // network-first for the page → an online reload always gets the latest index.html
     e.respondWith(fetch(e.request, { cache: "reload" }).catch(() => caches.match("./index.html")));

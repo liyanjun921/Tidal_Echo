@@ -22,6 +22,11 @@ if os.environ.get("LUNE_LATENT_AUTO_SETUP") == "1":
     if not (cache / "lune-passive-ready.json").is_file():
         subprocess.run([sys.executable, "scripts/setup_latent.py", "--destination", str(source), "--vectors", "--model-cache", str(cache)], check=True)
     os.environ["LUNE_PASSIVE_MODEL_CACHE"] = str(cache)
+sys.path.insert(0, str(root))
+from backend import ombre_runtime as ombre
+if os.environ.get('LUNE_OMBRE_AUTO_SETUP') == '1':
+    from setup_ombre import install as install_ombre
+    install_ombre(ombre.source())
 os.environ.setdefault("RELAY_URL", "http://127.0.0.1:" + os.environ.get("PORT", "8080") + "/relay")
 children = []
 
@@ -35,6 +40,10 @@ def stop(signum=None, frame=None):
 signal.signal(signal.SIGTERM, stop)
 signal.signal(signal.SIGINT, stop)
 try:
+    if ombre.installed():
+        for scope in ombre.SCOPES:
+            children.append(subprocess.Popen([sys.executable, str(ombre.source() / 'src/server.py')],
+                cwd=ombre.source(), env=ombre.prepare(scope)))
     children.append(subprocess.Popen([sys.executable, "-m", "uvicorn", "api_loop:app", "--app-dir", "examples", "--host", "127.0.0.1", "--port", "3020", "--no-access-log"]))
     children.append(subprocess.Popen([sys.executable, "-m", "uvicorn", "backend.lune_server:app", "--host", "0.0.0.0", "--port", os.environ.get("PORT", "8080"), "--no-access-log"]))
     while all(child.poll() is None for child in children):

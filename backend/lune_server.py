@@ -19,6 +19,8 @@ async def lifespan(app):
 
 
 app = FastAPI(lifespan=lifespan)
+from backend.lune_ombre import register_proxy
+register_proxy(app)
 
 
 @app.get("/readyz")
@@ -34,6 +36,12 @@ async def ready():
         if os.environ.get("LUNE_LATENT_AUTO_SETUP") == "1":
             from backend.lune_memory import LatentEngine
             ok = ok and LatentEngine(relay.DB_PATH).passive_status()["assets_ready"]
+        if os.environ.get('LUNE_OMBRE_AUTO_SETUP') == '1' or os.environ.get('LUNE_OMBRE_SOURCE'):
+            from backend import ombre_runtime as ob
+            ok = ok and ob.installed()
+            async with httpx.AsyncClient(timeout=3, trust_env=False) as client:
+                for scope in ob.SCOPES:
+                    ok = ok and (await client.get(ob.endpoint(scope) + '/health')).status_code == 200
     except (OSError, ValueError, sqlite3.Error, httpx.HTTPError):
         ok = False
     return JSONResponse({"ok": bool(ok)}, status_code=200 if ok else 503)

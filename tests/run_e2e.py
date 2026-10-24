@@ -6,9 +6,11 @@ import subprocess
 import sys
 import tempfile
 import time
+from unittest.mock import patch
 import httpx
 
 root = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(root))
 children = []
 with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
     env = {**os.environ, "RELAY_SECRET": "fixture-owner-secret", "RELAY_DB": tmp + "/relay.db", "RELAY_UPLOAD_DIR": tmp + "/uploads", "LOOP_CONFIG": tmp + "/config.json", "LOOP_CACHE_DIR": tmp + "/cache", "RELAY_BRAIN_FILE": tmp + "/brain", "RELAY_URL": "http://127.0.0.1:8089/relay", "PORT": "8089", "LUNE_TEST_REQUESTS": tmp + "/requests.jsonl"}
@@ -23,9 +25,9 @@ with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
         children.append(subprocess.Popen([sys.executable, "tests/mcp_fixture.py"], cwd=root, env=env, stdout=log, stderr=log))
         children.append(subprocess.Popen([sys.executable, "scripts/run_lune.py"], cwd=root, env=env, stdout=log, stderr=log, start_new_session=True))
         with httpx.Client(trust_env=False) as client:
-            for _ in range(100):
+            for _ in range(300):
                 try:
-                    if client.get("http://127.0.0.1:8089/relay/lune/rooms", headers={"Authorization": "Bearer fixture-owner-secret"}).status_code == 200 and client.get("http://127.0.0.1:3020/healthz").status_code == 200:
+                    if client.get("http://127.0.0.1:8089/relay/lune/rooms", headers={"Authorization": "Bearer fixture-owner-secret"}).status_code == 200 and client.get("http://127.0.0.1:8089/readyz").status_code == 200:
                         break
                 except httpx.HTTPError:
                     pass
@@ -36,6 +38,8 @@ with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
             subprocess.run([sys.executable, "tests/http_flow.py"], cwd=root, env=env, check=True, timeout=180)
         else:
             subprocess.run([env.get("CODEX_PRIMARY_RUNTIME_NODE", "node"), "tests/browser.cjs"], cwd=root, env=env, check=True, timeout=90)
+        if env.get('LUNE_OMBRE_SOURCE'):
+            subprocess.run([sys.executable, 'tests/ombre_flow.py'], cwd=root, env=env, check=True, timeout=240)
         with httpx.Client(trust_env=False, timeout=30, headers={"Authorization": "Bearer fixture-owner-secret"}) as client:
             base = "http://127.0.0.1:8089/relay"
             saved = client.get(base + "/lune/rooms/gpt/messages").json()["messages"]
@@ -43,7 +47,7 @@ with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
             children[2].terminate()
             children[2].wait(timeout=20)
             children[2] = subprocess.Popen([sys.executable, "scripts/run_lune.py"], cwd=root, env=env, stdout=log, stderr=log, start_new_session=True)
-            for _ in range(100):
+            for _ in range(300):
                 try:
                     if client.get("http://127.0.0.1:8089/readyz").status_code == 200:
                         break
@@ -54,6 +58,12 @@ with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
                 raise AssertionError("services did not become ready after restart")
             assert client.get(base + "/lune/rooms/gpt/messages").json()["messages"] == saved
             assert client.get(base + "/lune/memories").json()["memories"] == memories
+            if env.get('LUNE_OMBRE_SOURCE'):
+                from backend import ombre_runtime as ob
+                with patch.dict(os.environ, env):
+                    result = __import__('asyncio').run(ob.call('gpt', 'breath_search', {'query': 'OMBRE_PRIVATE_MARKER', 'max_results': 2}))
+                assert '用户说我们周日去海边看蓝色风筝。' in ob.text_result(result), result
+                print('Ombre restart PASS: original vault and search survive full supervisor restart')
             if env.get("LUNE_LATENT_SOURCE"):
                 result = client.post(base + "/lune/native/gpt/mcp", json={"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"latent_search","arguments":{"query":"周六去海边看风筝"}}}).json()
                 assert not result["result"].get("isError"), result

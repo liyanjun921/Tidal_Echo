@@ -3,7 +3,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends git ca-certific
 WORKDIR /app
 COPY examples/requirements.txt /tmp/loop-requirements.txt
 COPY backend/requirements.txt /tmp/backend-requirements.txt
-RUN pip install --no-cache-dir -r /tmp/backend-requirements.txt -r /tmp/loop-requirements.txt
+COPY backend/ombre-requirements.txt /tmp/ombre-requirements.txt
+RUN pip install --no-cache-dir -r /tmp/backend-requirements.txt -r /tmp/loop-requirements.txt -r /tmp/ombre-requirements.txt
 COPY backend backend
 COPY examples examples
 COPY web web
