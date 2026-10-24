@@ -46,4 +46,12 @@ with httpx.Client(base_url="http://127.0.0.1:8089/relay", headers={"Authorizatio
     saved = next(x for x in records if x["title"] == "HTTP_TOOL_SAVED")
     assert saved["scope"] == "group" and saved["author"] == "gpt", saved
     assert any(x["title"] == "HTTP_TOOL_SAVED" for x in c.get("/lune/export").json()["workspace"])
-    print("HTTP flow passed: private chat → group → attachment → MCP → assistant-created durable todo")
+    for provider, model in (("minimax", "speech-02-hd"), ("elevenlabs", "eleven_multilingual_v2")):
+        config = c.get("/lune/speech").json()
+        r = c.patch("/lune/speech", json={"provider": provider, "version": config["version"], "providers": {provider: {"key": "synthetic-voice-key", "voice_id": "fixture_voice", "model": model, "base_url": "http://127.0.0.1:8766"}}})
+        r.raise_for_status()
+        assert "synthetic-voice-key" not in r.text
+        result = c.post("/app/tts", json={"text": "测试朗读"})
+        result.raise_for_status()
+        assert result.content == ("ID3synthetic-" + provider).encode()
+    print("HTTP flow passed: private chat → group → attachment → MCP → assistant-created durable todo → MiniMax + ElevenLabs speech")

@@ -27,8 +27,9 @@ class OwnerDataTests(unittest.TestCase):
         relay.init_db()
         relay.lune_runtime["init"]()
         relay.workspace_runtime["init"]()
+        relay.speech_runtime["init"]()
         with relay.db() as c:
-            for table in ("messages", "lune_runs", "lune_memories", "lune_memory_revisions", "lune_imports", "lune_workspace"):
+            for table in ("messages", "lune_runs", "lune_memories", "lune_memory_revisions", "lune_imports", "lune_workspace", "lune_speech"):
                 c.execute("DELETE FROM " + table)
         self.context = TestClient(relay.app)
         self.client = self.context.__enter__()

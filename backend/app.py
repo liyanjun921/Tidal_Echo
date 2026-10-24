@@ -524,23 +524,27 @@ def transcribe_with_command(audio_path: Path, mime: str) -> str:
     return proc.stdout.strip()
 
 
-def minimax_tts_mp3(text: str) -> bytes:
-    if not MINIMAX_API_KEY or not MINIMAX_VOICE_ZH:
+def minimax_tts_mp3(text: str, config=None) -> bytes:
+    config = config or {"key": MINIMAX_API_KEY, "voice_id": MINIMAX_VOICE_ZH, "base_url": MINIMAX_API_BASE, "group_id": MINIMAX_GROUP_ID, "model": MINIMAX_MODEL}
+    if not config["key"] or not config["voice_id"]:
         raise HTTPException(status_code=503, detail="minimax tts not configured")
     clean = (text or "").strip()
     if not clean:
         raise HTTPException(status_code=400, detail="empty text")
     if len(clean) > 900:
         raise HTTPException(status_code=422, detail="单次朗读最多 900 字符，请分段朗读")
-    url = f"{MINIMAX_API_BASE.rstrip('/')}/v1/t2a_v2"
-    if MINIMAX_GROUP_ID:
-        url += f"?GroupId={MINIMAX_GROUP_ID}"
+    base = config["base_url"].rstrip("/")
+    if base.endswith("/v1"):
+        base = base[:-3]
+    url = f"{base}/v1/t2a_v2"
+    if config["group_id"]:
+        url += "?" + urllib.parse.urlencode({"GroupId": config["group_id"]})
     payload = {
-        "model": MINIMAX_MODEL,
+        "model": config["model"],
         "text": clean,
         "stream": False,
         "voice_setting": {
-            "voice_id": MINIMAX_VOICE_ZH,
+            "voice_id": config["voice_id"],
             "speed": 1.0,
             "vol": 1.0,
             "pitch": 0,
@@ -556,7 +560,7 @@ def minimax_tts_mp3(text: str) -> bytes:
         url,
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
         headers={
-            "Authorization": f"Bearer {MINIMAX_API_KEY}",
+            "Authorization": "Bearer " + config["key"],
             "Content-Type": "application/json",
         },
         method="POST",
@@ -566,8 +570,8 @@ def minimax_tts_mp3(text: str) -> bytes:
             data = json.loads(resp.read().decode("utf-8"))
     except HTTPException:
         raise
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"minimax tts failed: {exc}")
+    except Exception:
+        raise HTTPException(status_code=502, detail="MiniMax 朗读失败，请检查账户、音色与服务器网络") from None
     audio_hex = (data.get("data") or {}).get("audio")
     if not audio_hex:
         raise HTTPException(status_code=502, detail="minimax tts returned no audio")
@@ -637,6 +641,7 @@ async def lifespan(app: FastAPI):
     init_db()
     lune_runtime["init"]()
     workspace_runtime["init"]()
+    speech_runtime["init"]()
     yield
     for task in list(lune_runtime["tasks"].values()):
         task.cancel()
@@ -836,10 +841,10 @@ async def app_call(request: Request):
 
 @app.post("/app/tts")
 async def app_tts(request: Request):
-    """Generate MiniMax speech for an AI reply. The frontend falls back if unavailable."""
+    """Generate speech with the owner's selected provider; no paid fallback."""
     check_auth(request)
     body = await request.json()
-    audio = await asyncio.to_thread(minimax_tts_mp3, body.get("text") or "")
+    audio = await asyncio.to_thread(speech_runtime["synthesize"], body)
     return Response(
         content=audio,
         media_type="audio/mpeg",
@@ -1079,6 +1084,11 @@ try:
 except ImportError:
     from workspace import register as register_workspace
 workspace_runtime = register_workspace(app, globals())
+try:
+    from .speech import register as register_speech
+except ImportError:
+    from speech import register as register_speech
+speech_runtime = register_speech(app, globals())
 
 if __name__ == "__main__":
     import uvicorn

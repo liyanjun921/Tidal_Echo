@@ -43,7 +43,11 @@ python -m venv .venv
 
 ## 可选服务
 
-MiniMax 朗读在服务器注入 `MINIMAX_API_KEY`、`MINIMAX_MODEL`、`MINIMAX_VOICE_ZH`；根据所用账户/API 再填写 `MINIMAX_API_BASE` 和 `MINIMAX_GROUP_ID`。不要把这些值放到公开 HTML 或代码里。设置后用真实短消息验证朗读、停止和 iPhone 音频播放。
+朗读支持 MiniMax 与 ElevenLabs。连接正式服务器后，在「设置 → 朗读设置」选择服务、填写 API Key、音色 ID 和模型 ID，再保存；密钥输入框会清空，留空保留服务器密钥。点「试听已保存配置」会提交固定的测试短句，可能产生语音用量。两个服务的配置分别保存，切换后下一次朗读生效；失败不会自动向另一家发送文字。
+
+也可用环境变量提供初始值：MiniMax 使用 `MINIMAX_API_KEY`、`MINIMAX_MODEL`、`MINIMAX_VOICE_ZH`、`MINIMAX_API_BASE`、`MINIMAX_GROUP_ID`；ElevenLabs 使用 `ELEVENLABS_API_KEY`、`ELEVENLABS_VOICE_ID`、`ELEVENLABS_MODEL`、`ELEVENLABS_API_BASE`，默认模型为 `eleven_multilingual_v2`，API 基础地址为 `https://api.elevenlabs.io`。`LUNE_TTS_PROVIDER` 默认 `minimax`，可设为 `elevenlabs`。音色必须是自己账户可使用的音色 ID。
+
+手机保存的覆盖配置位于私人 SQLite 的 `lune_speech` 表，GET 接口只返回是否已配置密钥，不返回密钥本身；不要公开数据库。消息旁点「朗读」，播放器提供播放/暂停和停止；单次最多 900 字符。若 iPhone 阻止自动播放，点播放器的播放键。服务器请求已用合成服务验证，真实账户与 iPhone 音频仍待实测。
 
 Web Push 需要一对 VAPID 密钥，公钥填 `VAPID_PUBLIC_KEY`，私钥 PEM 内容或文件路径填 `VAPID_PRIVATE_PEM`，并填写自己的 `VAPID_SUBJECT`。在 HTTPS 主屏幕应用内点“开启消息通知”，允许通知，再点测试，最后锁屏验证实际送达。未配置时会明确提示，不能把按钮存在当作通知已接通。
 

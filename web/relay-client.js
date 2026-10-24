@@ -6,18 +6,18 @@ const defaults={base:'/relay',remember:false};
 let config={...defaults};try{config={...defaults,...JSON.parse(localStorage.getItem('lune-connection')||'{}')}}catch{}
 let secret=sessionStorage.getItem('lune-secret')||(config.remember?localStorage.getItem('lune-secret'):'')||'';
 if(preview)secret='';
-let stream=null,poll=null,owner='',activeRoom='gpt',epoch=0;
+let stream=null,poll=null,owner='',activeRoom='gpt',epoch=0,speechVersion=0,speechEpoch=0,speechController=null,speechUrl=null;
 const drafts=new Map(),blobUrls=new Map();
 const emit=(name,detail)=>window.dispatchEvent(new CustomEvent('lune-'+name,{detail}));
 const toast=t=>emit('notice',t);
 const apiUrl=path=>config.base.replace(/\/$/,'')+path;
 async function request(path,opts={}){
  if(preview)throw new Error('界面预览未连接服务器，请勿在此填写密钥');
- const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),opts.timeout||30000);
- try{const r=await fetch(apiUrl(path),{...opts,signal:opts.signal||controller.signal,headers:{Authorization:'Bearer '+secret,...(opts.body&&typeof opts.body==='string'?{'Content-Type':'application/json'}:{}),...opts.headers}});
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),opts.timeout||30000),abort=()=>controller.abort();if(opts.signal?.aborted)controller.abort();else opts.signal?.addEventListener('abort',abort,{once:true});
+ try{const r=await fetch(apiUrl(path),{...opts,signal:controller.signal,headers:{Authorization:'Bearer '+secret,...(opts.body&&typeof opts.body==='string'?{'Content-Type':'application/json'}:{}),...opts.headers}});
  if(!r.ok){let message='请求失败 HTTP '+r.status;try{const d=await r.json();message=typeof d.detail==='string'?d.detail:message}catch{};throw new Error(message)}
  return opts.blob?await r.blob():await r.json();
- }finally{clearTimeout(timer)}
+ }finally{clearTimeout(timer);opts.signal?.removeEventListener('abort',abort)}
 }
 const json=(path,method,body)=>request(path,{method,body:JSON.stringify(body)});
 function db(){return new Promise((resolve,reject)=>{const r=indexedDB.open('lune-cloud-cache',1);r.onupgradeneeded=()=>r.result.createObjectStore('rooms');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
@@ -67,7 +67,7 @@ async function connect(){
  await memories();
 }
 async function memories(){const result=await request('/lune/memories');emit('memories',result.memories.map(m=>({...m,date:m.updated_at.slice(0,10)})));return result.memories}
-function disconnect(){epoch++;stream?.close();clearInterval(poll);secret='';sessionStorage.removeItem('lune-secret');localStorage.removeItem('lune-secret');drafts.clear();for(const u of blobUrls.values())URL.revokeObjectURL(u);blobUrls.clear();emit('disconnected',{});emit('status','已断开连接')}
+function disconnect(){stopSpeech();epoch++;stream?.close();clearInterval(poll);secret='';sessionStorage.removeItem('lune-secret');localStorage.removeItem('lune-secret');drafts.clear();for(const u of blobUrls.values())URL.revokeObjectURL(u);blobUrls.clear();emit('disconnected',{});emit('status','已断开连接')}
 function pending(){try{return JSON.parse(localStorage.getItem('lune-outbox-'+owner)||'[]')}catch{return []}}
 function keepPending(m){const rows=pending().filter(x=>x.nonce!==m.nonce);rows.push({...m,status:'failed',time:'待核对发送状态'});localStorage.setItem('lune-outbox-'+owner,JSON.stringify(rows))}
 function clearPending(nonce){localStorage.setItem('lune-outbox-'+owner,JSON.stringify(pending().filter(x=>x.nonce!==nonce)))}
@@ -76,13 +76,21 @@ async function media(att){
  if(blobUrls.has(path))return blobUrls.get(path);
  const file=await request('/uploads/'+encodeURIComponent(path.split('/').pop()),{blob:true});const u=URL.createObjectURL(file);blobUrls.set(path,u);return u;
 }
+function stopSpeech(){speechEpoch++;speechController?.abort();speechController=null;const audio=$('#speechAudio');audio.pause();audio.removeAttribute('src');audio.load();if(speechUrl)URL.revokeObjectURL(speechUrl);speechUrl=null;$('#speechPlayback').hidden=true;$('#speechAudio').hidden=true;window.LuneRelay.audio=null}
 async function tts(text){
- if(window.LuneRelay.audio){window.LuneRelay.audio.pause();window.LuneRelay.audio=null;return}
+ if(preview)throw new Error('界面预览不能合成语音，请连接正式服务器');
+ if(window.LuneRelay.audio||speechController){stopSpeech();return}
  if(text.length>900)throw new Error('单次朗读最多 900 字符，请分段朗读');
- const blob=await request('/app/tts',{method:'POST',body:JSON.stringify({text}),blob:true,timeout:60000});
- const url=URL.createObjectURL(blob),audio=new Audio(url);window.LuneRelay.audio=audio;
- audio.onended=()=>{URL.revokeObjectURL(url);window.LuneRelay.audio=null};await audio.play();
+ const ticket=++speechEpoch,audio=$('#speechAudio');speechController=new AbortController();$('#speechPlayback').hidden=false;$('#speechStatus').textContent='正在合成朗读…';audio.hidden=true;
+ try{const blob=await request('/app/tts',{method:'POST',body:JSON.stringify({text}),blob:true,timeout:60000,signal:speechController.signal});if(ticket!==speechEpoch)return;speechController=null;
+ speechUrl=URL.createObjectURL(blob);audio.src=speechUrl;audio.hidden=false;window.LuneRelay.audio=audio;$('#speechStatus').textContent='消息朗读';
+ audio.onended=()=>{if(ticket===speechEpoch)stopSpeech()};audio.onerror=()=>{if(ticket===speechEpoch){stopSpeech();toast('音频未能播放，请重新点击朗读')}};
+ try{await audio.play()}catch{if(ticket===speechEpoch)$('#speechStatus').textContent='音频已就绪，请点播放'}
+ }catch(e){if(ticket===speechEpoch){stopSpeech();throw e}}
 }
+function paintSpeech(config){speechVersion=config.version;const f=$('#speechForm');f.elements.provider.value=config.provider;for(const [name,p]of Object.entries(config.providers))for(const key of ['key','voice_id','model','base_url','group_id']){const input=f.elements[name+'_'+key];if(!input)continue;if(key==='key'){input.value='';input.placeholder=p.key_set?'已保存；留空保持':'API Key'}else input.value=p[key]||''}speechProvider();$('#speechConfigStatus').textContent=Object.entries(config.providers).map(([n,p])=>(n==='minimax'?'MiniMax':'ElevenLabs')+' · '+(p.ready?'已配置，尚需实际试听':'待填写密钥与音色')).join(' / ')}
+function speechProvider(){const name=$('#speechForm').elements.provider.value;document.querySelectorAll('[data-speech-provider]').forEach(e=>e.hidden=e.dataset.speechProvider!==name)}
+async function speechSettings(){if(!preview&&secret)paintSpeech(await request('/lune/speech'))}
 async function notify(){
  if(preview)throw new Error('界面预览不申请通知权限；请在正式应用中订阅');
  if(!('Notification'in window)||!('serviceWorker'in navigator)||!('PushManager'in window))throw new Error('当前环境不支持通知，请在 iPhone 主屏幕应用中检查');
@@ -97,8 +105,9 @@ async function notify(){
 async function settings(){
  emit('settings-open',{});
  const dialog=$('#connectionDialog');$('#relayBase').value=config.base;$('#relaySecret').value='';$('#rememberConnection').checked=!!config.remember;if(!dialog.open)dialog.showModal();
- if(preview){$('#settingsStatus').textContent='当前为私人界面预览。模型、通知、朗读和 MCP 需部署正式服务后连接；请勿在这里填写密钥。生活页的本机保存可以实际使用。';document.querySelectorAll('#connectionForm input,#connectionForm button,#agent-gpt input,#agent-gpt textarea,#agent-gpt select,#agent-gpt button,#agent-claude input,#agent-claude textarea,#agent-claude select,#agent-claude button,#mcpForm input,#mcpForm button,#contextForm input,#contextForm select,#contextForm button').forEach(e=>e.disabled=true);return}
+ if(preview){$('#settingsStatus').textContent='当前为私人界面预览。模型、通知、MiniMax / ElevenLabs 朗读和 MCP 需部署正式服务后连接；请勿在这里填写密钥。生活页的本机保存可以实际使用。';document.querySelectorAll('#connectionForm input,#connectionForm button,#agent-gpt input,#agent-gpt textarea,#agent-gpt select,#agent-gpt button,#agent-claude input,#agent-claude textarea,#agent-claude select,#agent-claude button,#mcpForm input,#mcpForm button,#contextForm input,#contextForm select,#contextForm button,#speechForm input,#speechForm button').forEach(e=>e.disabled=true);return}
  if(!secret)return;
+ try{await speechSettings()}catch(e){$('#speechConfigStatus').textContent=e.message}
  try{const {agents}=await request('/app/loop/agents');for(const name of ['gpt','claude']){
  const f=$('#agent-'+name);for(const key of ['url','model','persona','protocol'])f.elements[key].value=agents[name][key]||'';f.elements.key.placeholder=agents[name].key_set?'已保存；留空保持':'API Key';f.elements.key.value='';
  }emit('agents',agents);const cfg=await request('/app/loop/config');const f=$('#contextForm');for(const key of ['history_n','history_images','max_tool_steps','vision'])if(cfg[key]!==undefined)f.elements[key].value=cfg[key];await toolStatus()}catch(e){$('#settingsStatus').textContent=e.message}
@@ -106,6 +115,10 @@ async function settings(){
 async function toolStatus(){const r=await request('/app/loop/mcp');$('#toolStatus').textContent=r.available?'MCP 客户端已安装':'MCP 客户端未安装';const list=$('#mcpServerList');list.replaceChildren();for(const server of r.servers||[]){const row=document.createElement('div');row.className='mcp-item';const text=document.createElement('span');text.textContent=server.name;const status=document.createElement('small');status.textContent=server.status+' · '+(server.tools?.length||0)+' 个工具';text.append(status);row.append(text);for(const [label,action]of [['重连',()=>json('/app/loop/mcp/'+encodeURIComponent(server.name)+'/reconnect','POST',{})],['移除',()=>request('/app/loop/mcp/'+encodeURIComponent(server.name),{method:'DELETE'})]]){const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{try{await action();await toolStatus()}catch(e){toast(e.message)}};row.append(b)}list.append(row)}}
 async function workspace(){try{const result=await request('/lune/workspace');cache('workspace',result.items,2000);return result.items}catch(e){const rows=await cached('workspace');if(rows.length)return rows;throw e}}
 function wire(){
+ $('#speechStop').onclick=stopSpeech;$('#speechForm').elements.provider.onchange=speechProvider;
+ $('#speechForm').onsubmit=async e=>{e.preventDefault();if(!secret){toast('请先连接自己的服务器');return}const f=e.target,name=f.elements.provider.value,values={};for(const key of ['key','voice_id','model','base_url','group_id']){const input=f.elements[name+'_'+key];if(input)values[key]=input.value}try{const config=await json('/lune/speech','PATCH',{provider:name,version:speechVersion,providers:{[name]:values}});paintSpeech(config);toast('朗读设置已保存到服务器')}catch(err){toast(err.message)}};
+ $('#speechTest').onclick=async()=>{if(preview){toast('此处仅预览朗读设置，不会提交语音请求');return}if(!secret){toast('请先连接自己的服务器');return}try{await tts('你好，这是 Luné 的朗读测试。');if(window.LuneRelay.audio){$('#settingsStatus').textContent='试听音频已就绪；如未自动播放，请关闭设置后点播放器。'}}catch(err){toast(err.message)}};
+
  document.querySelectorAll('[data-settings]').forEach(b=>b.onclick=settings);
  $('#closeConnection').onclick=()=>$('#connectionDialog').close();
  $('#connectionForm').onsubmit=async e=>{e.preventDefault();const raw=$('#relayBase').value.trim().replace(/\/$/,'');

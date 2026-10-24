@@ -3,9 +3,26 @@ import asyncio
 import json
 import os
 from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 
 app = FastAPI()
+
+
+@app.post("/v1/text-to-speech/{voice_id}")
+async def speech(voice_id: str, request: Request):
+    body = await request.json()
+    assert request.headers.get("xi-api-key") == "synthetic-voice-key"
+    assert voice_id == "fixture_voice" and body["model_id"] == "eleven_multilingual_v2"
+    assert request.query_params["output_format"] == "mp3_44100_128"
+    return Response(b"ID3synthetic-elevenlabs", media_type="audio/mpeg")
+
+
+@app.post("/v1/t2a_v2")
+async def minimax(request: Request):
+    body = await request.json()
+    assert request.headers.get("Authorization") == "Bearer synthetic-voice-key"
+    assert body["voice_setting"]["voice_id"] == "fixture_voice" and body["model"] == "speech-02-hd"
+    return {"data": {"audio": b"ID3synthetic-minimax".hex()}}
 
 
 def record(body):

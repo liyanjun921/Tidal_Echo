@@ -47,7 +47,7 @@ function renderMessages(force=false,anchor=false){
   else{const bubble=el('div','message-bubble');rich.render(bubble,m.text,m.kind==='stream');row.append(bubble)}
   for(const att of m.meta?.attachments||[]){const box=el('div','message-attachment');const b=button(att.name||'附件',async()=>{try{const url=await relay.media(att),a=document.createElement('a');a.href=url;a.download=att.name||'attachment';a.click()}catch(e){toast(e.message)}},'');box.append(b);if(String(att.mime||'').startsWith('image/')){const img=el('img');img.alt=att.name||'上传图片';img.loading='lazy';box.prepend(img);relay.media(att).then(url=>img.src=url).catch(()=>img.alt='图片暂不可用')}row.append(box)}
   const meta=el('div','message-meta');meta.append(el('span','',m.kind==='stream'?'正在回复…':stamp(m)));
-  if(m.kind!=='stream'&&m.kind!=='act'){meta.append(button('复制',()=>navigator.clipboard.writeText(m.text||'').then(()=>toast('已复制')).catch(()=>toast('请长按选择文字')),''));if(user)meta.append(button('记住这句',()=>openMemory(m),''));else meta.append(button('朗读',()=>{if(!relay.enabled){toast('朗读需要连接已配置 MiniMax 的服务器');return}relay.tts(m.text).catch(e=>toast(e.message))},''))}
+  if(m.kind!=='stream'&&m.kind!=='act'){meta.append(button('复制',()=>navigator.clipboard.writeText(m.text||'').then(()=>toast('已复制')).catch(()=>toast('请长按选择文字')),''));if(user)meta.append(button('记住这句',()=>openMemory(m),''));else meta.append(button('朗读',()=>{if(!relay.enabled){toast('朗读需要连接已配置 MiniMax 或 ElevenLabs 的服务器');return}relay.tts(m.text).catch(e=>toast(e.message))},''))}
   if(m.status==='failed')meta.append(button('核对并重试发送',()=>submitRemote(m),''));
   row.append(meta);root.append(row);
  }
