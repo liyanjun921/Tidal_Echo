@@ -33,6 +33,8 @@ python -m venv .venv
 
 进程入口 `scripts/run_lune.py` 会启动网页/relay 和内部 api_loop，并在任意一方退出时结束另一方。单实例、单 worker 运行；SQLite 和内存任务表不支持直接横向扩容。Docker 配置文件已提供，但本次环境没有 Docker 引擎，因此镜像构建尚未实测；相同 Python 双进程启动方式已完成浏览器联调。
 
+免费、不绑卡的 Render / Netlify 比较与实际内存证据见 [免费部署评估](LUNE_FREE_HOSTING.md)。当前容器持久卷方案不能直接当作免费云端方案使用。
+
 ### 容器部署配置
 
 已提供 `compose.lune.yaml` 和 `lune.env.example`。运行端准备私人 `.env` 中的连接密钥后，执行 `docker compose -f compose.lune.yaml up -d --build`。网页端不需要装 Docker 或 Node。容器将 SQLite、上传、模型设置、Latent 源码、向量缓存、冷却状态及完整档案放在同一个 `/data` 持久卷内，仅在服务器回环地址发布 8080；HTTPS 反代接入该端口。普通更新保留此卷。
