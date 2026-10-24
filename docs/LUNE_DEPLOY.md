@@ -35,6 +35,8 @@ python -m venv .venv
 
 ## 手机配置
 
+使用 ChatGPT 订阅代替 API Key 时，先按 [V0.6 订阅连接](LUNE_V06.md) 在电脑完成官方登录并连接到自己的服务器，再从手机选择订阅模型。Claude 订阅目前仅预留官方交互式 CLI 桥接，尚不能直接聊天；选中预留模式不会调用已保存的 API Key。
+
 1. Safari 打开自己的 HTTPS 地址，点设置，API 地址保留 `/relay`，输入服务器连接密钥。
 2. 分别展开 GPT、Claude 设置，填写自己的 API Base URL、固定模型 ID、API Key 和接口格式。OpenAI 兼容一般填包含 `/v1` 的基础地址；不要填完整 `/chat/completions`。Anthropic 可填服务基础地址或以 `/v1` 结尾的基础地址。中转站格式以其接口说明为准。
 3. 保存，再选择“测试已保存配置”。测试会请求一次模型，可能产生少量用量。密钥框清空表示已交给服务端，不表示保存失败。

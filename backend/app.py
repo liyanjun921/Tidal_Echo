@@ -465,6 +465,12 @@ def loop_json(path: str, method: str = "GET", body=None):
             return json.loads(raw) if raw else {}
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", "replace")[:500]
+        try:
+            parsed = json.loads(detail)
+            if isinstance(parsed.get("detail"), str):
+                detail = parsed["detail"]
+        except (ValueError, AttributeError):
+            pass
         raise HTTPException(status_code=exc.code, detail=detail)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"loop proxy error: {exc}")
@@ -850,6 +856,23 @@ async def app_tts(request: Request):
         media_type="audio/mpeg",
         headers={"Cache-Control": "no-store"},
     )
+
+
+@app.get("/lune/chatgpt-helper")
+async def chatgpt_login_helper(request: Request):
+    """Download only public helper sources, never runtime credentials."""
+    check_auth(request)
+    import io
+    import zipfile
+    root = Path(__file__).resolve().parents[1]
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.write(root / "scripts" / "chatgpt_login.py", "chatgpt_login.py")
+        archive.write(root / "examples" / "lune_auth.py", "lune_auth.py")
+        archive.writestr("requirements.txt", "httpx==0.28.1\nPyJWT[crypto]==2.15.1\n")
+        archive.writestr("start-windows.cmd", '@echo off\r\ncd /d "%~dp0"\r\npy -3 -m venv .login-env\r\nif errorlevel 1 goto end\r\n.login-env\\Scripts\\python.exe -m pip install -r requirements.txt\r\nif errorlevel 1 goto end\r\n.login-env\\Scripts\\python.exe chatgpt_login.py --export "%USERPROFILE%\\.lune\\lune-chatgpt-connection.json"\r\n:end\r\npause\r\n')
+        archive.writestr("README.txt", "Luné ChatGPT 订阅连接助手\n\n需要电脑上的 Python 3.10+ 和浏览器，无需 Node。Windows 解压后双击 start-windows.cmd。其他系统安装 requirements.txt 后运行 python chatgpt_login.py --export ~/.lune/lune-chatgpt-connection.json。\n\n登录只在 OpenAI 官方页面完成。授权成功后，在自己的 HTTPS Luné 设置中导入电脑私人目录里的连接文件。不要把它发给聊天、代码仓库或他人。首次登录与文件导入完成后，可继续从 iPhone 使用自己的 Luné 服务器。导出后助手清除电脑端的活动令牌，由导入端负责刷新。账户权限与可用模型以实际授权结果为准。\n")
+    return Response(buffer.getvalue(), media_type="application/zip", headers={"Cache-Control": "no-store", "Content-Disposition": 'attachment; filename="Lune-ChatGPT-Login-Helper.zip"'})
 
 
 # ---------------------------------------------------------------------------

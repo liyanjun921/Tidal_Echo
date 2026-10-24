@@ -2,6 +2,10 @@
 .venv
 venv
 node_modules
+lune-private
+**/lune-private
+**/chatgpt-plan*.json*
+**/*chatgpt*connection*.json
 **/__pycache__
 **/*.pyc
 **/.env

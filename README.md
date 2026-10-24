@@ -1,4 +1,6 @@
-# Luné / OURSPACE · V0.5 Echo × dwell 重做
+# Luné / OURSPACE · V0.6 订阅连接
+
+GPT 新增官方 ChatGPT 订阅授权与 Responses 适配；Claude 预留官方 CLI / tmux 桥接模式。API / 订阅独立切换，订阅错误不自动调用 API Key。首次授权需电脑本地回调或连接助手，真实账户尚待授权验收；Claude 运行时尚未接通。详见 [订阅连接与验证](docs/LUNE_V06.md)。
 
 本分支以 Tidal Echo 的 relay / API loop 为底座，参考 fang-claude / dwell 的 UI 结构与功能文档，重新实现聊天主屏、抽屉导航、分层页面和双行输入区。Luné 旧版本只保留灰白蓝色调、水光背景与液态玻璃材质。包含 GPT / Claude 私聊、三人群聊、隔离记忆，以及可实际保存的待办、日历、日记、悄悄话、共读批注等生活页。直接从 [本版状态与测试](docs/LUNE_V05.md) 和 [部署及 iPhone 使用](docs/LUNE_DEPLOY.md) 开始。网页入口为 `web/index.html`，双进程启动入口为 `scripts/run_lune.py`，Docker 构建使用 `Dockerfile.lune`。私人预览仅展示界面与本机保存；真实供应商、MiniMax、锁屏通知与真机 Safari 尚待部署后验收。
 

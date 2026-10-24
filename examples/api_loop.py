@@ -75,6 +75,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "backend"))
 from lune import memory_context
 from workspace import whisper_context
+from lune_auth import PlanError, PlanStore
+from lune_plan import chat as plan_chat, register as register_plan
 CURRENT_AGENT = ContextVar("lune_agent", default="")
 CURRENT_RUN = ContextVar("lune_run", default="")
 
@@ -119,7 +121,7 @@ TEXTISH_EXT = {
 # .env / *.env / .env.* , *.pem, *.key, relay.db*, api_loop.config.json, id_rsa*, *.p12/*.pfx,
 # and anything with "secret", "credential" or "token" in the name.
 SECRET_NAME_RE = re.compile(
-    r"((^|\.)env(\.|$)|\.pem$|\.key$|relay\.db|api_loop\.config\.json|id_rsa|\.p12$|\.pfx$|secret|credential|token)", re.I
+    r"((^|\.)env(\.|$)|\.pem$|\.key$|relay\.db|api_loop\.config\.json|id_rsa|\.p12$|\.pfx$|secret|credential|token|chatgpt[-_](plan|connection))", re.I
 )
 
 CONFIG_DEFAULTS: dict[str, Any] = {
@@ -192,6 +194,11 @@ def main_chain() -> list[dict[str, str]]:
     agent = CURRENT_AGENT.get()
     if agent:
         row = cfg.get("agents", {}).get(agent, {})
+        mode = row.get("connection_mode", "api")
+        if mode == "chatgpt_plan" and agent == "gpt":
+            return [{**row, "protocol": "chatgpt_plan", "model": row.get("subscription_model", ""), "url": "ChatGPT subscription"}]
+        if mode == "claude_subscription" and agent == "claude":
+            return [{**row, "protocol": "claude_subscription", "model": "Claude subscription (reserved)", "url": "reserved"}]
         return [row] if all(row.get(k) for k in ("url", "key", "model")) else []
     configured = cfg.get("main_chain")
     if isinstance(configured, list):
@@ -446,6 +453,9 @@ async def attachment_parts(atts: list[dict[str, Any]], *, with_images: bool) -> 
         if not isinstance(att, dict):
             continue
         name = str(att.get("name") or "file")
+        if SECRET_NAME_RE.search(name):
+            notes.append("已跳过可能含私人授权的附件；订阅连接文件应在设置中导入。")
+            continue
         mime = str(att.get("mime") or mimetypes.guess_type(name)[0] or "application/octet-stream")
         size = int(att.get("size") or 0)
         is_image = mime.startswith("image/")
@@ -841,6 +851,8 @@ def all_tools() -> list[dict[str, Any]]:
 
 
 def attach_allowed(path: Path) -> bool:
+    if "lune-private" in path.resolve().parts:
+        return False
     if SECRET_NAME_RE.search(path.name):
         return False
     roots = [r for r in (load_config().get("attach_roots") or []) if isinstance(r, str) and r.strip()]
@@ -1118,7 +1130,14 @@ async def run_model(messages: list[dict[str, Any]], tools: list[dict[str, Any]] 
                 await think_sink(chunk)
 
         try:
-            if stream and STREAM_OUTPUT:
+            if route.get("protocol") == "claude_subscription":
+                raise ModelError(503, "Claude 订阅接口已预留，当前尚未接通；没有调用 API。", route)
+            if route.get("protocol") == "chatgpt_plan":
+                try:
+                    out = await plan_chat(route, messages, tools, _sink if stream and STREAM_OUTPUT else None, gate=require_active_run)
+                except PlanError as exc:
+                    raise ModelError(exc.status, exc.message, route) from None
+            elif stream and STREAM_OUTPUT:
                 out = await stream_chat(route, messages, tools, _sink, _think)
             else:
                 out = await complete_chat(route, messages, tools)
@@ -1128,6 +1147,8 @@ async def run_model(messages: list[dict[str, Any]], tools: list[dict[str, Any]] 
         except ModelError as exc:
             err = f"{route.get('model')} @ {route.get('url')}: HTTP {exc.status} {exc.detail[:160]}"
             errors.append(err)
+            if route.get("protocol") in {"chatgpt_plan", "claude_subscription"}:
+                raise ModelError(exc.status, exc.detail, route) from exc
             if started["v"] or exc.status not in FALLBACK_CODES:
                 raise ModelError(exc.status, "; ".join(errors), route) from exc
         except Exception as exc:
@@ -1221,7 +1242,7 @@ async def _handle_turn(
                 raise ModelError(0, "model requested tools after the step limit")
             if step >= max_steps:
                 messages.append({"role": "assistant", "content": out.get("text") or None, "tool_calls": [
-                    {"id": c["id"], "type": "function", "function": {"name": c["name"], "arguments": c["arguments"]}} for c in calls]})
+                    {"id": c["id"], "type": "function", "function": {"name": c["name"], "arguments": c["arguments"]}} for c in calls], **({"responses_items": out["responses_items"]} if "responses_items" in out else {})})
                 for c in calls:
                     messages.append({"role": "tool", "tool_call_id": c["id"], "content": f"ERROR: tool step limit ({max_steps}) reached; answer with what you have."})
                 tools = None
@@ -1229,7 +1250,7 @@ async def _handle_turn(
                 continue
             step += 1
             messages.append({"role": "assistant", "content": out.get("text") or None, "tool_calls": [
-                {"id": c["id"], "type": "function", "function": {"name": c["name"], "arguments": c["arguments"]}} for c in calls]})
+                {"id": c["id"], "type": "function", "function": {"name": c["name"], "arguments": c["arguments"]}} for c in calls], **({"responses_items": out["responses_items"]} if "responses_items" in out else {})})
             steps_meta = []
             for c in calls:
                 result = await turn.run_tool(c["name"], c["arguments"])
@@ -1247,7 +1268,9 @@ async def _handle_turn(
 
     reply = "\n\n".join(t for t in texts if t).strip()
     if error:
-        reply = (reply + "\n\n" if reply else "") + ("⚠️ 模型请求未完成，请检查地址、模型、密钥或额度。" if CURRENT_AGENT.get() else f"⚠️ API loop 出错：{error}")
+        mode = load_config().get("agents", {}).get(CURRENT_AGENT.get(), {}).get("connection_mode", "api")
+        note = "⚠️ " + error if mode != "api" else ("⚠️ 模型请求未完成，请检查地址、模型、密钥或额度。" if CURRENT_AGENT.get() else f"⚠️ API loop 出错：{error}")
+        reply = (reply + "\n\n" if reply else "") + note
     if not reply:
         reply = "(The API loop did not produce a reply.)"
     meta: dict[str, Any] = {
@@ -1257,6 +1280,7 @@ async def _handle_turn(
         "usage": turn.usage,
         "session": session_id,
         "tool_steps": step,
+        "connection_mode": load_config().get("agents", {}).get(CURRENT_AGENT.get(), {}).get("connection_mode", "api"),
     }
     if error:
         meta["error"] = "model_request_failed" if CURRENT_AGENT.get() else error
@@ -1392,6 +1416,8 @@ async def lune_agents():
                              "model": configured.get(name, {}).get("model", ""),
                              "persona": configured.get(name, {}).get("persona", ""),
                              "protocol": configured.get(name, {}).get("protocol", "openai"),
+                             "connection_mode": configured.get(name, {}).get("connection_mode", "api"),
+                             "subscription_model": configured.get(name, {}).get("subscription_model", ""),
                              "key_set": bool(configured.get(name, {}).get("key"))}
                         for name in ("gpt", "claude")}}
 
@@ -1399,20 +1425,23 @@ async def lune_agents():
 @app.post("/loop/agents")
 async def lune_agents_update(request: Request):
     body = await request.json()
-    name = body.get("agent")
+    name = body.get("agent") if isinstance(body, dict) else None
     if name not in {"gpt", "claude"}:
         raise HTTPException(422, "模型身份不正确")
     cfg = load_config()
     rows = cfg.setdefault("agents", {})
     old = dict(rows.get(name, {}))
-    for field in ("url", "model", "persona", "protocol"):
+    for field in ("url", "model", "persona", "protocol", "connection_mode", "subscription_model"):
         if field in body:
             old[field] = str(body[field]).strip()
-    if not old.get("url", "").startswith(("https://", "http://127.0.0.1:", "http://localhost:")):
+    mode = old.get("connection_mode", "api")
+    if mode not in ({"api", "chatgpt_plan"} if name == "gpt" else {"api", "claude_subscription"}):
+        raise HTTPException(422, "连接方式与模型身份不匹配")
+    if mode == "api" and not old.get("url", "").startswith(("https://", "http://127.0.0.1:", "http://localhost:")):
         raise HTTPException(422, "API 地址须为 HTTPS，或本机开发地址")
     if old.get("protocol", "openai") not in {"openai", "anthropic"}:
         raise HTTPException(422, "不支持的接口格式")
-    if not old.get("model") or len(old.get("persona", "")) > 24000:
+    if mode == "api" and not old.get("model") or len(old.get("persona", "")) > 24000 or len(old.get("subscription_model", "")) > 160:
         raise HTTPException(422, "请填写模型 ID，说明最多 24000 字")
     if body.get("key"):
         old["key"] = str(body["key"]).strip()
@@ -1430,10 +1459,16 @@ async def lune_agent_test(request: Request):
     try:
         result = await run_model([{"role": "user", "content": "Reply with OK."}], None, stream=False)
         return {"ok": bool(result.get("text")), "model": result.get("model")}
+    except ModelError as exc:
+        mode = load_config().get("agents", {}).get(name, {}).get("connection_mode", "api")
+        raise HTTPException(exc.status or 502, exc.detail if mode != "api" else "测试未通过，请核对 API 地址、密钥、模型 ID 和额度")
     except Exception:
-        raise HTTPException(502, "测试未通过，请核对 API 地址、密钥、模型 ID 和额度")
+        raise HTTPException(502, "测试未完成，请检查连接状态")
     finally:
         CURRENT_AGENT.reset(token)
+
+
+register_plan(app)
 
 
 @app.post("/loop/config")
