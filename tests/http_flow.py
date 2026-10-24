@@ -84,4 +84,39 @@ with httpx.Client(base_url="http://127.0.0.1:8089/relay", headers={"Authorizatio
         result = c.post("/app/tts", json={"text": "测试朗读"})
         result.raise_for_status()
         assert result.content == ("ID3synthetic-" + provider).encode()
+    if os.environ.get("LUNE_LATENT_SOURCE"):
+        import json
+        def native_job(kind, data=None):
+            jid = post('/lune/native/gpt/jobs/'+kind, data or {})['id']
+            for _ in range(400):
+                jobs = c.get('/lune/native/status').json()['jobs']
+                job = next(j for j in jobs if j['id']==jid)
+                if job['state'] not in {'queued','running'}:
+                    assert job['state']=='done', job
+                    return json.loads(job['result'])
+                time.sleep(.1)
+            raise AssertionError('native job timeout')
+        archived = native_job('flush')
+        assert archived['status']=='flushed' and archived['batches'], archived
+        assert archived['cursor_epoch']>0
+        tools = post('/lune/native/gpt/mcp', {'jsonrpc':'2.0','id':1,'method':'tools/list'})['result']['tools']
+        assert len(tools)==10 and all(t['name']!='latent_passive_recall' for t in tools)
+        search = post('/lune/native/gpt/mcp', {'jsonrpc':'2.0','id':1,'method':'tools/call','params':{'name':'latent_search','arguments':{'query':'蓝色鸢尾'}}})
+        assert not search['result'].get('isError'), search
+        imported = native_job('import', {'name':'history.md','content':'## 2026-10-20\n用户：NATIVE_IMPORT_MARKER 在海边看到了蓝色风筝。\n助手：我们记下了那只风筝。\n当下状态：这件事已经结束。'})
+        assert imported['entries']>0
+        backed = native_job('backup')
+        backup = c.get(backed['download']);backup.raise_for_status();assert backup.content[:2]==b'PK'
+        checked = native_job('initialize', {'step':'inspect','persona':'这是用户自己的完整人格文件。\n不预设新的身份。','existing_persona_choice':'use_original_as_is'})
+        assert checked['exit_code']==0, checked
+        assert native_job('initialize', {'step':'route','route':'local'})['exit_code']==0
+        assert native_job('initialize', {'step':'ship'})['exit_code']==0
+        native_job('backfill')
+        prepared = post('/lune/native/gpt/prepare-continuation', {})
+        assert prepared['ok'] and prepared['cursor_epoch']>0
+        send('gpt','PERSONA_RELOAD_TRIGGER 请继续聊今天的事')
+        send('gpt','NATIVE_WRITE_TRIGGER 我想周六去海边看风筝。')
+        native_written = post('/lune/native/gpt/mcp', {'jsonrpc':'2.0','id':1,'method':'tools/call','params':{'name':'latent_search','arguments':{'query':'周六去海边看风筝'}}})
+        assert not native_written['result'].get('isError'), native_written
+        print('Full Latent HTTP PASS: 10 original tools + tool-free archive/self-review/facts + durable cursor + native import + backup + original inspect/route/ship + backfill + archive-before-continuation checkpoint')
     print("HTTP flow passed: private chat → group → attachment → MCP → assistant-created durable todo → MiniMax + ElevenLabs speech")

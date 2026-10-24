@@ -1,0 +1,172 @@
+{
+  "source_revision": "835250d080c02d9553d3b96d9a2753773a4a0c3c",
+  "raw_report_sha256": "070a4275ab763025186f57e4f53a0f115235d18ac88fc9649a3f100c69daacdf",
+  "summary": {
+    "passed": 32,
+    "failed": 0,
+    "timeout": 0
+  },
+  "checks": [
+    {
+      "file": "admin_api.py",
+      "status": "passed",
+      "duration_seconds": 0.064
+    },
+    {
+      "file": "background_archive.py",
+      "status": "passed",
+      "duration_seconds": 0.898
+    },
+    {
+      "file": "chunking_experiment.py",
+      "status": "passed",
+      "duration_seconds": 0.035
+    },
+    {
+      "file": "claude_code_hook.py",
+      "status": "passed",
+      "duration_seconds": 1.811
+    },
+    {
+      "file": "degradation_protocol.py",
+      "status": "passed",
+      "duration_seconds": 0.034
+    },
+    {
+      "file": "distinctive_token_experiment.py",
+      "status": "passed",
+      "duration_seconds": 0.52
+    },
+    {
+      "file": "draft_extraction.py",
+      "status": "passed",
+      "duration_seconds": 0.058
+    },
+    {
+      "file": "e2e_smoke.py",
+      "status": "passed",
+      "duration_seconds": 5.501
+    },
+    {
+      "file": "embedding_provider.py",
+      "status": "passed",
+      "duration_seconds": 0.145
+    },
+    {
+      "file": "forge_session.py",
+      "status": "passed",
+      "duration_seconds": 0.614
+    },
+    {
+      "file": "gate_experiment.py",
+      "status": "passed",
+      "duration_seconds": 1.416
+    },
+    {
+      "file": "mcp_server.py",
+      "status": "passed",
+      "duration_seconds": 30.628
+    },
+    {
+      "file": "memory_import.py",
+      "status": "passed",
+      "duration_seconds": 0.09
+    },
+    {
+      "file": "memory_init.py",
+      "status": "passed",
+      "duration_seconds": 18.589
+    },
+    {
+      "file": "memory_retrieval.py",
+      "status": "passed",
+      "duration_seconds": 0.488
+    },
+    {
+      "file": "notes_state.py",
+      "status": "passed",
+      "duration_seconds": 0.059
+    },
+    {
+      "file": "passive_facts.py",
+      "status": "passed",
+      "duration_seconds": 1.128
+    },
+    {
+      "file": "passive_metadata.py",
+      "status": "passed",
+      "duration_seconds": 0.029
+    },
+    {
+      "file": "passive_recall.py",
+      "status": "passed",
+      "duration_seconds": 0.854
+    },
+    {
+      "file": "passive_recall_host.py",
+      "status": "passed",
+      "duration_seconds": 0.04
+    },
+    {
+      "file": "passive_recall_observation.py",
+      "status": "passed",
+      "duration_seconds": 0.029
+    },
+    {
+      "file": "persona_compiler.py",
+      "status": "passed",
+      "duration_seconds": 0.054
+    },
+    {
+      "file": "persona_template.py",
+      "status": "passed",
+      "duration_seconds": 0.032
+    },
+    {
+      "file": "present_gold1_builder.py",
+      "status": "passed",
+      "duration_seconds": 0.277
+    },
+    {
+      "file": "probe_guard.py",
+      "status": "passed",
+      "duration_seconds": 0.037
+    },
+    {
+      "file": "reference_host.py",
+      "status": "passed",
+      "duration_seconds": 0.354
+    },
+    {
+      "file": "regression_set.py",
+      "status": "passed",
+      "duration_seconds": 25.676
+    },
+    {
+      "file": "rerank_experiment.py",
+      "status": "passed",
+      "duration_seconds": 0.046
+    },
+    {
+      "file": "session_recall.py",
+      "status": "passed",
+      "duration_seconds": 0.05
+    },
+    {
+      "file": "session_thread.py",
+      "status": "passed",
+      "duration_seconds": 0.037
+    },
+    {
+      "file": "time_context.py",
+      "status": "passed",
+      "duration_seconds": 0.047
+    },
+    {
+      "file": "unresolved_state.py",
+      "status": "passed",
+      "duration_seconds": 0.039
+    }
+  ],
+  "network_note": "A nonessential Microsoft telemetry request was denied by automatic approval review; it was not authorized or retried. Luné local ONNX runtime now disables telemetry events."
+}

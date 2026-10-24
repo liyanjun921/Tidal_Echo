@@ -33,7 +33,7 @@ with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
             else:
                 raise RuntimeError("test services did not start")
         if "--http-only" in sys.argv:
-            subprocess.run([sys.executable, "tests/http_flow.py"], cwd=root, env=env, check=True, timeout=90)
+            subprocess.run([sys.executable, "tests/http_flow.py"], cwd=root, env=env, check=True, timeout=180)
         else:
             subprocess.run([env.get("CODEX_PRIMARY_RUNTIME_NODE", "node"), "tests/browser.cjs"], cwd=root, env=env, check=True, timeout=90)
         requests = [json.loads(line) for line in Path(env["LUNE_TEST_REQUESTS"]).read_text().splitlines()]
@@ -47,6 +47,9 @@ with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
         assert any("ATTACHMENT_BODY_MARKER" in json.dumps(r) for r in requests)
         assert any(m.get("role") == "tool" and "TOOL_RESULT_MARKER" in m.get("content", "") for r in requests for m in r["messages"])
         if env.get("LUNE_PASSIVE_MODEL_CACHE"):
+            native_tools = {t["function"]["name"] for r in requests for t in r.get("tools", []) if t.get("type") == "function"}
+            assert {"latent_search", "latent_append", "latent_thread_close", "latent_fact_backfill", "latent_note_reply"} <= native_tools
+            assert "latent_passive_recall" not in native_tools
             native = [r for r in requests if "〔历史证据〕" in json.dumps(r, ensure_ascii=False)]
             assert native, "native recall never reached an actual provider HTTP request"
             assert any("我喜欢蓝色鸢尾" in json.dumps(r, ensure_ascii=False) for r in native)

@@ -48,6 +48,8 @@ def _atomic(path, text):
 def native_provider(cache):
     global _provider
     if _provider is None:
+        import onnxruntime
+        onnxruntime.disable_telemetry_events()
         from embedding_provider import LocalProvider
         from fastembed import TextEmbedding
         # Configure the native provider's underlying backend for offline runtime.

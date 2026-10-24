@@ -17,6 +17,8 @@ MODEL = "BAAI/bge-small-zh-v1.5"
 
 def prepare_vectors(cache):
     """Download public weights/tokenizer once; no private text or credentials used."""
+    import onnxruntime
+    onnxruntime.disable_telemetry_events()
     from fastembed import TextEmbedding
     import tiktoken
     cache = Path(cache).expanduser().resolve()

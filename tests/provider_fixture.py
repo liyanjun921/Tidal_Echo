@@ -37,6 +37,19 @@ async def openai(request: Request):
     reply = "TEST_GPT：消息已经过测试服务保存。"
     tool_name = next((t["function"]["name"] for t in body.get("tools", []) if t["function"]["name"].endswith("__echo")), None)
     last_user = next((m["content"] for m in reversed(body["messages"]) if m["role"] == "user"), "")
+    if body["messages"][0].get("content", "").startswith("严格按整理任务"):
+        import re
+        prompt = str(last_user)
+        if "事实拆条" in prompt:
+            reply = json.dumps({"fact": "用户说自己喜欢蓝色鸢尾。", "tag": "life", "kind": "state"}, ensure_ascii=False)
+        elif '只输出 JSON 对象 {"items"' in prompt:
+            batch = json.loads(prompt[prompt.rfind("\n[") + 1:])
+            reply = json.dumps({"items": [{"block": item["block"], "facts": []} for item in batch]})
+        else:
+            day = re.search(r"# 对话整理 · (\d{4}-\d{2}-\d{2})", prompt).group(1)
+            reply = "# 对话整理 · " + day + "\n用户说自己喜欢蓝色鸢尾。\n当下状态：这段对话已经结束，偏好按原话记录。"
+        assert not body.get("tools"), "archive model must have no tools"
+        return {"choices": [{"message": {"content": reply}}]}
     wants_tool = "TOOL_UI_MARKER" in str(last_user) and not any(m["role"] == "tool" for m in body["messages"])
     arguments = '{"value":"echo fixture"}'
     if "WORKSPACE_TRIGGER" in str(last_user) and not any(m["role"] == "tool" for m in body["messages"]):
@@ -45,6 +58,11 @@ async def openai(request: Request):
     if "MEMORY_WRITE_TRIGGER" in str(last_user) and not any(m["role"] == "tool" for m in body["messages"]):
         wants_tool, tool_name = True, "lune_memory"
         arguments = json.dumps({"action": "remember", "quote": "我喜欢蓝色鸢尾。", "title": "HTTP_MEMORY_SAVED"})
+    if "NATIVE_WRITE_TRIGGER" in str(last_user) and not any(m["role"] == "tool" for m in body["messages"]):
+        wants_tool, tool_name = True, "latent_append"
+        arguments = json.dumps({"text": "用户说想周六去海边看风筝。", "current_state": "只是计划，尚未成行。",
+            "indexEvidence": [{"type": "event", "quote": "用户说想周六去海边看风筝。"}, {"type": "state", "quote": "只是计划，尚未成行。"}],
+            "unresolvedOps": [{"action": "none"}]})
     if any(m["role"] == "tool" for m in body["messages"]):
         reply = "TEST_GPT：TOOL_RESULT_MARKER 工具结果已收到。"
     if not body.get("stream"):

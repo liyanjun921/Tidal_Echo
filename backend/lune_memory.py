@@ -82,7 +82,9 @@ class MemoryStore:
     def config(self):
         with self.db() as c:
             row = c.execute("SELECT * FROM lune_memory_settings WHERE id=1").fetchone()
-        return {**json.loads(row["value"]), "version": row["version"]}
+        return {"native_full": True, "archive_enabled": True, "archive_facts": True,
+                "context_continuation": True, "embedding_route": "local", "archive_agent": "gpt",
+                **json.loads(row["value"]), "version": row["version"]}
 
     def configure(self, body):
         with self.db() as c:
@@ -91,10 +93,17 @@ class MemoryStore:
             if body.get("version") != row["version"]:
                 raise HTTPException(409, "记忆设置已更新，请刷新")
             value = json.loads(row["value"])
-            for key in ("enabled", "auto_recall", "model_writes"):
+            for key in ("enabled", "auto_recall", "model_writes", "native_full", "archive_enabled", "archive_facts", "context_continuation"):
                 if key in body:
                     if not isinstance(body[key], bool):
                         raise HTTPException(422, "记忆开关必须是布尔值")
+                    value[key] = body[key]
+            for key, allowed in (("embedding_route", {"zero-dep", "local", "cloud"}), ("archive_agent", {"gpt", "claude"})):
+                if key in body:
+                    if not isinstance(body[key], str) or body[key] not in allowed:
+                        raise HTTPException(422, "检索路线或后台模型不正确")
+                    if body[key] == "cloud" and os.environ.get("LUNE_LATENT_CLOUD_CONSENT") != "1":
+                        raise HTTPException(409, "云端向量会发送查询和语料；请先由所有者在服务器配置供应商及 LUNE_LATENT_CLOUD_CONSENT=1")
                     value[key] = body[key]
             c.execute("UPDATE lune_memory_settings SET value=?,version=version+1 WHERE id=1", (json.dumps(value),))
         return self.config()
@@ -266,8 +275,8 @@ class LatentEngine:
         # Do not inherit the application's credentials, proxy settings or Python hooks.
         env = {k: v for k, v in os.environ.items() if k in {"PATH", "SYSTEMROOT", "WINDIR", "LANG", "LC_ALL", "TMPDIR"}}
         env.update(PYTHONIOENCODING="utf-8", PYTHONDONTWRITEBYTECODE="1")
-        if payload.get("operation") == "passive_check" or (payload.get("operation") == "context" and payload.get("auto_recall")):
-            if not self.passive_status()["assets_ready"]:
+        if payload.get("operation") in {"passive_check", "full"} or (payload.get("operation") == "context" and payload.get("auto_recall")):
+            if not self.passive_status()["assets_ready"] and (payload.get("operation") != "full" or payload.get("embedding_route") == "local"):
                 raise RuntimeError("native_passive_assets_missing")
             try:
                 from .latent_process import call_native
@@ -275,7 +284,10 @@ class LatentEngine:
                 from latent_process import call_native
             payload.update(private_state=str(self.private_state()), model_cache=str(self.model_cache()))
             env["TIKTOKEN_CACHE_DIR"] = str(self.model_cache() / "tiktoken")
-            if payload["operation"] == "context":
+            if payload.get("embedding_route") == "cloud":
+                names = {"LUNE_LATENT_CLOUD_CONSENT", "MEMORY_EMBED_PROVIDER", "MEMORY_EMBED_MODEL", "MEMORY_EMBED_ENDPOINT", "MEMORY_EMBED_API_KEY_ENV", "MEMORY_EMBED_QUERY_PREFIX", "MEMORY_EMBED_HIT_FLOOR", os.environ.get("MEMORY_EMBED_API_KEY_ENV", "MEMORY_EMBED_API_KEY")}
+                env.update({k: os.environ[k] for k in names if k in os.environ})
+            if payload["operation"] in {"context", "full"}:
                 return await call_native(self.source(), env, payload)
         process = await asyncio.create_subprocess_exec(sys.executable, "-I", "-B", str(Path(__file__).with_name("latent_worker.py")), str(self.source()),
                        stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL, env=env)

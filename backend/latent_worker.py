@@ -10,6 +10,9 @@ import time
 
 
 def run(payload):
+    if payload.get("operation") == "full":
+        from latent_full_worker import dispatch
+        return dispatch(payload)
     from memory_retrieval import MemoryIndex, has_history_intent
     from session_recall import SessionRecall, format_recall_block
     from session_thread import ThreadStore, auto_close_thread

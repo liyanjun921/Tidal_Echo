@@ -46,7 +46,7 @@ async def call_native(source, env, payload):
     loop = asyncio.get_running_loop()
     source = str(source)
     worker = _workers.get(loop)
-    if worker is None or worker.source != source:
+    if worker is None or worker.source != source or worker.env != env:
         if worker:
             await worker.close()
         worker = NativeWorker(source, env)
