@@ -36,6 +36,28 @@ with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
             subprocess.run([sys.executable, "tests/http_flow.py"], cwd=root, env=env, check=True, timeout=180)
         else:
             subprocess.run([env.get("CODEX_PRIMARY_RUNTIME_NODE", "node"), "tests/browser.cjs"], cwd=root, env=env, check=True, timeout=90)
+        with httpx.Client(trust_env=False, timeout=30, headers={"Authorization": "Bearer fixture-owner-secret"}) as client:
+            base = "http://127.0.0.1:8089/relay"
+            saved = client.get(base + "/lune/rooms/gpt/messages").json()["messages"]
+            memories = client.get(base + "/lune/memories").json()["memories"]
+            children[2].terminate()
+            children[2].wait(timeout=20)
+            children[2] = subprocess.Popen([sys.executable, "scripts/run_lune.py"], cwd=root, env=env, stdout=log, stderr=log, start_new_session=True)
+            for _ in range(100):
+                try:
+                    if client.get("http://127.0.0.1:8089/readyz").status_code == 200:
+                        break
+                except httpx.HTTPError:
+                    pass
+                time.sleep(.1)
+            else:
+                raise AssertionError("services did not become ready after restart")
+            assert client.get(base + "/lune/rooms/gpt/messages").json()["messages"] == saved
+            assert client.get(base + "/lune/memories").json()["memories"] == memories
+            if env.get("LUNE_LATENT_SOURCE"):
+                result = client.post(base + "/lune/native/gpt/mcp", json={"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"latent_search","arguments":{"query":"周六去海边看风筝"}}}).json()
+                assert not result["result"].get("isError"), result
+            print("Restart persistence PASS: both services ready; messages, saved memories and native archive survive restart")
         requests = [json.loads(line) for line in Path(env["LUNE_TEST_REQUESTS"]).read_text().splitlines()]
         group = [r for r in requests if "GROUP_UI_MARKER" in json.dumps(r, ensure_ascii=False)]
         assert len(group) >= 2

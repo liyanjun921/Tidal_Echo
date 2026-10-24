@@ -33,6 +33,16 @@ python -m venv .venv
 
 进程入口 `scripts/run_lune.py` 会启动网页/relay 和内部 api_loop，并在任意一方退出时结束另一方。单实例、单 worker 运行；SQLite 和内存任务表不支持直接横向扩容。Docker 配置文件已提供，但本次环境没有 Docker 引擎，因此镜像构建尚未实测；相同 Python 双进程启动方式已完成浏览器联调。
 
+### 容器部署配置
+
+已提供 `compose.lune.yaml` 和 `lune.env.example`。运行端准备私人 `.env` 中的连接密钥后，执行 `docker compose -f compose.lune.yaml up -d --build`。网页端不需要装 Docker 或 Node。容器将 SQLite、上传、模型设置、Latent 源码、向量缓存、冷却状态及完整档案放在同一个 `/data` 持久卷内，仅在服务器回环地址发布 8080；HTTPS 反代接入该端口。普通更新保留此卷。
+
+上线健康检查使用 `/readyz`：实际核对 SQLite、内部 api_loop 和自动安装模式下的 Latent 本地资源，成功返回 200；依赖未就绪返回 503，响应不包含私人配置。它不代替真实账号对话测试。首次安装会下载公开源码、模型及 tokenizer，容器健康检查留出初始宽限期；最终耗时取决于运行端网络。
+
+Render 路线尚未创建资源。其持久磁盘需要付费服务，不能将无持久盘的免费服务作为这版私人记忆库的正式保存位置。使用 Render 前须确认工作区、服务方案、磁盘和费用；当前部署配置本身不会创建或计费任何云端资源。规格依据为 Render 当前的 [持久磁盘文档](https://render.com/docs/disks)。已有支持 Docker 的服务器也可使用同一份 Compose 配置。
+
+本轮部署准备验证：71 项 Python 测试通过；真实本地 HTTP 联调包含 `/readyz`，并完整停止、重启双进程后核对消息、保存的记忆及原版档案仍可读取和检索。Compose 已通过 YAML 结构、引用文件和持久目录检查；当前环境没有 Docker 引擎，尚未执行镜像构建或 Compose 启动，也没有创建正式公网后端。
+
 ## 手机配置
 
 Latent 完整功能接线见 [V0.9 功能表与验证](LUNE_V09.md)。在服务器设置 `LUNE_LATENT_AUTO_SETUP=1` 后首次启动会独立安装固定源码并准备本地向量模型与 tokenizer，不把这些资源打进镜像；需要 Git 及首次下载网络，并将资源目录放在持久私人卷。新增完整原版工具、后台落档、人格初始化、导入与山屋数据管理；后台使用当前选定模型，私聊不跨模型整理。资源不足不会伪造成功，静态预览也不运行 Python 记忆服务。

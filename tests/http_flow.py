@@ -7,6 +7,8 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 
 with httpx.Client(base_url="http://127.0.0.1:8089/relay", headers={"Authorization": "Bearer fixture-owner-secret"}, trust_env=False, timeout=30) as c:
+    ready = c.get("http://127.0.0.1:8089/readyz")
+    assert ready.status_code == 200 and ready.json() == {"ok": True}, ready.text
     def post(path, body):
         r = c.post(path, json=body)
         r.raise_for_status()
