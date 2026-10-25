@@ -41,13 +41,13 @@ python -m venv .venv
 
 已提供 `compose.lune.yaml` 和 `lune.env.example`。运行端准备私人 `.env` 中的连接密钥后，执行 `docker compose -f compose.lune.yaml up -d --build`。网页端不需要装 Docker 或 Node。容器将 SQLite、上传、模型设置、Latent 源码、向量缓存、冷却状态及完整档案放在同一个 `/data` 持久卷内，仅在服务器回环地址发布 8080；HTTPS 反代接入该端口。普通更新保留此卷。
 
-V0.15 同时运行固定版本的心潮，Docker 已包含 Node 22；网页和 iPhone 无需安装 Node。非容器服务端需 Node 20+。四个心潮端口仅在回环地址监听，前端沿用 relay 鉴权；心潮源安装、模型预算与完整状态备份见 [心潮接入说明](LUNE_V15_XINCHAO.md)。
+当前版同时运行固定版本的心潮和影院，Docker 已包含 Node 24；网页和 iPhone 无需安装 Node。完整非容器服务端需 Node 24+、Python 3.12 和 FFmpeg。四个心潮端口仅在回环地址监听，前端沿用 relay 鉴权；心潮源安装、模型预算与完整状态备份见 [心潮接入说明](LUNE_V15_XINCHAO.md)。
 
 上线健康检查使用 `/readyz`：实际核对 SQLite、内部 api_loop 和自动安装模式下的 Latent 本地资源，成功返回 200；依赖未就绪返回 503，响应不包含私人配置。它不代替真实账号对话测试。首次安装会下载公开源码、模型及 tokenizer，容器健康检查留出初始宽限期；最终耗时取决于运行端网络。
 
 Render 路线尚未创建资源。其持久磁盘需要付费服务，不能将无持久盘的免费服务作为这版私人记忆库的正式保存位置。使用 Render 前须确认工作区、服务方案、磁盘和费用；当前部署配置本身不会创建或计费任何云端资源。规格依据为 Render 当前的 [持久磁盘文档](https://render.com/docs/disks)。已有支持 Docker 的服务器也可使用同一份 Compose 配置。
 
-本轮部署准备验证：71 项 Python 测试通过；真实本地 HTTP 联调包含 `/readyz`，并完整停止、重启双进程后核对消息、保存的记忆及原版档案仍可读取和检索。Compose 已通过 YAML 结构、引用文件和持久目录检查；当前环境没有 Docker 引擎，尚未执行镜像构建或 Compose 启动，也没有创建正式公网后端。
+早期部署准备验证：71 项 Python 测试通过（当前整套验收见 [V0.20 上线准备](LUNE_RELEASE_READINESS.md)）；真实本地 HTTP 联调包含 `/readyz`，并完整停止、重启双进程后核对消息、保存的记忆及原版档案仍可读取和检索。Compose 已通过 YAML 结构、引用文件和持久目录检查；当前环境没有 Docker 引擎，尚未执行镜像构建或 Compose 启动，也没有创建正式公网后端。
 
 ## Folio 合并增强
 
@@ -79,7 +79,7 @@ MCP 设置支持 HTTP 服务及可选 Authorization 请求头，界面可查看�
 
 ## 更新与备份
 
-完整备份至少包含 `/data/relay.db`（使用 SQLite 在线备份或停止服务后拷贝）、`/data/uploads/`、`/data/api_loop.config.json` 以及 VAPID 私钥。JSON 导出适合查看/迁移文本，不能替代完整恢复备份。
+当前完整备份应覆盖整个 `/data` 私人持久卷（停止服务后复制，或对各存储实施一致性快照），包括 SQLite 及伴随文件、uploads、模型配置、Latent、四份 Ombre/Folio、四份心潮和 cinema。另保存卷外的 `.env`、VAPID 私钥和独立 Claude CLI 的授权/配置。JSON 导出适合查看/迁移文本，不能替代完整恢复备份。
 
 更新网页应递增 `web/sw.js` 中的 CACHE 版本。发布前检查没有携带真实 `.env`、配置、数据库、上传内容或私钥；仓库和 Docker 上下文已有对应忽略规则。
 
