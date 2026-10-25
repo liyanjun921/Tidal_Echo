@@ -78,3 +78,17 @@ The verified source files remain unchanged. scripts/run_xinchao.mjs applies
 host boundary adaptations for loopback binding, current Ombre schemas and
 privacy-aware memory projections, real-output reflux and recall resonance.
 The Luné adapter, owner UI and durable delivery queue are host additions.
+
+still-true native lifecycle integration
+---------------------------------------
+Luné V0.16 vendors MIT-licensed files from the user's fork
+https://github.com/liyanjun921/still-true at revision
+f58d6f38fa6a0c3c3acb502af2d63ccb17b81484.
+Copyright (c) 2026 Rumi, Rune, Serein. See
+backend/vendor/still_true/LICENSE and SOURCE.json for pinned file hashes.
+The native living_context.py, today_state.py, hint_snapshots.py and tools.json
+implement the original lifecycle. The sole vendored source adaptation is a
+Windows import fallback for file locking; host code adds four scoped stores,
+canonical current-turn evidence for model writes, authenticated owner UI,
+private audit metadata and session receipts. An expired item does not imply
+the real-world event ended.

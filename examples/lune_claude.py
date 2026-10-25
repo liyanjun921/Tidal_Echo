@@ -145,9 +145,17 @@ class Session:
                     # Fixed protocol goes in the original system prompt; only
                     # current memory/background and current turn are resent.
                     payload = [m for m in messages[1:current_index] if m['role'] == 'system'] + messages[current_index:]
+                hints=None
+                if any(m.get('role')=='system' and isinstance(m.get('content'),str) and m['content'].startswith('当前背景由 still-true 管理') for m in payload):
+                    from lune_living_context import SessionHints
+                    if not self.state.get('hint_epoch'):
+                        self.state['hint_epoch']=uuid.uuid4().hex;self.save()
+                    hints=SessionHints(os.environ['RELAY_DB'],self.scope,self.state['hint_epoch'])
+                    payload=hints.prepare(payload)
                 frame = {'type': 'user', 'message': {'role': 'user', 'content': self.content(payload)}, 'parent_tool_use_id': None}
                 self.proc.stdin.write(json.dumps(frame, ensure_ascii=False).encode() + b'\n')
                 await self.proc.stdin.drain()
+                if hints:hints.sent()
                 text, usage = [], {}
                 while True:
                     gate()
@@ -159,6 +167,7 @@ class Session:
                         raise ClaudeError('Claude 进程已退出；原始聊天保留，未重放本轮')
                     event = json.loads(line)
                     kind = event.get('type')
+                    if hints and (event.get('subtype')=='compact_boundary' or event.get('isCompactSummary')):hints.compacted()
                     if kind == 'system' and event.get('subtype') == 'init':
                         self.state['session_id'] = event['session_id']
                         self.save()
@@ -310,6 +319,7 @@ class Pool:
                     await session.close()
                     session.proc = replacement
                     session.state['session_id'] = value['sessionId']
+                    session.state['hint_epoch']=uuid.uuid4().hex
                     session.state['usage'] = {}
                     session.save()
                     self.maintenance_state[scope] = {'state': 'forged'}

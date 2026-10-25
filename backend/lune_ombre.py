@@ -177,7 +177,15 @@ def register(app, relay):
             raise HTTPException(422, '工具参数格式不正确')
         # Current run was checked immediately before entering the native engine;
         # once a native write commits, cancellation cannot pretend to undo it.
-        return await ob.call(scope, native, args)
+        result=await ob.call(scope,native,args)
+        if native in {'breath','breath_advanced'} and not result.get('isError'):
+            try:
+                try:from .lune_living_context import projection
+                except ImportError:from lune_living_context import projection
+                current=projection(path,data['room'],data['agent_id'])
+                if current['text']:result={**result,'content':[*result.get('content',[]),{'type':'text','text':current['text']}]}
+            except (RuntimeError,ValueError,OSError):pass
+        return result
 
 
 def themed_html(html, scope):

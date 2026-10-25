@@ -87,6 +87,7 @@ CURRENT_RUN = ContextVar("lune_run", default="")
 CURRENT_MEMORY = ContextVar("lune_memory_trace", default=None)
 CURRENT_NATIVE_TOOLS = ContextVar("lune_native_tools", default=None)
 CURRENT_OMBRE_TOOLS = ContextVar("lune_ombre_tools", default=None)
+CURRENT_LIVING_TOOLS=ContextVar('lune_living_tools',default=None)
 CURRENT_XINCHAO_TOOLS=ContextVar('lune_xinchao_tools',default=None)
 CURRENT_XINCHAO_DELIVERED=ContextVar('lune_xinchao_delivered',default=None)
 CURRENT_PASSIVE_BLOCK = ContextVar("lune_passive_block", default="")
@@ -602,6 +603,7 @@ async def build_messages(
     passive_text = ""
     CURRENT_OMBRE_TOOLS.set(None)
     CURRENT_XINCHAO_TOOLS.set(None)
+    CURRENT_LIVING_TOOLS.set(None)
     CURRENT_XINCHAO_DELIVERED.set([])
     agent = CURRENT_AGENT.get()
     if agent:
@@ -662,6 +664,14 @@ async def build_messages(
                 messages.append({'role':'system','content':'心潮原生短态（模拟内部状态与历史资料，不是用户刚说的话；当前用户澄清优先，不据此编造经历或执行外部行动）：\n'+xinchao['text']})
         except (httpx.HTTPError,RuntimeError,ValueError,OSError):
             CURRENT_MEMORY.get()['xinchao']={'status':'unavailable'}
+        from lune_living_context import projection as living_projection
+        try:
+            living=living_projection(RELAY_DB,session_id,agent)
+            CURRENT_LIVING_TOOLS.set(living['tools'])
+            CURRENT_MEMORY.get()['living']={k:v for k,v in living.items() if k not in {'text','tools','version'}}
+            if living['text']:messages.append({'role':'system','content':living['text']})
+        except (RuntimeError,ValueError,OSError,sqlite3.Error):
+            CURRENT_MEMORY.get()['living']={'status':'unavailable'}
     had_images = False
     following = []
     if use_context:
@@ -970,7 +980,7 @@ def all_tools() -> list[dict[str, Any]]:
                 "query": {"type": "string"}, "quote": {"type": "string"}, "title": {"type": "string"},
                 "id": {"type": "string"}, "version": {"type": "integer"}
             }, "required": ["action"]}}})
-    return BUILTIN_TOOLS + extra + (CURRENT_NATIVE_TOOLS.get() or []) + (CURRENT_OMBRE_TOOLS.get() or []) + (CURRENT_XINCHAO_TOOLS.get() or []) + mcp_manager.openai_tools()
+    return BUILTIN_TOOLS + extra + (CURRENT_NATIVE_TOOLS.get() or []) + (CURRENT_OMBRE_TOOLS.get() or []) + (CURRENT_XINCHAO_TOOLS.get() or []) + (CURRENT_LIVING_TOOLS.get() or []) + mcp_manager.openai_tools()
 
 
 def attach_allowed(path: Path) -> bool:
@@ -1034,6 +1044,12 @@ class Turn:
                 args = {}
         except json.JSONDecodeError as exc:
             return f"ERROR: arguments are not valid JSON ({exc})"
+        if public_name in {t['function']['name'] for t in (CURRENT_LIVING_TOOLS.get() or [])} and CURRENT_AGENT.get():
+            async with httpx.AsyncClient(timeout=30,trust_env=False) as client:
+                response=await client.post(RELAY_URL+'/lune/assistant/living',headers=relay_headers(),json={
+                    'room':self.session_id,'agent_id':CURRENT_AGENT.get(),'run_id':CURRENT_RUN.get(),'name':public_name,'arguments':args})
+            response.raise_for_status()
+            return json.dumps(response.json(),ensure_ascii=False)
         if public_name in {t['function']['name'] for t in (CURRENT_XINCHAO_TOOLS.get() or [])} and CURRENT_AGENT.get():
             async with httpx.AsyncClient(timeout=180,trust_env=False) as client:
                 response=await client.post(RELAY_URL+'/lune/assistant/xinchao',headers=relay_headers(),json={
@@ -1310,10 +1326,12 @@ async def run_model(messages: list[dict[str, Any]], tools: list[dict[str, Any]] 
                     else:
                         native_tools, ombre_tools = CURRENT_NATIVE_TOOLS.get(), CURRENT_OMBRE_TOOLS.get()
                         xinchao_tools=CURRENT_XINCHAO_TOOLS.get()
+                        living_tools=CURRENT_LIVING_TOOLS.get()
                         async def dispatch(name, args):
                             tokens = [(CURRENT_AGENT, CURRENT_AGENT.set('claude')), (CURRENT_RUN, CURRENT_RUN.set(rid)),
                                 (CURRENT_NATIVE_TOOLS, CURRENT_NATIVE_TOOLS.set(native_tools)), (CURRENT_OMBRE_TOOLS, CURRENT_OMBRE_TOOLS.set(ombre_tools)),
-                                (CURRENT_XINCHAO_TOOLS,CURRENT_XINCHAO_TOOLS.set(xinchao_tools))]
+                                (CURRENT_XINCHAO_TOOLS,CURRENT_XINCHAO_TOOLS.set(xinchao_tools)),
+                                (CURRENT_LIVING_TOOLS,CURRENT_LIVING_TOOLS.set(living_tools))]
                             try:
                                 require_active_run()
                                 result = await turn.run_tool(name, json.dumps(args, ensure_ascii=False))
@@ -1362,6 +1380,7 @@ async def run_model(messages: list[dict[str, Any]], tools: list[dict[str, Any]] 
 # ---------------------------------------------------------------------------
 
 def _step_label(calls: list[dict[str, Any]]) -> str:
+    if all(c['name'] in {'today_set','today_get','ctx_set','ctx_get','ctx_drop'} for c in calls):return '查看或更新了当前背景'
     if all(c['name'].startswith('xinchao_') for c in calls):return '使用了心潮工具'
     names = [mcp_manager.index.get(c["name"], ("", c["name"]))[1] for c in calls]
     if len(names) == 1:
@@ -1457,9 +1476,10 @@ async def _handle_turn(
                 messages.append({"role": "tool", "tool_call_id": c["id"], "content": result})
                 real = mcp_manager.index.get(c["name"], ("", c["name"]))[1]
                 private=c['name'].startswith('xinchao_')
-                steps_meta.append({"tool":'xinchao' if private else real,
-                    "cmd":'心潮私有参数不展示' if private else c['arguments'][:600],
-                    "result":'原生结果已交付当前模型，私有内容不进入聊天动作卡' if private else result[:1200]})
+                living_private=c['name'] in {'today_set','today_get','ctx_set','ctx_get','ctx_drop'}
+                steps_meta.append({"tool":'xinchao' if private else 'living_context' if living_private else real,
+                    "cmd":'心潮私有参数不展示' if private else '当前背景参数不重复展示' if living_private else c['arguments'][:600],
+                    "result":'原生结果已交付当前模型，私有内容不进入聊天动作卡' if private else '当前背景工具已返回，原始结果可在当前背景页面核对' if living_private else result[:1200]})
             if any(c["name"].startswith(("latent_", "ombre_")) or c["name"] == "lune_memory" for c in calls):
                 block = CURRENT_PASSIVE_BLOCK.get()
                 if block:

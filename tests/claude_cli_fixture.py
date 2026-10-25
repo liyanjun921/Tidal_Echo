@@ -26,6 +26,10 @@ sid = sys.argv[sys.argv.index('--resume') + 1] if '--resume' in sys.argv else st
 emit({'type': 'system', 'subtype': 'init', 'session_id': sid})
 for i, line in enumerate(sys.stdin):
     row = json.loads(line)
+    if os.environ.get('LUNE_TEST_CLI_FRAMES'):
+        with open(os.environ['LUNE_TEST_CLI_FRAMES'],'a') as frame_log:frame_log.write(line)
+    if 'COMPACT_CLI_TRIGGER' in line:
+        emit({'type':'system','subtype':'compact_boundary'})
     if 'FAIL_CLI_TRIGGER' in line:
         emit({'type': 'result', 'subtype': 'error_during_execution', 'is_error': True})
         continue

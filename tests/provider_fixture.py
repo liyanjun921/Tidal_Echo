@@ -64,6 +64,18 @@ async def openai(request: Request):
         return {"choices": [{"message": {"content": reply}}]}
     wants_tool = "TOOL_UI_MARKER" in str(last_user) and not any(m["role"] == "tool" for m in body["messages"])
     arguments = '{"value":"echo fixture"}'
+    if body.get('tools') and 'LIVING_WRITE_TRIGGER' in str(last_user):
+        assert {'today_set','today_get','ctx_set','ctx_get','ctx_drop'} <= {t['function']['name'] for t in body['tools']}
+        count=sum(m['role']=='tool' for m in body['messages'])
+        sequence=[('today_set',{'items':[{'key':'晚饭','value':'今天晚饭吃了青菜'}],'quote':'我今天晚饭吃了青菜。'}),
+                  ('ctx_set',{'key':'家人来访','value':'妈妈现在还在我这里，准备下周回家','ttl_days':14,'quote':'妈妈准备下周回家，现在还在我这里。'}),
+                  ('today_get',{}),('ctx_get',{})]
+        if count<len(sequence):
+            wants_tool,tool_name=True,sequence[count][0]
+            arguments=json.dumps(sequence[count][1],ensure_ascii=False)
+    if body.get('tools') and 'LIVING_DROP_TRIGGER' in str(last_user) and not any(m['role']=='tool' for m in body['messages']):
+        wants_tool,tool_name=True,'ctx_drop'
+        arguments=json.dumps({'key':'家人来访','quote':'妈妈今天已经回家了。'},ensure_ascii=False)
     if body.get('tools') and 'XC_BOX_TRIGGER' in str(last_user) and not any(m['role']=='tool' for m in body['messages']):
         wants_tool,tool_name=True,'xinchao_box'
         arguments=json.dumps({'action':'put','kind':'secret','text':'XC_SECRET_ACTUAL_TOOL_RESULT','title':'XC_PRIVATE_TITLE'},ensure_ascii=False)

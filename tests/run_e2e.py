@@ -45,6 +45,7 @@ with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
         subprocess.run([sys.executable, 'tests/continuity_flow.py'], cwd=root, env=env, check=True, timeout=240)
         subprocess.run([sys.executable, 'tests/wren_flow.py'], cwd=root, env=env, check=True, timeout=180)
         subprocess.run([sys.executable, 'tests/desire_flow.py'], cwd=root, env=env, check=True, timeout=180)
+        subprocess.run([sys.executable,'tests/living_flow.py'],cwd=root,env=env,check=True,timeout=240)
         if env.get('LUNE_XINCHAO_SOURCE'):
             subprocess.run([sys.executable,'tests/xinchao_flow.py'],cwd=root,env=env,check=True,timeout=300)
         with httpx.Client(trust_env=False, timeout=30, headers={"Authorization": "Bearer fixture-owner-secret"}) as client:
@@ -58,6 +59,7 @@ with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
             folio = client.get('http://127.0.0.1:8089/ombre/gpt/api/folio/scoring-config').json() if env.get('LUNE_FOLIO_SOURCE') else None
             xinchao_saved = client.get(base+'/lune/xinchao/gpt/view/cabin').json() if env.get('LUNE_XINCHAO_SOURCE') else None
             xinchao_personality = client.get(base+'/lune/xinchao/gpt/view/personality').json() if env.get('LUNE_XINCHAO_SOURCE') else None
+            living_saved = client.get(base+'/lune/living/gpt').json()
             children[2].terminate()
             children[2].wait(timeout=20)
             children[2] = subprocess.Popen([sys.executable, "scripts/run_lune.py"], cwd=root, env=env, stdout=log, stderr=log, start_new_session=True)
@@ -73,6 +75,10 @@ with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
             assert client.get(base + "/lune/rooms/gpt/messages").json()["messages"] == saved
             assert client.get(base + "/lune/memories").json()["memories"] == memories
             assert client.get(base + "/lune/duet?room=gpt").json() == diaries
+            living_after=client.get(base+'/lune/living/gpt').json()
+            for key in ('today','fresh','stale','archive','dropped','events','settings','version'):
+                assert living_after[key]==living_saved[key],key
+            print('Still-true restart PASS: native today/context/archive, settings and evidence metadata survive supervisor restart')
             after_wren = client.get(base + '/lune/wren/gpt').json()
             for key in ('events','settings','clock'):
                 assert after_wren[key] == wren[key], key
