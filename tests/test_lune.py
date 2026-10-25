@@ -27,9 +27,10 @@ class OwnerDataTests(unittest.TestCase):
         relay.init_db()
         relay.lune_runtime["init"]()
         relay.workspace_runtime["init"]()
+        relay.checklist_runtime["init"]()
         relay.speech_runtime["init"]()
         with relay.db() as c:
-            for table in ("messages", "lune_runs", "lune_memories", "lune_memory_revisions", "lune_imports", "lune_workspace", "lune_speech"):
+            for table in ("messages", "lune_runs", "lune_memories", "lune_memory_revisions", "lune_imports", "lune_workspace", "lune_checklist_alarms", "lune_speech"):
                 c.execute("DELETE FROM " + table)
         self.context = TestClient(relay.app)
         self.client = self.context.__enter__()
@@ -205,6 +206,59 @@ class OwnerDataTests(unittest.TestCase):
         self.assertEqual(self.client.delete("/lune/workspace/" + book["id"], params={"version": 1}).status_code, 409)
         self.assertEqual(self.client.delete("/lune/workspace/" + book["id"], params={"version": 2}).status_code, 200)
         self.assertEqual(self.client.get("/lune/workspace").json()["items"], [])
+
+    def test_timed_checklist_rollover_delivery_and_retry(self):
+        from datetime import datetime, timezone, timedelta
+        clock = int(datetime.now(timezone.utc).timestamp() * 1000)
+        today = datetime.fromtimestamp(clock / 1000, timezone.utc).date()
+        yesterday = (today - timedelta(days=1)).isoformat()
+        daily = self.record("todo", data={"owner":"user", "done":True, "cycle":"daily", "timezone":"UTC", "cycle_day":yesterday})
+        once = self.record("todo", data={"owner":"user", "done":False, "cycle":"once", "timezone":"UTC", "cycle_day":yesterday})
+        alarm = self.record("todo", data={"owner":"user", "done":False, "cycle":"timed", "timezone":"UTC", "cycle_day":yesterday, "trigger_at":clock+60_000, "alarm_room":"gpt"})
+        self.assertEqual(self.client.post('/lune/workspace',json={'kind':'todo','scope':'gpt','title':'wrong room','data':{'cycle':'timed','in_minutes':1,'alarm_room':'claude'}}).status_code,422)
+        relative = self.record("todo", data={"owner":"user", "cycle":"timed", "timezone":"UTC", "in_minutes":30, "alarm_room":"gpt"})
+        self.assertTrue(clock+29*60_000 < relative['data']['trigger_at'] < clock+31*60_000)
+        self.assertNotIn('in_minutes', relative['data'])
+        self.assertEqual(self.client.get('/lune/checklist/alarms',headers={'Authorization':'Bearer wrong'}).status_code,401)
+        called = []
+        async def model(scope, prompt):
+            called.append((scope,prompt))
+            return {'text':json.dumps({'action':'say','text':'该看看这项清单了。'}),'usage':{'total_tokens':9}}
+        asyncio.run(relay.checklist_runtime['tick'](clock_ms=clock+61_000,generate_fn=model))
+        rows = {r['id']:r for r in self.client.get('/lune/workspace').json()['items']}
+        self.assertNotIn(once['id'],rows)
+        self.assertFalse(rows[daily['id']]['data']['done'])
+        self.assertIn(alarm['id'],rows)
+        states = {r['todo_id']:r for r in self.client.get('/lune/checklist/alarms').json()['items']}
+        self.assertEqual(states[alarm['id']]['state'],'delivered')
+        self.assertEqual(called[0][0],'gpt')
+        self.assertIn(alarm['title'],called[0][1])
+        with relay.db() as db:
+            messages = db.execute("SELECT text,meta FROM messages WHERE json_extract(meta,'$.checklist_alarm')=?",(alarm['id'],)).fetchall()
+        self.assertEqual(len(messages),1)
+        self.assertEqual(messages[0]['text'],'该看看这项清单了。')
+        asyncio.run(relay.checklist_runtime['tick'](clock_ms=clock+62_000,generate_fn=model))
+        self.assertEqual(len(called),1)
+        retry = self.record("todo", data={"owner":"user", "done":False, "cycle":"timed", "timezone":"UTC", "cycle_day":today.isoformat(), "trigger_at":clock+70_000, "alarm_room":"gpt"})
+        async def broken(scope,prompt):
+            raise RuntimeError('fixture model unavailable')
+        asyncio.run(relay.checklist_runtime['tick'](clock_ms=clock+71_000,generate_fn=broken))
+        states = {r['todo_id']:r for r in self.client.get('/lune/checklist/alarms').json()['items']}
+        self.assertEqual(states[retry['id']]['state'],'pending')
+        asyncio.run(relay.checklist_runtime['tick'](clock_ms=clock+72_000,generate_fn=model))
+        states = {r['todo_id']:r for r in self.client.get('/lune/checklist/alarms').json()['items']}
+        self.assertEqual(states[retry['id']]['state'],'delivered')
+        self.assertEqual(states[retry['id']]['attempts'],2)
+        cancelled = self.record("todo", data={"owner":"user", "done":False, "cycle":"timed", "timezone":"UTC", "cycle_day":today.isoformat(), "trigger_at":clock+80_000, "alarm_room":"gpt"})
+        async def completed_during_generation(scope,prompt):
+            row = next(r for r in self.client.get('/lune/workspace').json()['items'] if r['id']==cancelled['id'])
+            self.assertEqual(self.client.patch('/lune/workspace/'+row['id'],json={**row,'data':{**row['data'],'done':True}}).status_code,200)
+            return {'text':json.dumps({'action':'say','text':'Should never appear'})}
+        asyncio.run(relay.checklist_runtime['tick'](clock_ms=clock+81_000,generate_fn=completed_during_generation))
+        states = {r['todo_id']:r for r in self.client.get('/lune/checklist/alarms').json()['items']}
+        self.assertEqual(states[cancelled['id']]['state'],'cancelled')
+        with relay.db() as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM messages WHERE json_extract(meta,'$.checklist_alarm')=?",(cancelled['id'],)).fetchone()[0],0)
 
     def test_reading_anchors_replies_and_assistant_ownership(self):
         book = self.record("book", "gpt", content="First paragraph\n\nSecond paragraph", data={"progress": 0, "status": "reading"})

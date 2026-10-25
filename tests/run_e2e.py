@@ -36,6 +36,7 @@ with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
                 raise RuntimeError("test services did not start")
         if "--http-only" in sys.argv:
             subprocess.run([sys.executable, "tests/http_flow.py"], cwd=root, env=env, check=True, timeout=180)
+            subprocess.run([sys.executable, "tests/checklist_flow.py"], cwd=root, env=env, check=True, timeout=75)
         else:
             subprocess.run([env.get("CODEX_PRIMARY_RUNTIME_NODE", "node"), "tests/browser.cjs"], cwd=root, env=env, check=True, timeout=90)
         if env.get('LUNE_OMBRE_SOURCE'):

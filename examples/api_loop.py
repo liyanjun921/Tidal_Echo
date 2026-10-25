@@ -948,14 +948,14 @@ BUILTIN_TOOLS: list[dict[str, Any]] = [{
 
 def all_tools() -> list[dict[str, Any]]:
     extra = [{"type": "function", "function": {
-        "name": "lune_workspace", "description": "Read or save the current room's living pages: todos, diary, calendar, whispers and reading annotations. Only act on the user's request; do not fabricate external events or automatic reminders. Shared or this room's permitted scope only. List before updating and retain the returned version. A listed item with content_truncated=true is only an excerpt, never a whole book. Saving a whisper does not start another conversation.",
+        "name": "lune_workspace", "description": "Read or save the current room's living pages: todos, diary, calendar, whispers and reading annotations. Only act on the user's request; schedule a timed todo only when the user clearly asks for a reminder and its time is known. Never claim it is scheduled before the tool succeeds. Shared or this room's permitted scope only. List before updating and retain the returned version. A listed item with content_truncated=true is only an excerpt, never a whole book. Saving a whisper does not start another conversation.",
         "parameters": {"type": "object", "properties": {
             "action": {"type": "string", "enum": ["list", "create", "update"]},
             "kind": {"type": "string", "enum": ["todo", "journal", "event", "whisper", "book", "annotation", "report"]},
             "scope": {"type": "string", "enum": ["shared", "gpt", "claude", "group"]},
             "id": {"type": "string"}, "version": {"type": "integer"},
             "title": {"type": "string"}, "content": {"type": "string"},
-            "data": {"type": "object", "description": "todo: owner=user|gpt|claude, due=YYYY-MM-DD, time=HH:MM, done=boolean; event: date,time,yearly,special; annotation: book_id,quote,para, optional start/end exact character offsets, replies=[{author,text,at}]. To reply, list annotations first and update with all existing fields and one appended reply authored by yourself. Never alter someone else's note. journal: date,mood"}
+            "data": {"type": "object", "description": "todo: owner=user|gpt|claude, done=boolean. For an explicitly requested alarm set cycle=timed, timezone=IANA zone, alarm_room=current room, and ONE of trigger_at=milliseconds epoch, in_minutes=positive integer, at=HH:MM (today or tomorrow in timezone). For daily reset use cycle=daily; today-only cycle=once. Legacy due/date does not trigger an alarm. event: date,time,yearly,special; annotation: book_id,quote,para, optional start/end exact character offsets, replies=[{author,text,at}]. To reply, list annotations first and update with all existing fields and one appended reply authored by yourself. Never alter someone else's note. journal: date,mood"}
         }, "required": ["action", "kind"]}
     }}] if CURRENT_AGENT.get() else []
     if CURRENT_AGENT.get():

@@ -41,6 +41,8 @@ async def openai(request: Request):
     if not body.get('tools') and '【LUNE_WREN_WAKE】' in str(last_user):
         assert any('系统本轮自动装配的 Room 状态' in str(m.get('content', '')) for m in body['messages'])
         return {'choices':[{'message':{'content':json.dumps({'action':'say','text':'WREN_WAKE_DELIVERED：那本小书慢慢做。'},ensure_ascii=False)}}], 'usage':{'prompt_tokens':31,'completion_tokens':12}}
+    if not body.get('tools') and '【LUNE_CHECKLIST_ALARM】' in str(last_user):
+        return {'choices':[{'message':{'content':json.dumps({'action':'say','text':'CHECKLIST_ALARM_DELIVERED：到时间了，我们一起看看清单。'},ensure_ascii=False)}}], 'usage':{'prompt_tokens':18,'completion_tokens':14}}
     if not body.get('tools') and '【LUNE_FOLIO_' in system:
         result={'name':'Folio精修标题','summary':'FOLIO_REFINED_SUMMARY','narrative':'FOLIO_MOOD_NARRATIVE','tags':['测试'],'domain':['日常'],'valence':.7,'arousal':.4,'importance':6,'content':'FOLIO_REFINED_BODY'}
         return {'choices':[{'message':{'content':json.dumps(result,ensure_ascii=False)}}]}

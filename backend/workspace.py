@@ -8,7 +8,8 @@ import re
 import sqlite3
 import uuid
 from contextlib import contextmanager
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import HTTPException, Request
 
@@ -58,6 +59,42 @@ def validate(body):
         raise HTTPException(422, "完成状态不正确")
     if kind == "todo" and data.get("owner", "user") not in {"user", "gpt", "claude"}:
         raise HTTPException(422, "待办归属不正确")
+    if kind == "todo" and "cycle" in data:
+        cycle = data["cycle"]
+        if cycle not in {"daily", "once", "timed"}:
+            raise HTTPException(422, "清单类型不正确")
+        try:
+            ZoneInfo(data.get("timezone", "Asia/Shanghai"))
+        except (ZoneInfoNotFoundError, TypeError, ValueError):
+            raise HTTPException(422, "清单时区不正确") from None
+        if "cycle_day" in data:
+            try:
+                date.fromisoformat(data["cycle_day"])
+            except (ValueError, TypeError):
+                raise HTTPException(422, "清单日期不正确")
+        if cycle == "timed":
+            if data.get("trigger_at") is None and "in_minutes" in data:
+                minutes = data["in_minutes"]
+                if type(minutes) is not int or not 1 <= minutes <= 366 * 1440:
+                    raise HTTPException(422, "提醒分钟数不正确")
+                data["trigger_at"] = int(datetime.now(timezone.utc).timestamp() * 1000) + minutes * 60_000
+            elif data.get("trigger_at") is None and "at" in data:
+                match = re.fullmatch(r"(?:[01]?\d|2[0-3]):[0-5]\d", str(data["at"]))
+                if not match:
+                    raise HTTPException(422, "提醒时间应为 HH:MM")
+                local = datetime.now(ZoneInfo(data.get("timezone", "Asia/Shanghai")))
+                hour, minute = (int(x) for x in match.group().split(":"))
+                target = local.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                if target <= local:
+                    target = (local + timedelta(days=1)).replace(hour=hour, minute=minute, second=0, microsecond=0)
+                data["trigger_at"] = int(target.timestamp() * 1000)
+            data.pop("in_minutes", None)
+            data.pop("at", None)
+            room = data.get("alarm_room")
+            if type(data.get("trigger_at")) is not int or not 0 < data["trigger_at"] < 32503680000000 or room not in {"gpt", "claude", "group"} or scope not in {"shared", room}:
+                raise HTTPException(422, "提醒时间或房间不正确")
+        elif "trigger_at" in data and data["trigger_at"] is not None:
+            raise HTTPException(422, "只有定时清单可以设置闹钟")
     if kind == "annotation" and (not isinstance(data.get("book_id"), str) or not isinstance(data.get("quote"), str)):
         raise HTTPException(422, "批注缺少书籍和引文")
     if kind == "annotation" and (not data["quote"].strip() or len(data["quote"]) > 2000 or "para" in data and (type(data["para"]) is not int or data["para"] < 0)):
