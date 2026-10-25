@@ -44,6 +44,7 @@ with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
             subprocess.run([sys.executable,'tests/folio_flow.py'],cwd=root,env=env,check=True,timeout=240)
         subprocess.run([sys.executable, 'tests/continuity_flow.py'], cwd=root, env=env, check=True, timeout=240)
         subprocess.run([sys.executable, 'tests/wren_flow.py'], cwd=root, env=env, check=True, timeout=180)
+        subprocess.run([sys.executable, 'tests/desire_flow.py'], cwd=root, env=env, check=True, timeout=180)
         with httpx.Client(trust_env=False, timeout=30, headers={"Authorization": "Bearer fixture-owner-secret"}) as client:
             base = "http://127.0.0.1:8089/relay"
             saved = client.get(base + "/lune/rooms/gpt/messages").json()["messages"]

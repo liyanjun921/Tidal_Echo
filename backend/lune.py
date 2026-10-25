@@ -210,6 +210,18 @@ def register(app, relay):
                 cur = c.execute("INSERT INTO messages(ts,direction,kind,text,meta) VALUES(?,?,?,?,?)", (ts, "in", "user", text, json.dumps(meta, ensure_ascii=False)))
                 mid = cur.lastrowid
                 c.execute("INSERT INTO lune_runs VALUES(?,?,?,?,?,?,?,?,?)", (rid, room, nonce, mid, json.dumps(targets), "pending", "", ts, ts))
+                if c.execute("SELECT 1 FROM sqlite_master WHERE name='lune_wren_settings'").fetchone():
+                    try:
+                        from .lune_wren import SCOPES as BODY_SCOPES,config as body_config,sync_anchor,advance_body
+                    except ImportError:
+                        from lune_wren import SCOPES as BODY_SCOPES,config as body_config,sync_anchor,advance_body
+                    import time
+                    clock=time.time()
+                    for scope,pair in BODY_SCOPES.items():
+                        if pair[0]==room:
+                            cfg=body_config(c,scope)
+                            sync_anchor(c,scope,cfg,clock)
+                            advance_body(c,scope,cfg,clock)
                 c.commit()
             msg = {"id": mid, "ts": ts, "direction": "in", "kind": "user", "text": text, "meta": meta}
             tasks[rid] = asyncio.create_task(run(rid, room, msg, targets))

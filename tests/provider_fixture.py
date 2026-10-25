@@ -64,6 +64,17 @@ async def openai(request: Request):
         return {"choices": [{"message": {"content": reply}}]}
     wants_tool = "TOOL_UI_MARKER" in str(last_user) and not any(m["role"] == "tool" for m in body["messages"])
     arguments = '{"value":"echo fixture"}'
+    if body.get('tools') and 'DESIRE_TOOL_TRIGGER' in str(last_user):
+        count=sum(m['role']=='tool' for m in body['messages'])
+        if count==0:
+            wants_tool,tool_name=True,'lune_workspace'
+            arguments=json.dumps({'action':'create','kind':'journal','scope':'gpt','title':'DESIRE_ACTUAL_WRITE','content':'这是由测试模型真实调用宿主保存的日记。','data':{}},ensure_ascii=False)
+        elif count==1:
+            import sqlite3
+            with sqlite3.connect(os.environ['RELAY_DB']) as db:
+                memory_id=db.execute("SELECT id FROM lune_wren_thoughts WHERE scope='gpt' AND visibility='shared' ORDER BY updated DESC LIMIT 1").fetchone()[0]
+            wants_tool,tool_name=True,'lune_room'
+            arguments=json.dumps({'action':'experience','source_memory_id':memory_id,'content':'DESIRE_REAL_E：我认真地把那本小书的念头留了下来。','valence':.6,'arousal':.5,'tension':.1,'response_tendency':'engage','growth_delta':'growth','priority':85,'visibility':'shared'},ensure_ascii=False)
     if body.get('tools') and 'WREN_TOOL_TRIGGER' in str(last_user) and not any(m['role']=='tool' for m in body['messages']):
         import sqlite3
         with sqlite3.connect(os.environ['RELAY_DB']) as db:

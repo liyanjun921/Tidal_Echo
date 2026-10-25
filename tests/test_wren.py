@@ -85,7 +85,8 @@ class WrenTests(unittest.TestCase):
         value = self.status()
         self.assertEqual(len(value['thoughts']), 1)
         self.assertEqual(value['intent'], 'make')
-        self.assertIn('海边那本小书', w.context(self.path, 'lune-gpt', 'gpt'))
+        self.assertNotIn('海边那本小书', w.context(self.path, 'lune-gpt', 'gpt'))
+        self.assertIn('身体候选意图',w.context(self.path,'lune-gpt','gpt'))
         self.assertNotIn('海边那本小书', w.context(self.path, 'lune-claude', 'claude'))
 
     def test_unknown_visibility_private_has_no_owner_presence_or_context(self):
@@ -97,6 +98,9 @@ class WrenTests(unittest.TestCase):
         mine = self.tool(action='read').json()['thoughts']
         self.assertEqual(len(mine), 1)
         tid = mine[0]['id']
+        self.assertEqual(self.tool(action='satisfy',id=tid).status_code,409)
+        with w.connection(self.path) as db:
+            w.desire.action(db,'gpt',w.config(db,'gpt'),'run','host:fixture-write','make','actual fixture write',time.time())
         self.tool(action='satisfy', id=tid)
         self.tool(action='satisfy', id=tid)
         self.assertEqual(self.tool(action='read').json()['thoughts'][0]['fed'], 1)
@@ -113,6 +117,7 @@ class WrenTests(unittest.TestCase):
         for i in range(8):
             with w.connection(self.path) as db:
                 db.execute('UPDATE lune_runs SET id=?', ('r' + str(i),))
+                w.desire.action(db,'gpt',w.config(db,'gpt'),'r'+str(i),'host:fixture-write','make','actual fixture write',time.time())
             self.tool(action='satisfy', id=tid, run_id='r' + str(i))
         self.assertEqual(self.status()['thoughts'], [])
         with w.connection(self.path) as db:
@@ -122,7 +127,7 @@ class WrenTests(unittest.TestCase):
                 w.record_thought(db, 'gpt', {'source_id': self.mid, 'quote': text, 'drive': 'curiosity'}, time.time())
             self.assertEqual(db.execute('SELECT count(*) FROM lune_wren_thoughts').fetchone()[0], 200)
         sample = {'state': 'flit', 'strength': .4, 'updated': 0}
-        self.assertAlmostEqual(w.thought_view(sample, 21600)['strength'], .2)
+        self.assertAlmostEqual(w.thought_view(sample, 86400)['strength'], .2)
 
     def test_settings_version_validation_quiet_and_fatigue_gate(self):
         self.assertEqual(self.setting(idle_min=1000, idle_max=100).status_code, 422)

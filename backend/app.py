@@ -145,7 +145,17 @@ def save_message(direction: str, kind: str, text: str, meta: dict) -> dict:
         )
         conn.commit()
         mid = cur.lastrowid
-    return {"id": mid, "ts": ts, "direction": direction, "kind": kind, "text": text, "meta": meta}
+    msg={"id": mid, "ts": ts, "direction": direction, "kind": kind, "text": text, "meta": meta}
+    if direction=='out' and kind=='reply':
+        try:
+            from .lune_desire import record_reply
+        except ImportError:
+            from lune_desire import record_reply
+        try:
+            record_reply(DB_PATH,msg)
+        except (ValueError,KeyError,TypeError,sqlite3.Error):
+            print('欲望投递证据未能落账；原聊天正文已保存')
+    return msg
 
 
 def set_reaction(message_id, who, emoji):
