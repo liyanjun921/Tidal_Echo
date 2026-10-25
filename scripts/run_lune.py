@@ -1,6 +1,7 @@
 """Run both services, forwarding termination and stopping if either child fails."""
 import os
 import signal
+import shutil
 import subprocess
 import sys
 import time
@@ -49,6 +50,16 @@ def stop(signum=None, frame=None):
 signal.signal(signal.SIGTERM, stop)
 signal.signal(signal.SIGINT, stop)
 try:
+    cinema_source = root / 'backend/vendor/open_watch_cinema/server.mjs'
+    cinema_node = shutil.which('node')
+    if cinema_source.is_file() and cinema_node:
+        major = int(subprocess.check_output([cinema_node, '--version'], text=True).strip().lstrip('v').split('.')[0])
+        if major >= 24:
+            cinema_env = {**os.environ, 'OPEN_BROWSER': '0', 'PORT': os.environ.get('LUNE_CINEMA_PORT', '4182'),
+                          'LOCAL_DATA_ROOT': os.environ.get('LUNE_CINEMA_DATA') or str(Path(os.environ.get('RELAY_DB', 'relay.db')).resolve().parent / 'cinema')}
+            children.append(subprocess.Popen([cinema_node, str(cinema_source)], env=cinema_env, cwd=cinema_source.parent))
+        else:
+            print('Cinema unavailable: Node.js 24+ is required', flush=True)
     if ombre.installed():
         for scope in ombre.SCOPES:
             children.append(subprocess.Popen([sys.executable, str(root / 'scripts/run_ombre.py')],

@@ -92,3 +92,13 @@ Windows import fallback for file locking; host code adds four scoped stores,
 canonical current-turn evidence for model writes, authenticated owner UI,
 private audit metadata and session receipts. An expired item does not imply
 the real-world event ended.
+
+Open Watch Cinema local runtime
+-------------------------------
+Luné V0.19 includes the MIT-licensed Open Watch Cinema fork at
+https://github.com/liyanjun921/open-watch-cinema revision
+6154eec6ef8f8d2a1831169b2f54952ccab71bea.
+Copyright (c) 2026 wynsyl1014. Its original LICENSE and documentation live
+in backend/vendor/open_watch_cinema/. The only vendored source changes add
+an optional idempotency nonce to room messages; Luné's authenticated proxy,
+upload, guest model loop and water-light page are separate host additions.

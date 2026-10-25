@@ -16,7 +16,7 @@ async function request(path,opts={}){
  if(preview)throw new Error('界面预览未连接服务器，请勿在此填写密钥');
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),opts.timeout||30000),abort=()=>controller.abort();if(opts.signal?.aborted)controller.abort();else opts.signal?.addEventListener('abort',abort,{once:true});
  try{const r=await fetch(apiUrl(path),{...opts,signal:controller.signal,headers:{Authorization:'Bearer '+secret,...(opts.body&&typeof opts.body==='string'?{'Content-Type':'application/json'}:{}),...opts.headers}});
- if(!r.ok){let message='请求失败 HTTP '+r.status;try{const d=await r.json();message=typeof d.detail==='string'?d.detail:message}catch{};throw new Error(message)}
+ if(!r.ok){let message='请求失败 HTTP '+r.status;try{const d=await r.json();message=typeof d.detail==='string'?d.detail:typeof d.error==='string'?d.error:message}catch{};throw new Error(message)}
  return opts.blob?await r.blob():await r.json();
  }finally{clearTimeout(timer);opts.signal?.removeEventListener('abort',abort)}
 }
@@ -163,6 +163,7 @@ function wire(){
  if(!preview&&'serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>toast('离线缓存暂不可用，在线聊天不受影响'));
 }
 window.LuneRelay={get enabled(){return !!secret},get base(){return config.base},request,json,load,memories,media,tts,settings,connect,wire,pending,keepPending,clearPending,workspace,
+ cinemaUrl(path){if(!secret||!/^\/api\/media\/[a-f0-9]{24}\/(?:stream|subtitles\/[a-z0-9-]+)$/.test(path))throw Error('影院资源地址不正确');return apiUrl('/lune/cinema'+path)+'?token='+encodeURIComponent(secret)},
  select(room){activeRoom=room;if(secret)load(room).catch(e=>toast(e.message))},
  send(room,text,attachments,nonce){return json(`/lune/rooms/${room}/send`,'POST',{text,attachments,nonce})},
  async upload(file){return request('/app/upload?name='+encodeURIComponent(file.name),{method:'POST',body:file,headers:{'Content-Type':file.type||'application/octet-stream'}})},

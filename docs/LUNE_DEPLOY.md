@@ -20,7 +20,7 @@ RELAY_AI_NAME=Luné
 RELAY_APP_PATH=/
 ```
 
-容器构建文件是 `Dockerfile.lune`。运行时挂载持久目录到 `/data`，注入以上变量，仅将 8080 接到支持 SSE 的 HTTPS 反向代理；不对外开放内部 3020 端口。代理转发 `/relay/app/stream` 时关闭缓冲，空闲超时至少 10 分钟。访问日志不要记录查询字符串，因为 EventSource 的连接密钥会放在 token 参数中。
+容器构建文件是 `Dockerfile.lune`。运行时挂载持久目录到 `/data`，注入以上变量，仅将 8080 接到支持 SSE 的 HTTPS 反向代理；不对外开放内部 3020 或影院 4182 端口。代理转发 `/relay/app/stream` 时关闭缓冲，空闲超时至少 10 分钟。影院影片、房间和 AI 包保存在 `/data/cinema`，需要和 SQLite 一起备份；影片从前端分片导入时，反代单次请求体至少允许 4 MB。访问日志不要记录查询字符串，因为 EventSource 和影院视频资源的连接密钥会放在 token 参数中。详见 `docs/LUNE_CINEMA.md`。
 
 开发环境可用 Python：
 

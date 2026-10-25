@@ -658,6 +658,7 @@ async def lifespan(app: FastAPI):
     lune_runtime["init"]()
     workspace_runtime["init"]()
     checklist_runtime["init"]()
+    cinema_runtime["init"]()
     speech_runtime["init"]()
     native_runtime["init"]()
     continuity_runtime["init"]()
@@ -668,14 +669,16 @@ async def lifespan(app: FastAPI):
     continuity_watch = asyncio.create_task(continuity_runtime["watch"]())
     wren_watch = asyncio.create_task(wren_runtime["watch"]())
     checklist_watch = asyncio.create_task(checklist_runtime["watch"]())
+    cinema_watch = asyncio.create_task(cinema_runtime["watch"]())
     xinchao_watch=asyncio.create_task(xinchao_runtime['watch']())
     yield
     native_watch.cancel()
     continuity_watch.cancel()
     wren_watch.cancel()
     checklist_watch.cancel()
+    cinema_watch.cancel()
     xinchao_watch.cancel()
-    await asyncio.gather(native_watch, continuity_watch, wren_watch, checklist_watch, xinchao_watch, return_exceptions=True)
+    await asyncio.gather(native_watch, continuity_watch, wren_watch, checklist_watch, cinema_watch, xinchao_watch, return_exceptions=True)
     await wren_runtime["shutdown"]()
     await continuity_runtime["shutdown"]()
     await native_runtime["shutdown"]()
@@ -1152,6 +1155,14 @@ try:
 except ImportError:
     from lune_checklist import register as register_checklist
 checklist_runtime = register_checklist(app, globals())
+try:
+    from .lune_cinema import register as register_cinema
+    from .lune_cinema_companion import register as register_cinema_companion
+except ImportError:
+    from lune_cinema import register as register_cinema
+    from lune_cinema_companion import register as register_cinema_companion
+register_cinema(app, globals())
+cinema_runtime = register_cinema_companion(app, globals())
 try:
     from .speech import register as register_speech
 except ImportError:

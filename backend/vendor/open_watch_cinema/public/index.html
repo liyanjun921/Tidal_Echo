@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Open Watch Cinema</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="cinema-page">
+    <section class="cinema-heading" aria-labelledby="cinemaTitle">
+      <p class="eyebrow">OPEN WATCH CINEMA</p>
+      <p class="cinema-whisper" id="cinemaTitle">Let the room disappear. Keep the story.</p>
+    </section>
+
+    <section class="cinema-workspace" id="cinemaWorkspace" aria-live="polite">
+      <section class="player-shell" id="playerShell">
+        <div class="player-stage" id="playerStage">
+          <div class="screen-frame" id="screenFrame">
+            <video id="videoPlayer" controls preload="metadata" playsinline></video>
+            <div class="danmaku-layer" id="danmakuLayer" aria-hidden="true"></div>
+            <div class="screen-placeholder" id="screenPlaceholder">
+              <span class="placeholder-icon" aria-hidden="true">▶</span>
+              <strong>The screen is waiting</strong>
+              <small>Choose a film from the strip below.</small>
+            </div>
+
+            <div class="screen-actions" id="screenActions">
+              <button class="screen-action-button sidebar-toggle-button" id="sidebarHandle" type="button" aria-expanded="false" aria-controls="roomSidebar" title="Open room sidebar">
+                <span aria-hidden="true">◀</span>
+                <b id="unreadBadge" hidden>0</b>
+              </button>
+              <button class="screen-action-button fullscreen-button" id="fullscreenButton" type="button" title="Cinema full screen" aria-label="Cinema full screen">
+                <span aria-hidden="true">⛶</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="danmaku-dock" id="danmakuDock">
+            <button class="danmaku-toggle" id="danmakuToggle" type="button" aria-pressed="true">
+              Danmaku on
+            </button>
+            <div class="subtitle-picker" id="subtitlePicker">
+              <label for="subtitleSelect">CC</label>
+              <select id="subtitleSelect" aria-label="Subtitle track" disabled>
+                <option value="off">Subtitles off</option>
+              </select>
+              <button id="addSubtitleButton" type="button" title="Add a local SRT or VTT subtitle">＋ SRT/VTT</button>
+              <input id="subtitleFileInput" type="file" accept=".srt,.vtt,text/vtt,application/x-subrip" hidden>
+            </div>
+            <form class="quick-composer" id="quickComposer" hidden>
+              <input id="quickMessageInput" type="text" maxlength="800" autocomplete="off" placeholder="Say it at this frame…">
+              <button type="submit">Send</button>
+            </form>
+            <span class="dock-note" id="dockNote">Open the room when the story asks for company.</span>
+          </div>
+        </div>
+      </section>
+
+      <aside class="room-sidebar" id="roomSidebar" aria-label="Room conversation and past sessions">
+        <header class="sidebar-header">
+          <div>
+            <p class="eyebrow">THE ROOM BESIDE THE SCREEN</p>
+            <h2 id="sidebarTitle">Room messages</h2>
+          </div>
+          <button class="icon-button" id="closeSidebarButton" type="button" aria-label="Close sidebar">×</button>
+        </header>
+
+        <div class="sidebar-tabs" role="tablist" aria-label="Room sidebar views">
+          <button class="sidebar-tab active" id="messagesTab" type="button" role="tab" aria-selected="true">Messages</button>
+          <button class="sidebar-tab" id="sessionsTab" type="button" role="tab" aria-selected="false">Past sessions</button>
+        </div>
+
+        <section class="sidebar-panel" id="messagesPanel" role="tabpanel">
+          <div class="room-summary" id="roomSummary">
+            <strong>No room is open.</strong>
+            <p>The screen is yours alone.</p>
+          </div>
+
+          <details class="identity-settings" id="identitySettings">
+            <summary>
+              <span>Your name</span>
+              <strong id="currentNameLabel">Viewer</strong>
+            </summary>
+            <label for="senderNameInput">Name shown in this cinema</label>
+            <input id="senderNameInput" type="text" maxlength="60" autocomplete="nickname" value="Viewer">
+          </details>
+
+          <div class="message-list" id="messageList"></div>
+          <form class="sidebar-composer" id="sidebarComposer" hidden>
+            <textarea id="sidebarMessageInput" maxlength="800" rows="3" aria-label="Room message" placeholder="Say it at this frame…"></textarea>
+            <button type="submit">Send to room</button>
+          </form>
+        </section>
+
+        <section class="sidebar-panel" id="sessionsPanel" role="tabpanel" hidden>
+          <p class="session-help">Every ended room keeps its words beside the frame where they were spoken.</p>
+          <div class="session-list" id="sessionList"></div>
+        </section>
+      </aside>
+
+      <div class="now-playing-row">
+        <div>
+          <span>NOW PLAYING</span>
+          <strong id="nowPlayingTitle">Nothing selected</strong>
+          <p id="playerMessage">The curtain is waiting.</p>
+        </div>
+        <div class="room-controls">
+          <span class="room-state" id="roomState">Solo viewing</span>
+          <button class="room-button" id="openRoomButton" type="button" disabled>Open room</button>
+          <button class="room-button danger" id="endRoomButton" type="button" hidden>End room</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="library-section" id="librarySection" aria-labelledby="libraryTitle">
+      <div class="section-heading">
+        <button class="library-title-button" id="libraryToggle" type="button" aria-expanded="true" aria-controls="libraryBody">
+          <span>
+            <small>TONIGHT'S FILM STRIP</small>
+            <strong id="libraryTitle">Films</strong>
+          </span>
+          <i aria-hidden="true">⌃</i>
+        </button>
+
+        <div class="library-tools">
+          <label class="library-search" for="librarySearch">
+            <span aria-hidden="true">⌕</span>
+            <input id="librarySearch" type="search" autocomplete="off" placeholder="Search films…">
+          </label>
+          <span class="count-badge" id="mediaCount">0 films</span>
+          <button class="quiet-button" id="rescanButton" type="button" title="Rescan films">
+            <span aria-hidden="true">↻</span>
+            Rescan
+          </button>
+          <div class="server-pill" id="serverStatus" title="Projector status">Warming…</div>
+        </div>
+      </div>
+
+      <div class="library-body" id="libraryBody">
+        <div class="library-body-inner">
+          <div class="empty-state" id="emptyState" hidden>
+            <strong>No film on the reel yet.</strong>
+            <p>Add one to the film folder, then press <b>Rescan</b>.</p>
+          </div>
+          <div class="empty-state search-empty" id="searchEmpty" hidden>
+            <strong>No matching film.</strong>
+            <p>Try another title or clear the search.</p>
+          </div>
+          <div class="media-strip" id="mediaGrid"></div>
+        </div>
+      </div>
+    </section>
+
+    <dialog class="ai-subtitle-dialog playback-repair-dialog" id="playbackRepairDialog" aria-labelledby="playbackRepairDialogTitle">
+      <form method="dialog" class="ai-subtitle-form playback-repair-form">
+        <p class="eyebrow">PLAYBACK REPAIR</p>
+        <h2 id="playbackRepairDialogTitle">What went wrong?</h2>
+        <p class="ai-subtitle-help">Tell the cinema what you actually observed. It will change only the smallest media layer that needs help, without guessing a browser compatibility table.</p>
+        <fieldset class="ai-subtitle-options playback-repair-options" id="playbackRepairOptions">
+          <label class="ai-subtitle-option">
+            <input type="radio" name="playbackRepair" value="audio">
+            <span><b>Picture works, no sound</b><small>Keep the video and container. Convert only audio.</small></span>
+          </label>
+          <label class="ai-subtitle-option">
+            <input type="radio" name="playbackRepair" value="video">
+            <span><b>Sound works, no picture</b><small>Keep the audio and container. Convert only video.</small></span>
+          </label>
+          <label class="ai-subtitle-option">
+            <input type="radio" name="playbackRepair" value="remux">
+            <span><b>The file will not load</b><small>Try a light MP4 rewrap first. No video or audio re-encoding.</small></span>
+          </label>
+          <label class="ai-subtitle-option">
+            <input type="radio" name="playbackRepair" value="safe">
+            <span><b>Not sure · use the safest fallback</b><small>Use MP4 and only transcode tracks that miss the conservative H.264/AAC profile.</small></span>
+          </label>
+        </fieldset>
+        <div class="ai-subtitle-actions">
+          <button class="room-button" id="playbackRepairCancel" type="submit" value="cancel">Cancel</button>
+          <button class="room-button ai-subtitle-confirm" id="playbackRepairConfirm" type="submit" value="confirm" disabled>Start repair</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="ai-subtitle-dialog" id="aiSubtitleDialog" aria-labelledby="aiSubtitleDialogTitle">
+      <form method="dialog" class="ai-subtitle-form">
+        <p class="eyebrow">AI DIALOGUE TRACK</p>
+        <h2 id="aiSubtitleDialogTitle">Choose subtitles for the AI</h2>
+        <p class="ai-subtitle-help">Choose the timed dialogue track the connected AI will read. This does not change the subtitles shown on your screen.</p>
+        <fieldset class="ai-subtitle-options" id="aiSubtitleOptions"></fieldset>
+        <div class="ai-subtitle-actions">
+          <button class="room-button" id="aiSubtitleCancel" type="submit" value="cancel">Cancel</button>
+          <button class="room-button ai-subtitle-confirm" id="aiSubtitleConfirm" type="submit" value="confirm">Prepare AI package</button>
+        </div>
+      </form>
+    </dialog>
+  </main>
+
+  <footer>
+    Open Watch Cinema · Keep the lights low and the room close.
+  </footer>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
