@@ -41,6 +41,8 @@ python -m venv .venv
 
 已提供 `compose.lune.yaml` 和 `lune.env.example`。运行端准备私人 `.env` 中的连接密钥后，执行 `docker compose -f compose.lune.yaml up -d --build`。网页端不需要装 Docker 或 Node。容器将 SQLite、上传、模型设置、Latent 源码、向量缓存、冷却状态及完整档案放在同一个 `/data` 持久卷内，仅在服务器回环地址发布 8080；HTTPS 反代接入该端口。普通更新保留此卷。
 
+V0.15 同时运行固定版本的心潮，Docker 已包含 Node 22；网页和 iPhone 无需安装 Node。非容器服务端需 Node 20+。四个心潮端口仅在回环地址监听，前端沿用 relay 鉴权；心潮源安装、模型预算与完整状态备份见 [心潮接入说明](LUNE_V15_XINCHAO.md)。
+
 上线健康检查使用 `/readyz`：实际核对 SQLite、内部 api_loop 和自动安装模式下的 Latent 本地资源，成功返回 200；依赖未就绪返回 503，响应不包含私人配置。它不代替真实账号对话测试。首次安装会下载公开源码、模型及 tokenizer，容器健康检查留出初始宽限期；最终耗时取决于运行端网络。
 
 Render 路线尚未创建资源。其持久磁盘需要付费服务，不能将无持久盘的免费服务作为这版私人记忆库的正式保存位置。使用 Render 前须确认工作区、服务方案、磁盘和费用；当前部署配置本身不会创建或计费任何云端资源。规格依据为 Render 当前的 [持久磁盘文档](https://render.com/docs/disks)。已有支持 Docker 的服务器也可使用同一份 Compose 配置。

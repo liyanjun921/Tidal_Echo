@@ -46,7 +46,7 @@ def settings(path, scope):
     return {'enabled': bool(row[0]), 'automatic': bool(row[1])}
 
 
-async def context(path, room, agent, query, opening=None):
+async def context(path, room, agent, query, opening=None,event_id=''):
     scope = ob.scope_for(room, agent)
     value = {'scope': scope, 'status': 'not_installed', 'tools': [], 'text': ''}
     if not ob.installed():
@@ -69,13 +69,25 @@ async def context(path, room, agent, query, opening=None):
         parts = []
         if opening:
             parts.append(ob.text_result(await ob.call(scope, 'breath')))
-        parts.append(ob.text_result(await ob.call(scope, 'breath_search',
-            {'query': query, 'max_results': 2, 'mode': 'automatic'})))
+        coordinates={}
+        try:
+            try:from . import xinchao_runtime as xc
+            except ImportError:import xinchao_runtime as xc
+            if xc.installed() and xc.config(scope)['enabled'] and xc.config(scope)['memory_read']:
+                state=await xc.request(scope,'/v1/dashboard/snapshot')
+                emotion=state.get('emotion',{})
+                coordinates={key:emotion[key] for key in ('valence','arousal') if type(emotion.get(key)) in (int,float)}
+        except (httpx.HTTPError,ValueError,RuntimeError):pass
+        parts.append(ob.text_result(await ob.call(scope, 'breath_advanced' if coordinates else 'breath_search',
+            {'query': query, 'max_results': 2, 'mode': 'automatic',**coordinates})))
         # Never cut a memory body into an invented fragment: omit an oversized
         # projection entirely and leave all native tools available for retrieval.
         text = '\n\n'.join(p for p in parts if p)
         value['text'] = text if len(text) <= 24000 else ''
         value['projection_omitted'] = len(text) > 24000
+        if coordinates and event_id:
+            try:await xc.request(scope,'/lune-host/resonance','POST',{'id':'recall:'+event_id,'text':text[:24000]})
+            except (httpx.HTTPError,ValueError,RuntimeError):pass
     return value
 
 

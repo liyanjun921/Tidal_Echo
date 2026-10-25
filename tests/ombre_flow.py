@@ -63,7 +63,8 @@ with httpx.Client(base_url=BASE, timeout=90, trust_env=False,
         other.raise_for_status()
         assert other.json() == [], (scope, other.text)
     buckets = get('/api/buckets')
-    marker = next(b for b in buckets if 'Ombre真实工具接线' in b['name'])
+    marker = next((b for b in buckets if 'Ombre真实工具接线' in b['name']), None)
+    assert marker, {'missing_written_title': buckets}
     native('hold', {'content': '另一件独立的经历：我今天读完了一本关于山野植物的书。', 'title': '山野植物', 'valence': .6, 'arousal': .3})
     native('grow', {'content': '第一行原文证据\n第二行不同原文', 'items': [
         {'title': '测试独立事件甲', 'content': '这是一段用于合成测试的独立记录甲。', 'source_ranges': [[1, 1]], 'domain': ['工作'], 'tags': ['甲'], 'valence': .5, 'arousal': .3},

@@ -661,14 +661,17 @@ async def lifespan(app: FastAPI):
     native_runtime["init"]()
     continuity_runtime["init"]()
     wren_runtime["init"]()
+    xinchao_runtime["init"]()
     native_watch = asyncio.create_task(native_runtime["watch"]())
     continuity_watch = asyncio.create_task(continuity_runtime["watch"]())
     wren_watch = asyncio.create_task(wren_runtime["watch"]())
+    xinchao_watch=asyncio.create_task(xinchao_runtime['watch']())
     yield
     native_watch.cancel()
     continuity_watch.cancel()
     wren_watch.cancel()
-    await asyncio.gather(native_watch, continuity_watch, wren_watch, return_exceptions=True)
+    xinchao_watch.cancel()
+    await asyncio.gather(native_watch, continuity_watch, wren_watch,xinchao_watch, return_exceptions=True)
     await wren_runtime["shutdown"]()
     await continuity_runtime["shutdown"]()
     await native_runtime["shutdown"]()
@@ -1168,6 +1171,12 @@ try:
 except ImportError:
     from lune_wren import register as register_wren
 wren_runtime = register_wren(app, globals())
+
+try:
+    from .lune_xinchao import register as register_xinchao
+except ImportError:
+    from lune_xinchao import register as register_xinchao
+xinchao_runtime=register_xinchao(app,globals())
 
 if __name__ == "__main__":
     import uvicorn

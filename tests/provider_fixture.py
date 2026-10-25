@@ -64,6 +64,9 @@ async def openai(request: Request):
         return {"choices": [{"message": {"content": reply}}]}
     wants_tool = "TOOL_UI_MARKER" in str(last_user) and not any(m["role"] == "tool" for m in body["messages"])
     arguments = '{"value":"echo fixture"}'
+    if body.get('tools') and 'XC_BOX_TRIGGER' in str(last_user) and not any(m['role']=='tool' for m in body['messages']):
+        wants_tool,tool_name=True,'xinchao_box'
+        arguments=json.dumps({'action':'put','kind':'secret','text':'XC_SECRET_ACTUAL_TOOL_RESULT','title':'XC_PRIVATE_TITLE'},ensure_ascii=False)
     if body.get('tools') and 'DESIRE_TOOL_TRIGGER' in str(last_user):
         count=sum(m['role']=='tool' for m in body['messages'])
         if count==0:

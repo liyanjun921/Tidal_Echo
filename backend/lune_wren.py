@@ -445,6 +445,7 @@ def register(app, relay):
         try:
             usage = {}
             read_evidence=None
+            xinchao_delivered=[]
             if kind == 'say':
                 action, text = 'say', timer['body']
             elif snapshot['intent'] == 'rest' and kind == 'wake':
@@ -472,6 +473,7 @@ def register(app, relay):
                     raise ValueError('invalid wake result')
                 text = text.strip() if action != 'pass' else ''
                 usage = result.get('usage') or {}
+                xinchao_delivered=result.get('xinchao_delivered') or []
             msg = None
             with connection(path) as db:
                 db.execute('BEGIN IMMEDIATE')
@@ -487,6 +489,8 @@ def register(app, relay):
                     msg = {'id': mid, 'ts': stamp, 'direction': 'out', 'kind': 'reply', 'text': text, 'meta': meta}
                 db.execute('UPDATE lune_wren_events SET state=?,body=?,usage=?,message_id=?,finished=? WHERE id=?',
                            (action, text, json.dumps(usage), msg['id'] if msg else None, time.time(), eid))
+                if xinchao_delivered:
+                    db.executemany("UPDATE lune_xinchao_bridge SET state='seen' WHERE scope=? AND id=? AND state='pending'",[(scope,id) for id in xinchao_delivered if isinstance(id,str)])
                 if cfg['desire']['enabled']:
                     if read_evidence:
                         desire.action(db,scope,cfg,eid,read_evidence['tool'],read_evidence['intent'],read_evidence['result'],time.time())
@@ -501,6 +505,10 @@ def register(app, relay):
                     else:
                         db.execute("UPDATE lune_wren_timers SET state='done',version=version+1 WHERE id=?", (timer['id'],))
             if msg:
+                try:
+                    from .lune_xinchao import queue_output
+                    queue_output(path,scope,eid,text)
+                except (OSError,ValueError,sqlite3.Error):pass
                 # Persistence is complete; delivery failures must never replay the model.
                 try:
                     await relay['broadcast'](relay['app_subs'], relay['app_payload'](msg))

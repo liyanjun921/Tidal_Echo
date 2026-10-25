@@ -124,6 +124,12 @@ def register(app, relay):
                     })
                     if resp.status_code != 200 or not resp.json().get("ok"):
                         raise RuntimeError("model_turn_failed")
+                    try:
+                        try:from .lune_xinchao import queue_exchange
+                        except ImportError:from lune_xinchao import queue_exchange
+                        queue_exchange(db_path,room,agent,msg,rid)
+                    except (OSError,ValueError,sqlite3.Error):
+                        print('心潮回流暂未入队；原聊天已保存')
             update_run(rid, "completed")
         except asyncio.CancelledError:
             update_run(rid, "cancelled", "已停止等待；已执行的工具操作不会撤销")

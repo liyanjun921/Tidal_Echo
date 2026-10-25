@@ -45,6 +45,8 @@ with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
         subprocess.run([sys.executable, 'tests/continuity_flow.py'], cwd=root, env=env, check=True, timeout=240)
         subprocess.run([sys.executable, 'tests/wren_flow.py'], cwd=root, env=env, check=True, timeout=180)
         subprocess.run([sys.executable, 'tests/desire_flow.py'], cwd=root, env=env, check=True, timeout=180)
+        if env.get('LUNE_XINCHAO_SOURCE'):
+            subprocess.run([sys.executable,'tests/xinchao_flow.py'],cwd=root,env=env,check=True,timeout=300)
         with httpx.Client(trust_env=False, timeout=30, headers={"Authorization": "Bearer fixture-owner-secret"}) as client:
             base = "http://127.0.0.1:8089/relay"
             saved = client.get(base + "/lune/rooms/gpt/messages").json()["messages"]
@@ -54,6 +56,8 @@ with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
             if env.get('LUNE_FOLIO_SOURCE'):
                 client.post(base+'/lune/ombre/gpt/open',json={}).raise_for_status()
             folio = client.get('http://127.0.0.1:8089/ombre/gpt/api/folio/scoring-config').json() if env.get('LUNE_FOLIO_SOURCE') else None
+            xinchao_saved = client.get(base+'/lune/xinchao/gpt/view/cabin').json() if env.get('LUNE_XINCHAO_SOURCE') else None
+            xinchao_personality = client.get(base+'/lune/xinchao/gpt/view/personality').json() if env.get('LUNE_XINCHAO_SOURCE') else None
             children[2].terminate()
             children[2].wait(timeout=20)
             children[2] = subprocess.Popen([sys.executable, "scripts/run_lune.py"], cwd=root, env=env, stdout=log, stderr=log, start_new_session=True)
@@ -74,6 +78,11 @@ with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
                 assert after_wren[key] == wren[key], key
             persisted_thoughts = lambda data: [{k:v for k,v in t.items() if k!='strength'} for t in data['thoughts']]
             assert persisted_thoughts(after_wren) == persisted_thoughts(wren)
+            if xinchao_saved:
+                after_xc=client.get(base+'/lune/xinchao/gpt/view/cabin').json()
+                for key in ('notes','ledger','totals'):assert after_xc[key]==xinchao_saved[key],key
+                assert client.get(base+'/lune/xinchao/gpt/view/personality').json()==xinchao_personality
+                print('Xinchao restart PASS: native cabin, locks, personality and original scope survive full supervisor restart')
             if folio:
                 client.post(base+'/lune/ombre/gpt/open',json={}).raise_for_status()
                 assert client.get('http://127.0.0.1:8089/ombre/gpt/api/folio/scoring-config').json()==folio

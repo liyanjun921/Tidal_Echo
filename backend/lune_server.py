@@ -42,6 +42,11 @@ async def ready():
             async with httpx.AsyncClient(timeout=3, trust_env=False) as client:
                 for scope in ob.SCOPES:
                     ok = ok and (await client.get(ob.endpoint(scope) + '/health')).status_code == 200
+        if os.environ.get('LUNE_XINCHAO_AUTO_SETUP')=='1' or os.environ.get('LUNE_XINCHAO_SOURCE'):
+            from backend import xinchao_runtime as xc
+            ok=ok and xc.installed()
+            async with httpx.AsyncClient(timeout=3,trust_env=False) as client:
+                for scope in xc.SCOPES:ok=ok and (await client.get(xc.endpoint(scope)+'/health')).status_code==200
     except (OSError, ValueError, sqlite3.Error, httpx.HTTPError):
         ok = False
     return JSONResponse({"ok": bool(ok)}, status_code=200 if ok else 503)

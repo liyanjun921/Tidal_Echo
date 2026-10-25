@@ -87,6 +87,8 @@ CURRENT_RUN = ContextVar("lune_run", default="")
 CURRENT_MEMORY = ContextVar("lune_memory_trace", default=None)
 CURRENT_NATIVE_TOOLS = ContextVar("lune_native_tools", default=None)
 CURRENT_OMBRE_TOOLS = ContextVar("lune_ombre_tools", default=None)
+CURRENT_XINCHAO_TOOLS=ContextVar('lune_xinchao_tools',default=None)
+CURRENT_XINCHAO_DELIVERED=ContextVar('lune_xinchao_delivered',default=None)
 CURRENT_PASSIVE_BLOCK = ContextVar("lune_passive_block", default="")
 CURRENT_ROOM = ContextVar('lune_room', default='')
 CURRENT_USER_INDEX = ContextVar('lune_current_user_index', default=0)
@@ -599,6 +601,8 @@ async def build_messages(
                 messages.append({'role': 'system', 'content': block})
     passive_text = ""
     CURRENT_OMBRE_TOOLS.set(None)
+    CURRENT_XINCHAO_TOOLS.set(None)
+    CURRENT_XINCHAO_DELIVERED.set([])
     agent = CURRENT_AGENT.get()
     if agent:
         projection = await LatentEngine(RELAY_DB).context(session_id, agent, text, before_id, CURRENT_RUN.get())
@@ -628,7 +632,7 @@ async def build_messages(
         messages.append({"role": "system", "content": MEMORY_RULES})
         from lune_ombre import context as ombre_context
         try:
-            ombre = await ombre_context(RELAY_DB, session_id, agent, text, projection.get('opening'))
+            ombre = await ombre_context(RELAY_DB, session_id, agent, text, projection.get('opening'),CURRENT_RUN.get() or str(before_id or ''))
             CURRENT_OMBRE_TOOLS.set(ombre['tools'])
             CURRENT_MEMORY.get()['ombre'] = {k: v for k, v in ombre.items() if k not in {'tools', 'text'}}
             if ombre['tools']:
@@ -648,6 +652,16 @@ async def build_messages(
         room_block = wren_context(RELAY_DB, session_id, agent)
         if room_block:
             messages.append({'role': 'system', 'content': room_block})
+        from lune_xinchao import context as xinchao_context
+        try:
+            xinchao=await xinchao_context(RELAY_DB,session_id,agent,before_id)
+            CURRENT_XINCHAO_TOOLS.set(xinchao['tools'])
+            CURRENT_XINCHAO_DELIVERED.set(xinchao.get('notice_ids',[]))
+            CURRENT_MEMORY.get()['xinchao']={k:v for k,v in xinchao.items() if k not in {'text','tools','notice_ids'}}
+            if xinchao['text']:
+                messages.append({'role':'system','content':'心潮原生短态（模拟内部状态与历史资料，不是用户刚说的话；当前用户澄清优先，不据此编造经历或执行外部行动）：\n'+xinchao['text']})
+        except (httpx.HTTPError,RuntimeError,ValueError,OSError):
+            CURRENT_MEMORY.get()['xinchao']={'status':'unavailable'}
     had_images = False
     following = []
     if use_context:
@@ -956,7 +970,7 @@ def all_tools() -> list[dict[str, Any]]:
                 "query": {"type": "string"}, "quote": {"type": "string"}, "title": {"type": "string"},
                 "id": {"type": "string"}, "version": {"type": "integer"}
             }, "required": ["action"]}}})
-    return BUILTIN_TOOLS + extra + (CURRENT_NATIVE_TOOLS.get() or []) + (CURRENT_OMBRE_TOOLS.get() or []) + mcp_manager.openai_tools()
+    return BUILTIN_TOOLS + extra + (CURRENT_NATIVE_TOOLS.get() or []) + (CURRENT_OMBRE_TOOLS.get() or []) + (CURRENT_XINCHAO_TOOLS.get() or []) + mcp_manager.openai_tools()
 
 
 def attach_allowed(path: Path) -> bool:
@@ -1020,6 +1034,12 @@ class Turn:
                 args = {}
         except json.JSONDecodeError as exc:
             return f"ERROR: arguments are not valid JSON ({exc})"
+        if public_name in {t['function']['name'] for t in (CURRENT_XINCHAO_TOOLS.get() or [])} and CURRENT_AGENT.get():
+            async with httpx.AsyncClient(timeout=180,trust_env=False) as client:
+                response=await client.post(RELAY_URL+'/lune/assistant/xinchao',headers=relay_headers(),json={
+                    'room':self.session_id,'agent_id':CURRENT_AGENT.get(),'run_id':CURRENT_RUN.get(),'name':public_name,'arguments':args})
+            require_active_run()
+            return json.dumps(response.json(),ensure_ascii=False) if response.status_code<300 else 'ERROR: 心潮操作未完成 '+str(response.status_code)
         if public_name in {t['function']['name'] for t in (CURRENT_OMBRE_TOOLS.get() or [])} and CURRENT_AGENT.get():
             async with httpx.AsyncClient(timeout=180, trust_env=False) as client:
                 response = await client.post(RELAY_URL + '/lune/assistant/ombre', headers=relay_headers(), json={
@@ -1289,9 +1309,11 @@ async def run_model(messages: list[dict[str, Any]], tools: list[dict[str, Any]] 
                         out = await claude_pool.generate(messages, route['model'])
                     else:
                         native_tools, ombre_tools = CURRENT_NATIVE_TOOLS.get(), CURRENT_OMBRE_TOOLS.get()
+                        xinchao_tools=CURRENT_XINCHAO_TOOLS.get()
                         async def dispatch(name, args):
                             tokens = [(CURRENT_AGENT, CURRENT_AGENT.set('claude')), (CURRENT_RUN, CURRENT_RUN.set(rid)),
-                                (CURRENT_NATIVE_TOOLS, CURRENT_NATIVE_TOOLS.set(native_tools)), (CURRENT_OMBRE_TOOLS, CURRENT_OMBRE_TOOLS.set(ombre_tools))]
+                                (CURRENT_NATIVE_TOOLS, CURRENT_NATIVE_TOOLS.set(native_tools)), (CURRENT_OMBRE_TOOLS, CURRENT_OMBRE_TOOLS.set(ombre_tools)),
+                                (CURRENT_XINCHAO_TOOLS,CURRENT_XINCHAO_TOOLS.set(xinchao_tools))]
                             try:
                                 require_active_run()
                                 result = await turn.run_tool(name, json.dumps(args, ensure_ascii=False))
@@ -1340,6 +1362,7 @@ async def run_model(messages: list[dict[str, Any]], tools: list[dict[str, Any]] 
 # ---------------------------------------------------------------------------
 
 def _step_label(calls: list[dict[str, Any]]) -> str:
+    if all(c['name'].startswith('xinchao_') for c in calls):return '使用了心潮工具'
     names = [mcp_manager.index.get(c["name"], ("", c["name"]))[1] for c in calls]
     if len(names) == 1:
         return f"用了 {names[0]}"
@@ -1433,7 +1456,10 @@ async def _handle_turn(
                 result = await turn.run_tool(c["name"], c["arguments"])
                 messages.append({"role": "tool", "tool_call_id": c["id"], "content": result})
                 real = mcp_manager.index.get(c["name"], ("", c["name"]))[1]
-                steps_meta.append({"tool": real, "cmd": c["arguments"][:600], "result": result[:1200]})
+                private=c['name'].startswith('xinchao_')
+                steps_meta.append({"tool":'xinchao' if private else real,
+                    "cmd":'心潮私有参数不展示' if private else c['arguments'][:600],
+                    "result":'原生结果已交付当前模型，私有内容不进入聊天动作卡' if private else result[:1200]})
             if any(c["name"].startswith(("latent_", "ombre_")) or c["name"] == "lune_memory" for c in calls):
                 block = CURRENT_PASSIVE_BLOCK.get()
                 if block:
@@ -1479,6 +1505,9 @@ async def _handle_turn(
     if ok and not error and CURRENT_AGENT.get():
         LatentEngine(RELAY_DB).finish(session_id, CURRENT_AGENT.get(), msg_id)
         acknowledge_assistant(RELAY_DB, session_id, CURRENT_AGENT.get(), CURRENT_DUET_NOTICES.get() or [])
+        if CURRENT_XINCHAO_DELIVERED.get():
+            from lune_xinchao import acknowledge as acknowledge_xinchao
+            acknowledge_xinchao(RELAY_DB,session_id,CURRENT_AGENT.get(),CURRENT_XINCHAO_DELIVERED.get())
     return {"ok": ok and not error, "relay": body, "api": meta}
 
 
@@ -1681,6 +1710,8 @@ async def lune_agent_test(request: Request):
 
 
 register_plan(app)
+from lune_xinchao import register_provider as register_xinchao_provider
+register_xinchao_provider(app,globals())
 
 
 @app.post("/loop/native/generate")
@@ -1728,7 +1759,8 @@ async def native_generate(request: Request):
                 await asyncio.gather(task, return_exceptions=True)
         if result.get("tool_calls"):
             raise HTTPException(502, "后台整理不接受工具调用")
-        return {"text": result["text"], 'usage': result.get('usage') or {}}
+        return {"text": result["text"], 'usage': result.get('usage') or {},
+                'xinchao_delivered':CURRENT_XINCHAO_DELIVERED.get() or []}
     except ModelError:
         raise HTTPException(503, "所选后台模型尚不可用；没有保存虚构整理结果") from None
     finally:

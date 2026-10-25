@@ -65,3 +65,16 @@ process, tool registry, data stores, letter locks and native ledger remain
 authoritative. backend/ombre_folio.py implements the integrated runtime
 extensions; the active behavior therefore includes these recorded host
 modifications even though the pinned base source files remain unchanged.
+
+Xinchao runtime integration
+---------------------------
+Lune V0.15 invokes the separately installed MIT-licensed xinchao/ directory
+from https://github.com/liyanjun921/xinchao-nian at revision
+3acbaf48e92508d678dd5d5a90e13f82d900a370 (Xinchao 4.1.1).
+Copyright (c) 2026 Xinchao contributors. Retain xinchao/LICENSE.
+The repository root and bundled ombre-brain/ have separate license terms;
+that bundled Ombre runtime is not executed by this integration.
+The verified source files remain unchanged. scripts/run_xinchao.mjs applies
+host boundary adaptations for loopback binding, current Ombre schemas and
+privacy-aware memory projections, real-output reflux and recall resonance.
+The Luné adapter, owner UI and durable delivery queue are host additions.
