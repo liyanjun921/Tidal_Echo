@@ -13,7 +13,7 @@
 5. 双击 **`Lune-Phone.cmd`**。Windows 可能要求管理员确认，这是 Tailscale Serve 在 Windows 的要求。若首次要求启用 HTTPS，按 Tailscale 显示的链接在其官方页面确认，再双击一次。它只设置私人网络访问，不启用公网 Funnel；如果这台电脑原先有其他 Serve / Funnel 配置，会保留原配置并停止自动设置。
 6. iPhone 保持 Tailscale 已连接，用 Safari 打开连接信息中的 `https://...ts.net/` 地址，填写连接密码。在 Safari 分享菜单选择「添加到主屏幕」，以后从图标打开。
 
-首次构建完成只表示程序就绪；要在设置里连接真实模型，才能验证实际 AI 对话。原版 Passive Recall 的运行检查、导入、备份和其他入口仍在记忆面板。GPT / Claude 订阅桥接的已实现与待验收边界保持 [V0.6 文档](LUNE_V06.md) 的说明，不能因电脑已启动就标为全部账号已连通。
+首次构建完成只表示程序就绪；要在设置里连接真实模型，才能验证实际 AI 对话。原版 Passive Recall 的运行检查、导入、备份和其他入口仍在记忆面板。GPT 订阅连接见 [V0.6 文档](LUNE_V06.md)，Claude Code 桥接及其独立运行要求见 [V0.11 文档](LUNE_V11_CONTINUITY.md)。Docker 镜像尚未安装 Claude CLI，也不会自动读取 Windows 的登录；不能因电脑已启动就标为全部账号已连通。
 
 ## 平时怎么用
 

@@ -38,6 +38,9 @@ async def openai(request: Request):
     tool_name = next((t["function"]["name"] for t in body.get("tools", []) if t["function"]["name"].endswith("__echo")), None)
     last_user = next((m["content"] for m in reversed(body["messages"]) if m["role"] == "user"), "")
     system = str(body['messages'][0].get('content', ''))
+    if not body.get('tools') and ('Duet 独立日记' in str(last_user) or '提取本房间真正没聊完' in str(last_user)):
+        reply = 'SYNTHETIC_INDEPENDENT_DIARY' if 'Duet 独立日记' in str(last_user) else 'PASS'
+        return {'choices': [{'message': {'content': reply}}]}
     if not body.get('tools') and 'valence' in system and 'arousal' in system:
         return {'choices': [{'message': {'content': json.dumps({'name': '合成记忆', 'tags': ['测试'], 'domain': ['日常'], 'valence': .7, 'arousal': .4, 'why_remembered': '这是合成测试原话。'}, ensure_ascii=False)}}]}
     if body["messages"][0].get("content", "").startswith("严格按整理任务"):

@@ -159,7 +159,15 @@ def register(app):
 
     @app.get("/loop/subscriptions")
     async def status():
-        return {"chatgpt": await asyncio.to_thread(PlanStore().status), "claude": {"ready": False, "state": "reserved", "transport": "claude_code_interactive", "message": "已预留官方 Claude Code 交互进程（tmux / hooks）桥接；尚未连接。账户在官方 CLI 登录，Luné 不接收 Claude 会话令牌。", "docs_url": "https://code.claude.com/docs/en/legal-and-compliance"}}
+        from lune_claude import enabled, command, pool
+        import shutil
+        installed = bool(shutil.which(command()[0]))
+        return {"chatgpt": await asyncio.to_thread(PlanStore().status), "claude": {
+            "ready": False, "state": "needs_account_test" if enabled() and installed else "runtime_required",
+            "transport": "claude_code_stream_json", "runtime_enabled": enabled(), "installed": installed,
+            "running": any(s.proc and s.proc.returncode is None for s in pool.sessions.values()),
+            "message": "官方 Claude Code 常驻桥接已接线。请在运行电脑安装并登录 CLI、启用运行端后测试；Luné 不导入 Claude 令牌，也不自动改用 API。",
+            "docs_url": "https://code.claude.com/docs/en/cli-reference"}}
 
     @app.post("/loop/subscriptions/chatgpt/start")
     async def login(request: Request):

@@ -15,8 +15,10 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 
 try:
     from .lune_memory import LatentEngine, MemoryStore, room_view, view_scopes
+    from .lune_continuity import idle
 except ImportError:
     from lune_memory import LatentEngine, MemoryStore, room_view, view_scopes
+    from lune_continuity import idle
 
 PRODUCT_FEATURES = [
     ("tools", "八个原生记忆工具", "原版 MCP 处理器；房间范围与来源写保护"),
@@ -145,6 +147,22 @@ def register(app, relay):
             return [dict(r) for r in c.execute("SELECT * FROM lune_native_jobs ORDER BY created_at DESC LIMIT 40")]
 
     async def execute(jid, view, kind, data):
+        automatic = data.get('_automatic') is True
+        guard = None
+        if automatic:
+            if not idle(path, view, 30):
+                with native.store.db() as c:
+                    c.execute("UPDATE lune_native_jobs SET state='deferred',result=? WHERE id=?", ('{"reason":"聊天尚未空闲，后台让位"}', jid))
+                tasks.pop(jid, None)
+                return
+            parent = asyncio.current_task()
+            async def preempt():
+                while True:
+                    await asyncio.sleep(.2)
+                    if not idle(path, view, 30):
+                        parent.cancel()
+                        return
+            guard = asyncio.create_task(preempt())
         with native.store.db() as c:
             c.execute("UPDATE lune_native_jobs SET state='running' WHERE id=?", (jid,))
         env = {k: v for k, v in os.environ.items() if k in {"PATH", "LANG", "LC_ALL", "TMPDIR"}}
@@ -169,11 +187,14 @@ def register(app, relay):
             result = json.loads(stdout)
             state = "failed" if proc.returncode or result.get("status") in {"failed", "aborted"} else "done"
         except asyncio.CancelledError:
-            state, result = "cancelled", {"error": "任务已停止，已落盘记录与原始对话保留"}
+            state, result = ("deferred" if automatic else "cancelled"), {"error": "任务已让位或停止，已落盘记录与原始对话保留"}
             raise
         except Exception as exc:
             state, result = "failed", {"error": "任务未完成（" + type(exc).__name__ + "），未伪造成功；检查模型连接或原版返回"}
         finally:
+            if guard:
+                guard.cancel()
+                await asyncio.gather(guard, return_exceptions=True)
             proc = processes.pop(jid, None)
             if proc and proc.returncode is None:
                 try:
@@ -237,15 +258,21 @@ def register(app, relay):
     @app.post("/lune/native/{view}/jobs/{kind}")
     async def start(view: str, kind: str, request: Request):
         relay["check_auth"](request)
+        if view in {'gpt', 'claude', 'group'} and kind != 'backup' and not idle(path, view, 0):
+            raise HTTPException(409, '请等当前聊天回复结束，再运行后台任务')
         return await start_job(view, kind, await body(request))
 
     @app.post("/lune/native/{view}/prepare-continuation")
     async def prepare_continuation(view: str, request: Request):
         relay["check_auth"](request)
+        options = await body(request)
+        idle_only = options.get('idle_only') is True
+        if idle_only and not idle(path, view, 30):
+            raise HTTPException(409, '聊天尚未空闲，不进行后台重铸')
         cfg = native.store.config()
         if not (cfg["enabled"] and cfg["native_full"] and cfg["context_continuation"]):
             raise HTTPException(409, "上下文续接已关闭，不得以此静默裁剪")
-        job = await start_job(view, "flush", {})
+        job = await start_job(view, "flush", {'_automatic': True} if idle_only else {})
         task = tasks[job["id"]]
         await asyncio.shield(task)
         row = next(r for r in jobs() if r["id"] == job["id"])
@@ -284,7 +311,8 @@ def register(app, relay):
             if cfg["enabled"] and cfg["native_full"] and cfg["archive_enabled"] and native.engine.installation():
                 for view in ("gpt", "claude", "group"):
                     try:
-                        await start_job(view, "archive", {})
+                        if idle(path, view, 30):
+                            await start_job(view, "archive", {'_automatic': True})
                     except HTTPException:
                         pass
 

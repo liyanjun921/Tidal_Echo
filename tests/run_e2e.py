@@ -40,10 +40,12 @@ with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
             subprocess.run([env.get("CODEX_PRIMARY_RUNTIME_NODE", "node"), "tests/browser.cjs"], cwd=root, env=env, check=True, timeout=90)
         if env.get('LUNE_OMBRE_SOURCE'):
             subprocess.run([sys.executable, 'tests/ombre_flow.py'], cwd=root, env=env, check=True, timeout=240)
+        subprocess.run([sys.executable, 'tests/continuity_flow.py'], cwd=root, env=env, check=True, timeout=240)
         with httpx.Client(trust_env=False, timeout=30, headers={"Authorization": "Bearer fixture-owner-secret"}) as client:
             base = "http://127.0.0.1:8089/relay"
             saved = client.get(base + "/lune/rooms/gpt/messages").json()["messages"]
             memories = client.get(base + "/lune/memories").json()["memories"]
+            diaries = client.get(base + "/lune/duet?room=gpt").json()
             children[2].terminate()
             children[2].wait(timeout=20)
             children[2] = subprocess.Popen([sys.executable, "scripts/run_lune.py"], cwd=root, env=env, stdout=log, stderr=log, start_new_session=True)
@@ -58,6 +60,7 @@ with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
                 raise AssertionError("services did not become ready after restart")
             assert client.get(base + "/lune/rooms/gpt/messages").json()["messages"] == saved
             assert client.get(base + "/lune/memories").json()["memories"] == memories
+            assert client.get(base + "/lune/duet?room=gpt").json() == diaries
             if env.get('LUNE_OMBRE_SOURCE'):
                 from backend import ombre_runtime as ob
                 with patch.dict(os.environ, env):

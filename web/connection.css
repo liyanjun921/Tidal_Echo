@@ -7,3 +7,5 @@
 .memory-quote{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7}.memory-revisions{border-left:2px solid var(--line);padding-left:12px;margin-top:12px}#memoryEngineDialog .entry-card{min-width:0}#memoryEngineDialog .entry-list{margin-bottom:12px}#memoryEngineStatus{white-space:pre-line}
 
 .ombre-sheet{width:min(100vw,1100px);max-width:100vw}#ombreDashboard{width:100%;height:78dvh;min-height:520px;border:1px solid rgba(116,145,165,.2);border-radius:22px;background:#edf3f6}.ombre-sheet .sheet-body{overflow-x:hidden}
+
+#openDuet{margin:8px 12px;font-size:12px}#duetDialog textarea{width:100%;min-height:130px}.duet-body{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8}#duetRounds .entry-card{padding:18px}#continuityThreads p{overflow-wrap:anywhere}
