@@ -206,6 +206,28 @@ class OwnerDataTests(unittest.TestCase):
         self.assertEqual(self.client.delete("/lune/workspace/" + book["id"], params={"version": 2}).status_code, 200)
         self.assertEqual(self.client.get("/lune/workspace").json()["items"], [])
 
+    def test_reading_anchors_replies_and_assistant_ownership(self):
+        book = self.record("book", "gpt", content="First paragraph\n\nSecond paragraph", data={"progress": 0, "status": "reading"})
+        data = {"book_id": book["id"], "quote": "Second", "para": 1, "start": 0, "end": 6, "color": "blue", "replies": []}
+        self.assertEqual(self.client.post("/lune/workspace", json={"kind": "annotation", "scope": "gpt", "title": "bad", "data": {**data, "start": 1}}).status_code, 422)
+        note = self.record("annotation", "gpt", title="Second", content="My thought", data=data)
+        ctx = self.active_run()
+        ai_note = self.client.post("/lune/assistant/workspace", json={**ctx, "action": "create", "kind": "annotation", "scope": "gpt", "title": "First", "content": "Another perspective", "data": {"book_id": book["id"], "quote": "First", "para": 0, "start": 0, "end": 5}})
+        self.assertEqual(ai_note.status_code, 200, ai_note.text)
+        self.assertEqual(ai_note.json()["item"]["author"], "gpt")
+        def ai(**body):
+            return self.client.post("/lune/assistant/workspace", json={**ctx, **body, "action": "update", "id": note["id"], "version": note["version"]})
+        reply = {"author": "gpt", "text": "I see the same passage differently", "at": "2026-10-25T12:00:00Z"}
+        changed = ai(kind="annotation", scope="gpt", title=note["title"], content=note["content"], data={**data, "replies": [reply]})
+        self.assertEqual(changed.status_code, 200, changed.text)
+        updated = changed.json()["item"]
+        self.assertEqual(updated["data"]["replies"], [reply])
+        self.assertEqual(self.client.patch("/lune/workspace/" + note["id"], json={**updated, "data": {**data, "replies": []}}).status_code, 422)
+        self.assertEqual(self.client.patch("/lune/workspace/" + note["id"], json={**updated, "data": {**data, "replies": [reply, {"author": "gpt", "text": "impersonation", "at": "now"}]}}).status_code, 422)
+        owner_reply = {"author": "user", "text": "Thank you", "at": "2026-10-25T12:01:00Z"}
+        self.assertEqual(self.client.patch("/lune/workspace/" + note["id"], json={**updated, "data": {**data, "replies": [reply, owner_reply]}}).status_code, 200)
+        self.assertEqual(ai(kind="annotation", scope="gpt", title="rewritten", content=note["content"], data={**data, "replies": [reply, owner_reply]}).status_code, 403)
+
     def test_workspace_assistant_scope_and_cancel_gate(self):
         for scope in ("shared", "gpt", "claude", "group"):
             self.record(scope=scope)

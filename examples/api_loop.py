@@ -955,7 +955,7 @@ def all_tools() -> list[dict[str, Any]]:
             "scope": {"type": "string", "enum": ["shared", "gpt", "claude", "group"]},
             "id": {"type": "string"}, "version": {"type": "integer"},
             "title": {"type": "string"}, "content": {"type": "string"},
-            "data": {"type": "object", "description": "todo: owner=user|gpt|claude, due=YYYY-MM-DD, time=HH:MM, done=boolean; event: date,time,yearly,special; annotation: book_id,quote,para; journal: date,mood"}
+            "data": {"type": "object", "description": "todo: owner=user|gpt|claude, due=YYYY-MM-DD, time=HH:MM, done=boolean; event: date,time,yearly,special; annotation: book_id,quote,para, optional start/end exact character offsets, replies=[{author,text,at}]. To reply, list annotations first and update with all existing fields and one appended reply authored by yourself. Never alter someone else's note. journal: date,mood"}
         }, "required": ["action", "kind"]}
     }}] if CURRENT_AGENT.get() else []
     if CURRENT_AGENT.get():

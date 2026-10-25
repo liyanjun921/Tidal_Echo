@@ -62,6 +62,14 @@ def validate(body):
         raise HTTPException(422, "批注缺少书籍和引文")
     if kind == "annotation" and (not data["quote"].strip() or len(data["quote"]) > 2000 or "para" in data and (type(data["para"]) is not int or data["para"] < 0)):
         raise HTTPException(422, "批注引文或段落不正确")
+    if kind == "book" and ("progress" in data and (type(data["progress"]) is not int or data["progress"] < 0) or data.get("status", "reading") not in {"reading", "finished"}):
+        raise HTTPException(422, "阅读进度或状态不正确")
+    if kind == "annotation":
+        if ("start" in data) != ("end" in data) or "start" in data and (type(data["start"]) is not int or type(data["end"]) is not int or data["start"] < 0 or data["end"] <= data["start"]):
+            raise HTTPException(422, "引文位置不正确")
+        replies = data.get("replies", [])
+        if not isinstance(replies, list) or len(replies) > 24 or any(not isinstance(r, dict) or r.get("author") not in {"user", "gpt", "claude"} or not isinstance(r.get("text"), str) or not 0 < len(r["text"].strip()) <= 280 or not isinstance(r.get("at"), str) or len(r["at"]) > 40 for r in replies):
+            raise HTTPException(422, "共读回复格式不正确")
     return {"kind": kind, "scope": scope, "title": title.strip(), "content": content, "data": data}
 
 
@@ -109,9 +117,22 @@ def register(app, relay):
             if old and allowed is not None and old["scope"] not in allowed:
                 raise HTTPException(403, "本会话不能访问这个范围")
             if body["kind"] == "annotation":
-                book = c.execute("SELECT scope FROM lune_workspace WHERE id=? AND kind='book' AND deleted=0", (body["data"]["book_id"],)).fetchone()
+                book = c.execute("SELECT scope,content FROM lune_workspace WHERE id=? AND kind='book' AND deleted=0", (body["data"]["book_id"],)).fetchone()
                 if not book or book["scope"] != body["scope"]:
                     raise HTTPException(422, "批注与书籍的范围必须一致")
+                if "start" in body["data"]:
+                    ps = re.split(r"\n\s*\n", book["content"])
+                    d = body["data"]
+                    if type(d.get("para")) is not int or d["para"] < 0 or d["para"] >= len(ps) or ps[d["para"]][d["start"]:d["end"]] != d["quote"]:
+                        raise HTTPException(422, "批注引文与原文位置不一致")
+                replies = body["data"].get("replies", [])
+                previous = json.loads(old["data"]).get("replies", []) if old else []
+                if replies[:len(previous)] != previous or len(replies) > len(previous) + 1 or (replies and len(replies) > len(previous) and replies[-1]["author"] != actor):
+                    raise HTTPException(422, "不能改写已有的共读回复")
+                if old and actor != "user" and old["author"] != actor:
+                    before = json.loads(old["data"])
+                    if body["title"] != old["title"] or body["content"] != old["content"] or {k:v for k,v in body["data"].items() if k != "replies"} != {k:v for k,v in before.items() if k != "replies"}:
+                        raise HTTPException(403, "只能回复他人的批注")
             # Check the expected version within the write transaction.
             if old:
                 if version != old["version"]:
