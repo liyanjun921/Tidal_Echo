@@ -38,6 +38,9 @@ async def openai(request: Request):
     tool_name = next((t["function"]["name"] for t in body.get("tools", []) if t["function"]["name"].endswith("__echo")), None)
     last_user = next((m["content"] for m in reversed(body["messages"]) if m["role"] == "user"), "")
     system = str(body['messages'][0].get('content', ''))
+    if not body.get('tools') and '【LUNE_FOLIO_' in system:
+        result={'name':'Folio精修标题','summary':'FOLIO_REFINED_SUMMARY','narrative':'FOLIO_MOOD_NARRATIVE','tags':['测试'],'domain':['日常'],'valence':.7,'arousal':.4,'importance':6,'content':'FOLIO_REFINED_BODY'}
+        return {'choices':[{'message':{'content':json.dumps(result,ensure_ascii=False)}}]}
     if not body.get('tools') and ('Duet 独立日记' in str(last_user) or '提取本房间真正没聊完' in str(last_user)):
         reply = 'SYNTHETIC_INDEPENDENT_DIARY' if 'Duet 独立日记' in str(last_user) else 'PASS'
         return {'choices': [{'message': {'content': reply}}]}

@@ -19,6 +19,7 @@ except ImportError:
     from lune_memory import MemoryStore
 
 FEATURES = [
+    ('Folio 合并增强', '同一引擎与档案：新版时间线/记忆格/手机页、中文检索、精修预览与回收恢复'),
     ('情感坐标与混合检索', 'Russell 效价/唤醒度，关键词、BM25 与本地语义融合'),
     ('遗忘与浮现', '原版衰减、归档、恢复、digested/dont_surface 和开场 breath'),
     ('记忆、感受与做梦', 'hold/grow/trace/feel/dream 原版处理器、耐久向量队列'),
@@ -97,7 +98,12 @@ def register(app, relay):
                 except (httpx.HTTPError, RuntimeError):
                     pass
             rows.append(row)
+        try:
+            from . import ombre_folio_runtime as folio
+        except ImportError:
+            import ombre_folio_runtime as folio
         return {'installed': ob.installed(), 'version': ob.VERSION, 'revision': ob.REVISION,
+                'folio_installed': folio.installed(), 'folio_revision': folio.REVISION,
                 'scopes': rows, 'features': [{'name': n, 'detail': d} for n, d in FEATURES]}
 
     @app.patch('/lune/ombre/{scope}/settings')
@@ -127,7 +133,8 @@ def register(app, relay):
             raise HTTPException(422, '记忆空间不正确') from None
         if not ob.installed():
             raise HTTPException(503, '尚未安装或校验通过原版 Ombre-Brain')
-        response = JSONResponse({'url': '/ombre/' + scope + '/'})
+        view = request.query_params.get('view', '')
+        response = JSONResponse({'url': '/ombre/' + scope + ('/v2/' if view == 'folio' else '/')})
         response.set_cookie('lune_ombre_' + scope, ob.owner_ticket(scope), httponly=True,
                             secure=request.url.scheme == 'https', samesite='strict',
                             path='/ombre/' + scope + '/', max_age=3600)
@@ -165,7 +172,7 @@ def themed_html(html, scope):
     prefix = '/ombre/' + ob.scope_check(scope)
     # The original UI has root-absolute navigation/assets. Keep its actual
     # controls and requests, rebasing only in the served projection.
-    html = re.sub(r'([\"\x27])/(api|auth|static|onboarding|dashboard|favicon\.ico)(?=[/\"\x27?#])',
+    html = re.sub(r'([\"\x27`])/(api|v2|auth|static|onboarding|dashboard|favicon\.ico)(?=[/\"\x27`?#])',
                   lambda m: m[1] + prefix + '/' + m[2], html)
     html = html.replace("location.href='/'", "location.href='" + prefix + "/'")
     bootstrap = '''<script>(()=>{const prefix=PREFIX;
@@ -219,6 +226,8 @@ def register_proxy(app):
             if result.status_code == 401:
                 sessions.pop(scope, None)
             response_headers = {'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no'}
+            if tail.startswith('v2/') and tail.endswith(('.woff2','.png','.ico','.svg')):
+                response_headers['Cache-Control']='private, max-age=604800, immutable'
             for key in ('content-type', 'content-disposition', 'content-range', 'accept-ranges'):
                 if key in result.headers:
                     response_headers[key] = result.headers[key]
@@ -232,6 +241,13 @@ def register_proxy(app):
                 await result.aclose()
                 await client.aclose()
                 return Response(themed_html(html, scope), status_code=result.status_code, headers=response_headers)
+            if tail.startswith('v2/') and any(t in result.headers.get('content-type','') for t in ('javascript','text/css','application/json')):
+                raw = (await result.aread()).decode('utf-8')
+                await result.aclose()
+                await client.aclose()
+                prefix = '/ombre/' + scope
+                raw = re.sub(r'([\"\x27`])/(api|v2)(?=[/\"\x27`?#])',lambda m:m[1]+prefix+'/'+m[2],raw)
+                return Response(raw,status_code=result.status_code,headers=response_headers)
             async def stream():
                 try:
                     async for chunk in result.aiter_bytes():

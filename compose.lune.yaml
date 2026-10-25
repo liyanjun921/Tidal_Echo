@@ -28,6 +28,8 @@ services:
       LUNE_OMBRE_AUTO_SETUP: "1"
       LUNE_OMBRE_SOURCE: /data/lune-private/ombre/source
       LUNE_OMBRE_DIR: /data/lune-private/ombre
+      LUNE_FOLIO_AUTO_SETUP: "1"
+      LUNE_FOLIO_SOURCE: /data/lune-private/ombre/folio-source
     volumes:
       - lune_data:/data
     healthcheck:

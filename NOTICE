@@ -33,3 +33,18 @@ from https://github.com/liyanjun921/Ombre-Brain at revision
 115d831d979bf67efc7150f976e2cb34c333c935. Ombre Brain is MIT licensed;
 its LICENSE, AUTHORS.md and NOTICE.md remain with that installation.
 The host integration does not replace the original attribution or license.
+
+Ombre Folio enhancements
+-----------------------
+Luné V0.12 integrates additions from the user's optimized fork
+https://github.com/liyanjun921/OmbreBrain-folio at revision
+bf6887575fa8e6fa519279be9dc7e5886a29d2ea, originating from
+https://github.com/ceshihaox-dotcom/OmbreBrain-folio.
+Copyright (c) 2026 P0lar1zzZ (original author), Rin (fork modifications).
+The MIT LICENSE remains in that separately installed checkout. Its V2 UI
+and average-link family clustering are reused with host compatibility
+adaptations. The older Folio server is not run: the existing Ombre 3.6.14
+process, tool registry, data stores, letter locks and native ledger remain
+authoritative. backend/ombre_folio.py implements the integrated runtime
+extensions; the active behavior therefore includes these recorded host
+modifications even though the pinned base source files remain unchanged.

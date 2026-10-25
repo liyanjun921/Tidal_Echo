@@ -128,4 +128,10 @@ def prepare(scope):
         OMBRE_PORT=endpoint(scope).rsplit(':', 1)[1], OMBRE_MCP_REQUIRE_AUTH='true',
         OMBRE_MCP_TOKEN=credential(scope, 'mcp'), OMBRE_DASHBOARD_PASSWORD=credential(scope, 'dashboard'),
         OMBRE_HOOK_TOKEN=credential(scope, 'hook'), OMBRE_HOOK_SKIP='true')
+    env['LUNE_OMBRE_SOURCE'] = str(source())
+    try:
+        from .ombre_folio_runtime import source as folio_source
+    except ImportError:
+        from ombre_folio_runtime import source as folio_source
+    env['LUNE_FOLIO_SOURCE'] = str(folio_source())
     return env
