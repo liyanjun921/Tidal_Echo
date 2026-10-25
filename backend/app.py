@@ -650,12 +650,16 @@ async def lifespan(app: FastAPI):
     speech_runtime["init"]()
     native_runtime["init"]()
     continuity_runtime["init"]()
+    wren_runtime["init"]()
     native_watch = asyncio.create_task(native_runtime["watch"]())
     continuity_watch = asyncio.create_task(continuity_runtime["watch"]())
+    wren_watch = asyncio.create_task(wren_runtime["watch"]())
     yield
     native_watch.cancel()
     continuity_watch.cancel()
-    await asyncio.gather(native_watch, continuity_watch, return_exceptions=True)
+    wren_watch.cancel()
+    await asyncio.gather(native_watch, continuity_watch, wren_watch, return_exceptions=True)
+    await wren_runtime["shutdown"]()
     await continuity_runtime["shutdown"]()
     await native_runtime["shutdown"]()
     for task in list(lune_runtime["tasks"].values()):
@@ -1148,6 +1152,12 @@ try:
 except ImportError:
     from lune_continuity import register as register_continuity
 continuity_runtime = register_continuity(app, globals())
+
+try:
+    from .lune_wren import register as register_wren
+except ImportError:
+    from lune_wren import register as register_wren
+wren_runtime = register_wren(app, globals())
 
 if __name__ == "__main__":
     import uvicorn

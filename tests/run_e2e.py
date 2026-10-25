@@ -43,11 +43,13 @@ with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
         if env.get('LUNE_FOLIO_SOURCE'):
             subprocess.run([sys.executable,'tests/folio_flow.py'],cwd=root,env=env,check=True,timeout=240)
         subprocess.run([sys.executable, 'tests/continuity_flow.py'], cwd=root, env=env, check=True, timeout=240)
+        subprocess.run([sys.executable, 'tests/wren_flow.py'], cwd=root, env=env, check=True, timeout=180)
         with httpx.Client(trust_env=False, timeout=30, headers={"Authorization": "Bearer fixture-owner-secret"}) as client:
             base = "http://127.0.0.1:8089/relay"
             saved = client.get(base + "/lune/rooms/gpt/messages").json()["messages"]
             memories = client.get(base + "/lune/memories").json()["memories"]
             diaries = client.get(base + "/lune/duet?room=gpt").json()
+            wren = client.get(base + '/lune/wren/gpt').json()
             if env.get('LUNE_FOLIO_SOURCE'):
                 client.post(base+'/lune/ombre/gpt/open',json={}).raise_for_status()
             folio = client.get('http://127.0.0.1:8089/ombre/gpt/api/folio/scoring-config').json() if env.get('LUNE_FOLIO_SOURCE') else None
@@ -66,6 +68,11 @@ with tempfile.TemporaryDirectory(prefix="lune-e2e-") as tmp:
             assert client.get(base + "/lune/rooms/gpt/messages").json()["messages"] == saved
             assert client.get(base + "/lune/memories").json()["memories"] == memories
             assert client.get(base + "/lune/duet?room=gpt").json() == diaries
+            after_wren = client.get(base + '/lune/wren/gpt').json()
+            for key in ('events','settings','clock'):
+                assert after_wren[key] == wren[key], key
+            persisted_thoughts = lambda data: [{k:v for k,v in t.items() if k!='strength'} for t in data['thoughts']]
+            assert persisted_thoughts(after_wren) == persisted_thoughts(wren)
             if folio:
                 client.post(base+'/lune/ombre/gpt/open',json={}).raise_for_status()
                 assert client.get('http://127.0.0.1:8089/ombre/gpt/api/folio/scoring-config').json()==folio

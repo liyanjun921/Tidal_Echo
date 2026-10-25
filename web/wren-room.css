@@ -1,0 +1,20 @@
+.wren-intro{padding:20px 2px 12px;border-bottom:1px solid var(--line)}
+.wren-intro .eyebrow{font-size:9px;letter-spacing:.16em;color:var(--muted)}
+.wren-intro p{font:24px/1.6 Georgia,'Songti SC',serif;margin:12px 0 5px}
+.wren-intro small{color:var(--muted);line-height:1.7}
+.wren-tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:rgba(108,145,165,.08);border-radius:16px;padding:5px}
+.wren-tabs button{padding:11px 4px;border-radius:12px;color:var(--muted)}
+.wren-tabs button[aria-pressed=true]{background:rgba(255,255,255,.78);color:var(--ink);box-shadow:0 2px 9px #516d7c0d}
+.wren-drives{display:grid;grid-template-columns:1fr 1fr;gap:16px 20px}
+.wren-drive{display:grid;grid-template-columns:34px 1fr 30px;align-items:center;gap:7px;font-size:12px}
+.wren-drive small{color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
+.wren-drive meter{width:100%;height:7px;appearance:none;background:#9cb4c322;border:0;border-radius:8px;overflow:hidden}
+.wren-drive meter::-webkit-meter-bar{background:#9cb4c322;border:0;border-radius:8px}
+.wren-drive meter::-webkit-meter-optimum-value{background:#7a9eb2;border-radius:8px}
+.wren-drive meter::-moz-meter-bar{background:#7a9eb2;border-radius:8px}
+.wren-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.wren-links{display:flex;flex-wrap:wrap;gap:6px 14px;border-top:1px solid var(--line);padding-top:12px}
+#wrenRoom .entry-card p{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8}
+#wrenRoom .entry-card h3{font-size:14px;margin:0}
+#wrenRoom summary{cursor:pointer;padding:10px 0}
+@media(max-width:380px){.wren-drives{grid-template-columns:1fr}.wren-pair{gap:8px}}

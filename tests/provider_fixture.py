@@ -38,6 +38,9 @@ async def openai(request: Request):
     tool_name = next((t["function"]["name"] for t in body.get("tools", []) if t["function"]["name"].endswith("__echo")), None)
     last_user = next((m["content"] for m in reversed(body["messages"]) if m["role"] == "user"), "")
     system = str(body['messages'][0].get('content', ''))
+    if not body.get('tools') and '【LUNE_WREN_WAKE】' in str(last_user):
+        assert any('系统本轮自动装配的 Room 状态' in str(m.get('content', '')) for m in body['messages'])
+        return {'choices':[{'message':{'content':json.dumps({'action':'say','text':'WREN_WAKE_DELIVERED：那本小书慢慢做。'},ensure_ascii=False)}}], 'usage':{'prompt_tokens':31,'completion_tokens':12}}
     if not body.get('tools') and '【LUNE_FOLIO_' in system:
         result={'name':'Folio精修标题','summary':'FOLIO_REFINED_SUMMARY','narrative':'FOLIO_MOOD_NARRATIVE','tags':['测试'],'domain':['日常'],'valence':.7,'arousal':.4,'importance':6,'content':'FOLIO_REFINED_BODY'}
         return {'choices':[{'message':{'content':json.dumps(result,ensure_ascii=False)}}]}
@@ -61,6 +64,13 @@ async def openai(request: Request):
         return {"choices": [{"message": {"content": reply}}]}
     wants_tool = "TOOL_UI_MARKER" in str(last_user) and not any(m["role"] == "tool" for m in body["messages"])
     arguments = '{"value":"echo fixture"}'
+    if body.get('tools') and 'WREN_TOOL_TRIGGER' in str(last_user) and not any(m['role']=='tool' for m in body['messages']):
+        import sqlite3
+        with sqlite3.connect(os.environ['RELAY_DB']) as db:
+            source = db.execute("SELECT id FROM messages WHERE direction='in' AND text LIKE '%WREN_TOOL_TRIGGER%' ORDER BY id DESC LIMIT 1").fetchone()[0]
+        assert any(t['function']['name']=='lune_room' for t in body['tools'])
+        wants_tool, tool_name = True, 'lune_room'
+        arguments = json.dumps({'action':'thought','source_id':source,'quote':'海边那本小书','drive':'craft','visibility':'shared'},ensure_ascii=False)
     if 'OMBRE_WRITE_TRIGGER' in str(last_user) and not any(m['role'] == 'tool' for m in body['messages']):
         wants_tool, tool_name = True, 'ombre_hold'
         arguments = json.dumps({'content': 'OMBRE_PRIVATE_MARKER 用户说我们周日去海边看蓝色风筝。', 'title': 'Ombre真实工具接线', 'valence': .8, 'arousal': .5})

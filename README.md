@@ -1,8 +1,12 @@
-# Luné / OURSPACE · V0.9 完整 Latent 功能接线
+# Luné / OURSPACE · V0.13 自主空间与记忆
+
+本版把用户 fork 的 WrenWen 架构中的驱动、原话念头、空闲唤醒、追问、两种提醒和足迹账接入现有前端，入口为侧边栏“自主空间 · Room”。WrenWen 只有文档，运行代码在本宿主独立实现；自主唤醒默认关闭，后台生成使用现有房间人格和记忆，发言回到原聊天。具体范围、额度/恢复规则和验证见 [V0.13 接入说明](docs/LUNE_V13_WREN.md)。
+
+保留完整 Latent、原 Ombre 16 工具与四空间档案、合入同引擎的 Folio 增强、Duet 独立封存日记和可选官方 Claude Code 常驻桥接。参见 [Folio](docs/LUNE_V12_FOLIO.md)、[会话连续性与 Claude 运行端](docs/LUNE_V11_CONTINUITY.md)。当前为开发分支，未正式部署。
 
 完整接入独立安装的 Latent 原生产品功能：八个业务工具、事实回填和便条回信、自动浮现、后台落档与自审、人格初始化和逐节确认、历史导入、山屋十个数据入口、三条检索路线、诊断、备份及上下文续接。新增原版工具的鉴权 MCP 网关和后台任务面板；现有记忆保持可直接编辑，新增档案按房间持久保存。源码未打包或重标许可证。功能接线、可用条件和逐项验证见 [V0.9 完整功能表](docs/LUNE_V09.md)，不能把入口齐全写成真实订阅账号或 iPhone 真机已经验收。
 
-GPT 新增官方 ChatGPT 订阅授权与 Responses 适配；Claude 预留官方 CLI / tmux 桥接模式。API / 订阅独立切换，订阅错误不自动调用 API Key。首次授权需电脑本地回调或连接助手，真实账户尚待授权验收；Claude 运行时尚未接通。详见 [订阅连接与验证](docs/LUNE_V06.md)。
+GPT 提供官方 ChatGPT 订阅授权与 Responses 适配；Claude 提供可选官方 CLI 常驻桥接。API / 订阅独立切换，订阅错误不自动调用 API Key。首次授权需电脑本地回调或连接助手，真实账户尚待授权验收。基础说明见 [订阅连接与验证](docs/LUNE_V06.md)，CLI 当前条件见 V0.11 文档。
 
 本分支以 Tidal Echo 的 relay / API loop 为底座，参考 fang-claude / dwell 的 UI 结构与功能文档，重新实现聊天主屏、抽屉导航、分层页面和双行输入区。Luné 旧版本只保留灰白蓝色调、水光背景与液态玻璃材质。包含 GPT / Claude 私聊、三人群聊、隔离记忆，以及可实际保存的待办、日历、日记、悄悄话、共读批注等生活页。直接从 [本版状态与测试](docs/LUNE_V05.md) 和 [部署及 iPhone 使用](docs/LUNE_DEPLOY.md) 开始。网页入口为 `web/index.html`，双进程启动入口为 `scripts/run_lune.py`，Docker 构建使用 `Dockerfile.lune`。私人预览仅展示界面与本机保存；真实供应商、MiniMax、锁屏通知与真机 Safari 尚待部署后验收。
 

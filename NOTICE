@@ -1,5 +1,13 @@
 Companion Channel / Tidal Echo
 
+WrenWen design reference
+------------------------
+Luné V0.13's Room/wake mechanisms are independently implemented from the
+public architecture documentation at https://github.com/liyanjun921/WrenWen,
+revision b987ae0ae9154f782920062358ea693e8388d6a0, originally by ssxl0126.
+That repository publishes documentation, not its private runtime or persona.
+No private WrenWen code, persona or production data is included here.
+
 Current project license
 -----------------------
 
