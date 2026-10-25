@@ -145,7 +145,17 @@ def save_message(direction: str, kind: str, text: str, meta: dict) -> dict:
         )
         conn.commit()
         mid = cur.lastrowid
-    return {"id": mid, "ts": ts, "direction": direction, "kind": kind, "text": text, "meta": meta}
+    msg={"id": mid, "ts": ts, "direction": direction, "kind": kind, "text": text, "meta": meta}
+    if direction=='out' and kind=='reply':
+        try:
+            from .lune_desire import record_reply
+        except ImportError:
+            from lune_desire import record_reply
+        try:
+            record_reply(DB_PATH,msg)
+        except (ValueError,KeyError,TypeError,sqlite3.Error):
+            print('欲望投递证据未能落账；原聊天正文已保存')
+    return msg
 
 
 def set_reaction(message_id, who, emoji):
@@ -426,6 +436,8 @@ async def handle_stream_delta(kind: str, body: dict) -> dict:
             "done": False,
             "ts": draft["ts"],
             "api_session": draft["meta"].get("api_session") or "",
+            "agent_id": draft["meta"].get("agent_id") or "",
+            "run_id": draft["meta"].get("run_id") or "",
         })
         return {"ok": True, "stream_id": stream_id, "draft": True}
 
@@ -463,6 +475,12 @@ def loop_json(path: str, method: str = "GET", body=None):
             return json.loads(raw) if raw else {}
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", "replace")[:500]
+        try:
+            parsed = json.loads(detail)
+            if isinstance(parsed.get("detail"), str):
+                detail = parsed["detail"]
+        except (ValueError, AttributeError):
+            pass
         raise HTTPException(status_code=exc.code, detail=detail)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"loop proxy error: {exc}")
@@ -522,22 +540,27 @@ def transcribe_with_command(audio_path: Path, mime: str) -> str:
     return proc.stdout.strip()
 
 
-def minimax_tts_mp3(text: str) -> bytes:
-    if not MINIMAX_API_KEY or not MINIMAX_VOICE_ZH:
+def minimax_tts_mp3(text: str, config=None) -> bytes:
+    config = config or {"key": MINIMAX_API_KEY, "voice_id": MINIMAX_VOICE_ZH, "base_url": MINIMAX_API_BASE, "group_id": MINIMAX_GROUP_ID, "model": MINIMAX_MODEL}
+    if not config["key"] or not config["voice_id"]:
         raise HTTPException(status_code=503, detail="minimax tts not configured")
     clean = (text or "").strip()
     if not clean:
         raise HTTPException(status_code=400, detail="empty text")
-    clean = clean[:900]
-    url = f"{MINIMAX_API_BASE.rstrip('/')}/v1/t2a_v2"
-    if MINIMAX_GROUP_ID:
-        url += f"?GroupId={MINIMAX_GROUP_ID}"
+    if len(clean) > 900:
+        raise HTTPException(status_code=422, detail="单次朗读最多 900 字符，请分段朗读")
+    base = config["base_url"].rstrip("/")
+    if base.endswith("/v1"):
+        base = base[:-3]
+    url = f"{base}/v1/t2a_v2"
+    if config["group_id"]:
+        url += "?" + urllib.parse.urlencode({"GroupId": config["group_id"]})
     payload = {
-        "model": MINIMAX_MODEL,
+        "model": config["model"],
         "text": clean,
         "stream": False,
         "voice_setting": {
-            "voice_id": MINIMAX_VOICE_ZH,
+            "voice_id": config["voice_id"],
             "speed": 1.0,
             "vol": 1.0,
             "pitch": 0,
@@ -553,7 +576,7 @@ def minimax_tts_mp3(text: str) -> bytes:
         url,
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
         headers={
-            "Authorization": f"Bearer {MINIMAX_API_KEY}",
+            "Authorization": "Bearer " + config["key"],
             "Content-Type": "application/json",
         },
         method="POST",
@@ -563,8 +586,8 @@ def minimax_tts_mp3(text: str) -> bytes:
             data = json.loads(resp.read().decode("utf-8"))
     except HTTPException:
         raise
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"minimax tts failed: {exc}")
+    except Exception:
+        raise HTTPException(status_code=502, detail="MiniMax 朗读失败，请检查账户、音色与服务器网络") from None
     audio_hex = (data.get("data") or {}).get("audio")
     if not audio_hex:
         raise HTTPException(status_code=502, detail="minimax tts returned no audio")
@@ -632,7 +655,42 @@ def check_auth(request: Request) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    lune_runtime["init"]()
+    workspace_runtime["init"]()
+    checklist_runtime["init"]()
+    cinema_runtime["init"]()
+    speech_runtime["init"]()
+    native_runtime["init"]()
+    continuity_runtime["init"]()
+    wren_runtime["init"]()
+    xinchao_runtime["init"]()
+    living_runtime["init"]()
+    native_watch = asyncio.create_task(native_runtime["watch"]())
+    continuity_watch = asyncio.create_task(continuity_runtime["watch"]())
+    wren_watch = asyncio.create_task(wren_runtime["watch"]())
+    checklist_watch = asyncio.create_task(checklist_runtime["watch"]())
+    cinema_watch = asyncio.create_task(cinema_runtime["watch"]())
+    xinchao_watch=asyncio.create_task(xinchao_runtime['watch']())
     yield
+    native_watch.cancel()
+    continuity_watch.cancel()
+    wren_watch.cancel()
+    checklist_watch.cancel()
+    cinema_watch.cancel()
+    xinchao_watch.cancel()
+    await asyncio.gather(native_watch, continuity_watch, wren_watch, checklist_watch, cinema_watch, xinchao_watch, return_exceptions=True)
+    await wren_runtime["shutdown"]()
+    await continuity_runtime["shutdown"]()
+    await native_runtime["shutdown"]()
+    for task in list(lune_runtime["tasks"].values()):
+        task.cancel()
+    if lune_runtime["tasks"]:
+        await asyncio.gather(*list(lune_runtime["tasks"].values()), return_exceptions=True)
+    try:
+        from .latent_process import close_native
+    except ImportError:
+        from latent_process import close_native
+    await close_native()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -665,6 +723,16 @@ async def channel_out(request: Request):
     check_auth(request)
     body = await request.json()
     kind = body.get("type", "reply")
+    run_id = str(body.get("run_id") or "")
+    if run_id:
+        with db() as conn:
+            run = conn.execute("SELECT state FROM lune_runs WHERE id=?", (run_id,)).fetchone()
+            if not run or run["state"] not in {"pending", "running"}:
+                raise HTTPException(status_code=409, detail="generation is no longer active")
+            if kind == "reply" or (kind == "reply_delta" and body.get("done")):
+                prior = conn.execute("SELECT id FROM messages WHERE direction='out' AND kind='reply' AND json_extract(meta,'$.run_id')=? AND json_extract(meta,'$.agent_id')=?", (run_id, body.get("agent_id", ""))).fetchone()
+                if prior:
+                    return {"id": prior["id"], "saved": True, "duplicate": True}
     if kind in ("thinking_delta", "reply_delta"):
         return await handle_stream_delta(kind, body)
     if kind == "react":
@@ -817,15 +885,32 @@ async def app_call(request: Request):
 
 @app.post("/app/tts")
 async def app_tts(request: Request):
-    """Generate MiniMax speech for an AI reply. The frontend falls back if unavailable."""
+    """Generate speech with the owner's selected provider; no paid fallback."""
     check_auth(request)
     body = await request.json()
-    audio = minimax_tts_mp3(body.get("text") or "")
+    audio = await asyncio.to_thread(speech_runtime["synthesize"], body)
     return Response(
         content=audio,
         media_type="audio/mpeg",
         headers={"Cache-Control": "no-store"},
     )
+
+
+@app.get("/lune/chatgpt-helper")
+async def chatgpt_login_helper(request: Request):
+    """Download only public helper sources, never runtime credentials."""
+    check_auth(request)
+    import io
+    import zipfile
+    root = Path(__file__).resolve().parents[1]
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.write(root / "scripts" / "chatgpt_login.py", "chatgpt_login.py")
+        archive.write(root / "examples" / "lune_auth.py", "lune_auth.py")
+        archive.writestr("requirements.txt", "httpx==0.28.1\nPyJWT[crypto]==2.15.1\n")
+        archive.writestr("start-windows.cmd", '@echo off\r\ncd /d "%~dp0"\r\npy -3 -m venv .login-env\r\nif errorlevel 1 goto end\r\n.login-env\\Scripts\\python.exe -m pip install -r requirements.txt\r\nif errorlevel 1 goto end\r\n.login-env\\Scripts\\python.exe chatgpt_login.py --export "%USERPROFILE%\\.lune\\lune-chatgpt-connection.json"\r\n:end\r\npause\r\n')
+        archive.writestr("README.txt", "Luné ChatGPT 订阅连接助手\n\n需要电脑上的 Python 3.10+ 和浏览器，无需 Node。Windows 解压后双击 start-windows.cmd。其他系统安装 requirements.txt 后运行 python chatgpt_login.py --export ~/.lune/lune-chatgpt-connection.json。\n\n登录只在 OpenAI 官方页面完成。授权成功后，在自己的 HTTPS Luné 设置中导入电脑私人目录里的连接文件。不要把它发给聊天、代码仓库或他人。首次登录与文件导入完成后，可继续从 iPhone 使用自己的 Luné 服务器。导出后助手清除电脑端的活动令牌，由导入端负责刷新。账户权限与可用模型以实际授权结果为准。\n")
+    return Response(buffer.getvalue(), media_type="application/zip", headers={"Cache-Control": "no-store", "Content-Disposition": 'attachment; filename="Lune-ChatGPT-Login-Helper.zip"'})
 
 
 # ---------------------------------------------------------------------------
@@ -1048,6 +1133,76 @@ async def loop_proxy_delete(request: Request, path: str):
     check_auth(request)
     return loop_json("/loop/" + path, method="DELETE")
 
+
+try:
+    from .lune import register as register_lune
+except ImportError:
+    from lune import register as register_lune
+
+lune_runtime = register_lune(app, globals())
+try:
+    from .lune_memory import register as register_memory
+except ImportError:
+    from lune_memory import register as register_memory
+register_memory(app, globals())
+try:
+    from .workspace import register as register_workspace
+except ImportError:
+    from workspace import register as register_workspace
+workspace_runtime = register_workspace(app, globals())
+try:
+    from .lune_checklist import register as register_checklist
+except ImportError:
+    from lune_checklist import register as register_checklist
+checklist_runtime = register_checklist(app, globals())
+try:
+    from .lune_cinema import register as register_cinema
+    from .lune_cinema_companion import register as register_cinema_companion
+except ImportError:
+    from lune_cinema import register as register_cinema
+    from lune_cinema_companion import register as register_cinema_companion
+register_cinema(app, globals())
+cinema_runtime = register_cinema_companion(app, globals())
+try:
+    from .speech import register as register_speech
+except ImportError:
+    from speech import register as register_speech
+speech_runtime = register_speech(app, globals())
+try:
+    from .lune_native import register as register_native
+except ImportError:
+    from lune_native import register as register_native
+native_runtime = register_native(app, globals())
+
+try:
+    from .lune_ombre import register as register_ombre
+except ImportError:
+    from lune_ombre import register as register_ombre
+register_ombre(app, globals())
+
+try:
+    from .lune_continuity import register as register_continuity
+except ImportError:
+    from lune_continuity import register as register_continuity
+continuity_runtime = register_continuity(app, globals())
+
+try:
+    from .lune_wren import register as register_wren
+except ImportError:
+    from lune_wren import register as register_wren
+wren_runtime = register_wren(app, globals())
+
+try:
+    from .lune_xinchao import register as register_xinchao
+except ImportError:
+    from lune_xinchao import register as register_xinchao
+xinchao_runtime=register_xinchao(app,globals())
+
+try:
+    from .lune_living_context import register as register_living
+except ImportError:
+    from lune_living_context import register as register_living
+living_runtime=register_living(app,globals())
 
 if __name__ == "__main__":
     import uvicorn

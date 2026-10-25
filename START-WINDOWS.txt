@@ -1,0 +1,25 @@
+Lune / OURSPACE - Windows 电脑运行，iPhone 聊天
+
+第一次：
+1. 电脑安装并打开 Docker Desktop，使用 WSL 2 / Linux 引擎。
+   https://docs.docker.com/desktop/setup/install/windows-install/
+2. 电脑和 iPhone 安装 Tailscale，登录同一个个人账号，选择 Personal 免费方案。
+   https://tailscale.com/download
+3. 全部解压本项目，双击 Lune-Start.cmd，等待第一次下载和安装完成。
+4. 双击 Lune-Phone.cmd，按 Windows 提示确认私人 HTTPS 配置。
+5. iPhone 连接 Tailscale，在 Safari 打开生成的 https 地址，输入私人连接密码。
+   可从 Safari 分享菜单“添加到主屏幕”。
+
+常用：
+Lune-Start.cmd  启动 / 更新后台。
+Lune-Phone.cmd  设置私人手机访问地址。
+Lune-Access.cmd 查看私人地址和连接密码。
+Lune-Stop.cmd   停止后台，保留数据。
+
+完整说明在 docs/LUNE_WINDOWS.md。
+这些脚本尚待在你的 Windows 和 iPhone 实际验收。安装报错时保留原提示即可。
+首次成功后还需要在网页设置里连接模型账号。
+
+记忆在 Docker 的 lune-local_lune_data 持久卷。
+不要删除该卷；不要公开 .env、.lune-local 目录或任何私人备份。
+电脑睡眠、关机或断网时，手机暂时无法连接。
