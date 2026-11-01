@@ -50,8 +50,18 @@ try {
     Expect-Blocked { Assert-LuneServeConfig (($ours.Replace('"/":', '"/other":')) | ConvertFrom-Json) $hostPort $target }
     Expect-Blocked { Assert-LuneServeConfig ('{"Services":{"svc:foreign":{"TCP":{"443":{"HTTPS":true}}}}}' | ConvertFrom-Json) $hostPort $target }
     Expect-Blocked { Assert-LuneServeConfig ('{"TCP":{"443":{"TCPForward":"127.0.0.1:9000"}}}' | ConvertFrom-Json) $hostPort $target }
-    $native = Invoke-LuneNative (Get-Process -Id $PID).Path @('-NoProfile', '-Command', '[Console]::Error.WriteLine("fixture diagnostic"); exit 7')
-    if ($native.Code -ne 7 -or -not $native.Text.Contains('fixture diagnostic')) { throw 'Native failure was hidden or lost its exit status.' }
+    $fixture = Join-Path $temporary 'native-fixture.cmd'
+    [IO.File]::WriteAllText($fixture, "@echo off`r
+echo fixture diagnostic 1>&2`r
+exit /b 7`r
+", [Text.Encoding]::ASCII)
+    $cmd = Join-Path $env:WINDIR 'System32/cmd.exe'
+    $native = Invoke-LuneNative $cmd @('/d', '/c', ('"' + $fixture + '"'))
+    if ($native.Code -ne 7 -or -not $native.Text.Contains('fixture diagnostic')) {
+        throw ('Native failure was hidden or lost its exit status. Code=' + $native.Code + '; Output=' + $native.Text)
+    }
+    # The GitHub PowerShell runner propagates LASTEXITCODE after dot-sourcing this test.
+    $global:LASTEXITCODE = 0
     Write-Host 'PASS: syntax; persistent random credentials; private access file; port validation; stable volume project; private HTTPS guards.'
 } finally {
     Remove-Item -LiteralPath $temporary -Recurse -Force
