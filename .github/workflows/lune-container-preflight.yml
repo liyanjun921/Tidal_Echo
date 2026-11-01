@@ -47,7 +47,7 @@ jobs:
         run: |
           python - <<'PY'
           import json, time, urllib.request
-          base = "http://127.0.0.1:18080"
+          base = "http://127.0.0.1:18080/relay"
           token = "Bearer ci-preflight-only"
           def call(path, method="GET", payload=None):
               data = None if payload is None else json.dumps(payload).encode()
