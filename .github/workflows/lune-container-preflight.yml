@@ -43,6 +43,48 @@ jobs:
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18080/relay/app/brain)" = 401
           curl --fail --silent -H 'Authorization: Bearer ci-preflight-only' \
             http://127.0.0.1:18080/relay/app/brain | grep -q '"target":"loop"'
+      - name: Smoke-test Room preset, scope isolation, and durable event inbox
+        run: |
+          python - <<'PY'
+          import json, time, urllib.request
+          base = "http://127.0.0.1:18080"
+          token = "Bearer ci-preflight-only"
+          def call(path, method="GET", payload=None):
+              data = None if payload is None else json.dumps(payload).encode()
+              request = urllib.request.Request(
+                  base + path, data=data, method=method,
+                  headers={"Authorization": token, "Content-Type": "application/json"})
+              with urllib.request.urlopen(request, timeout=5) as response:
+                  return json.load(response)
+          before = call("/lune/wren/gpt")
+          other = call("/lune/wren/claude")
+          assert before["settings"]["enabled"] is False
+          assert other["settings"]["enabled"] is False
+          call("/lune/wren/gpt/preset/high-affection", "POST",
+               {"version": before["settings"]["version"]})
+          after = call("/lune/wren/gpt")
+          assert after["settings"]["enabled"] is True
+          assert (after["settings"]["idle_min"], after["settings"]["idle_max"]) == (1800, 1800)
+          assert after["settings"]["daily_limit"] == 40
+          assert (after["settings"]["quiet_start"], after["settings"]["quiet_end"]) == (1, 9)
+          assert after["settings"]["desire"]["enabled"] is True
+          assert call("/lune/wren/claude")["settings"]["enabled"] is False
+          event = {
+              "source": "system", "event_id": "container-preflight-event",
+              "type": "system.preflight", "summary": "容器内持久唤醒队列验收。",
+              "resource_ref": "preflight:1", "priority": 80,
+              "not_before": time.time() + 3600, "ttl_seconds": 86400
+          }
+          first = call("/lune/wren/gpt/events", "POST", event)
+          duplicate = call("/lune/wren/gpt/events", "POST", event)
+          assert first["ok"] and not first["duplicate"]
+          assert duplicate["ok"] and duplicate["duplicate"]
+          snapshot = call("/lune/wren/gpt")
+          stored = next(x for x in snapshot["wake_events"] if x["id"] == first["id"])
+          assert stored["state"] == "pending"
+          assert stored["summary"] == event["summary"]
+          print("Room 30-minute preset, independent scope, and durable wake inbox: OK")
+          PY
       - name: Inspect failures and remove test data
         if: always()
         run: |
