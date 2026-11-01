@@ -51,7 +51,9 @@ try {
     Expect-Blocked { Assert-LuneServeConfig ('{"Services":{"svc:foreign":{"TCP":{"443":{"HTTPS":true}}}}}' | ConvertFrom-Json) $hostPort $target }
     Expect-Blocked { Assert-LuneServeConfig ('{"TCP":{"443":{"TCPForward":"127.0.0.1:9000"}}}' | ConvertFrom-Json) $hostPort $target }
     $native = Invoke-LuneNative (Get-Process -Id $PID).Path @('-NoProfile', '-Command', '[Console]::Error.WriteLine("fixture diagnostic"); exit 7')
-    if ($native.Code -ne 7 -or -not $native.Text.Contains('fixture diagnostic')) { throw 'Native failure was hidden or lost its exit status.' }
+    if ($native.Code -ne 7 -or -not $native.Text.Contains('fixture diagnostic')) {
+        throw ('Native failure was hidden or lost its exit status. Code=' + $native.Code + '; Output=' + $native.Text)
+    }
     Write-Host 'PASS: syntax; persistent random credentials; private access file; port validation; stable volume project; private HTTPS guards.'
 } finally {
     Remove-Item -LiteralPath $temporary -Recurse -Force

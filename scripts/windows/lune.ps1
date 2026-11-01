@@ -1,4 +1,4 @@
-﻿# Compatible with Windows PowerShell 5.1. Save this source as ASCII.
+﻿﻿# Compatible with Windows PowerShell 5.1. UTF-8 BOM is required for Chinese messages.
 param([ValidateSet('Start', 'Stop', 'Phone', 'Access', 'Status')][string]$Action = 'Start',
       [switch]$KeepOpenOnError)
 $ErrorActionPreference = 'Stop'
@@ -49,8 +49,9 @@ function Invoke-LuneNative([string]$Tool, [string[]]$Arguments) {
     $before = $ErrorActionPreference
     try {
         $ErrorActionPreference = 'Continue'
-        $output = & $Tool @Arguments 2>&1 | Out-String
+        $output = & $Tool @Arguments 2>&1
         $code = $LASTEXITCODE
+        $output = ($output | Out-String).Trim()
     } finally { $ErrorActionPreference = $before }
     return @{ Text = $output.Trim(); Code = $code }
 }
