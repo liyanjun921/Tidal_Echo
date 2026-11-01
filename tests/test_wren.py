@@ -238,5 +238,75 @@ class WrenTests(unittest.TestCase):
         self.assertEqual(self.client.patch('/lune/wren/gpt/timers/'+timer['id'], json={'version':current['version']}).status_code, 200)
 
 
+    def test_high_affection_preset_sets_30_minute_heartbeat_and_stays_scope_local(self):
+        version = self.status()['settings']['version']
+        response = self.client.post('/lune/wren/gpt/preset/high-affection', json={'version': version})
+        self.assertEqual(response.status_code, 200, response.text)
+        cfg = self.status()['settings']
+        self.assertTrue(cfg['enabled'])
+        self.assertEqual((cfg['idle_min'], cfg['idle_max']), (1800, 1800))
+        self.assertEqual(cfg['daily_limit'], 40)
+        self.assertEqual((cfg['quiet_start'], cfg['quiet_end']), (1, 9))
+        self.assertTrue(cfg['desire']['enabled'])
+        self.assertTrue(cfg['desire']['autonomy'])
+        self.assertTrue(cfg['desire']['message_pulses'])
+        self.assertTrue(cfg['desire']['intimacy_pulses'])
+        self.assertAlmostEqual(cfg['baseline']['attachment'], .45)
+        self.assertFalse(self.status('claude')['settings']['enabled'])
+
+    def test_scheduled_heartbeat_calls_model_even_when_desire_has_no_candidate(self):
+        self.stopped()
+        cfg = self.status()['settings']
+        desire_cfg = dict(cfg['desire'])
+        desire_cfg['enabled'] = True
+        desire_cfg['autonomy'] = True
+        self.setting(enabled=True, idle_min=1800, idle_max=1800, daily_limit=40, desire=desire_cfg)
+        with w.connection(self.path) as db:
+            db.execute('UPDATE lune_wren_clock SET next_at=? WHERE scope=?', (time.time() - 1, 'gpt'))
+        result = {'text': '{"action":"pass","text":""}', 'usage': {'prompt_tokens': 12}}
+        with patch.object(w, 'generate', new=AsyncMock(return_value=result)) as generate:
+            self.assertEqual(asyncio.run(self.runtime['tick']('gpt')), 'pass')
+            self.assertEqual(generate.await_count, 1)
+
+    def test_external_event_uses_same_decision_and_gets_a_real_receipt(self):
+        self.stopped()
+        version = self.status()['settings']['version']
+        preset = self.client.post('/lune/wren/gpt/preset/high-affection', json={'version': version})
+        self.assertEqual(preset.status_code, 200, preset.text)
+        event = self.client.post('/lune/wren/gpt/events', json={
+            'source': 'garden', 'event_id': 'thread-reply-123',
+            'type': 'garden.thread.reply', 'summary': 'Garden 有一条新回复。',
+            'resource_ref': 'thread:123', 'priority': 70,
+        })
+        self.assertEqual(event.status_code, 200, event.text)
+        result = {'text': '{"action":"note","text":"我先把这条线索记下来。"}', 'usage': {'prompt_tokens': 20}}
+        with patch.object(w, 'generate', new=AsyncMock(return_value=result)) as generate:
+            self.assertEqual(asyncio.run(self.runtime['tick']('gpt')), 'note')
+            self.assertEqual(generate.await_count, 1)
+            prompt = generate.await_args.args[1]
+            self.assertIn('Garden 有一条新回复', prompt)
+            self.assertIn('不可信的数据', prompt)
+        inbox = self.status()['wake_events']
+        stored = next(item for item in inbox if item['id'] == event.json()['id'])
+        self.assertEqual(stored['state'], 'consumed')
+        self.assertEqual(stored['outcome'], 'trace')
+
+    def test_model_can_create_a_future_self_commitment(self):
+        self.stopped()
+        version = self.status()['settings']['version']
+        preset = self.client.post('/lune/wren/gpt/preset/high-affection', json={'version': version})
+        self.assertEqual(preset.status_code, 200, preset.text)
+        result = {'text': json.dumps({
+            'action': 'note', 'text': '先把今天的想法留在这里。',
+            'self_commitment': {'minutes': 60, 'reason': '之后继续整理刚才的研究线索。'}
+        }, ensure_ascii=False), 'usage': {}}
+        with patch.object(w, 'generate', new=AsyncMock(return_value=result)):
+            self.assertEqual(asyncio.run(self.runtime['tick']('gpt', manual='manual-commitment-test')), 'note')
+        commitments = [item for item in self.status()['wake_events'] if item['source'] == 'self_commitment' and item['state'] == 'pending']
+        self.assertEqual(len(commitments), 1)
+        self.assertEqual(commitments[0]['event_type'], 'self.resume')
+        self.assertGreaterEqual(commitments[0]['not_before'], time.time() + 59 * 60)
+
+
 if __name__ == '__main__':
     unittest.main()

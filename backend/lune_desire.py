@@ -287,8 +287,8 @@ async def classify_message(path,room,agent,text,message_id):
 
 
 async def read_for_intent(path,scope,intent):
-    """One bounded, actual read. Never pretend unavailable outside services ran."""
-    if intent!='reflect':return None
+    """One bounded, actual read from this room's existing sources."""
+    if intent not in {'reflect','explore','follow_through','socialize'}:return None
     try:
         from .lune_wren import SCOPES
         from . import ombre_runtime as ob
@@ -296,13 +296,36 @@ async def read_for_intent(path,scope,intent):
         from lune_wren import SCOPES
         import ombre_runtime as ob
     with connection(path) as db:
-        row=db.execute("SELECT id,title,content FROM lune_workspace WHERE scope IN ('shared',?) AND kind='book' AND deleted=0 AND length(content)>0 ORDER BY updated_at DESC LIMIT 1",(SCOPES[scope][0],)).fetchone()
-        if row:return {'tool':'host:read_book_excerpt','intent':'reflect','result':{'source_id':row['id'],'title':row['title'],'excerpt':row['content'][:4000],'partial':len(row['content'])>4000}}
-        thought=db.execute("SELECT topic_keys FROM lune_wren_thoughts WHERE scope=? AND visibility='shared' AND state!='retired' ORDER BY updated DESC LIMIT 1",(scope,)).fetchone()
-    if thought and ob.installed():
+        if intent=='follow_through':
+            todo=db.execute(
+                "SELECT id,title,content FROM lune_workspace WHERE scope IN ('shared',?) AND kind='todo' AND deleted=0 AND COALESCE(json_extract(data,'$.done'),0)=0 ORDER BY updated_at DESC LIMIT 1",
+                (SCOPES[scope][0],)
+            ).fetchone()
+            if todo:
+                return {'tool':'host:read_todo','intent':'follow_through',
+                        'result':{'source_id':todo['id'],'title':todo['title'],'content':todo['content'][:1200]}}
+        if intent=='socialize' and SCOPES[scope][0]=='group':
+            rows=db.execute(
+                "SELECT id,direction,text FROM messages WHERE json_extract(meta,'$.api_session')='lune-group' ORDER BY id DESC LIMIT 3"
+            ).fetchall()
+            if rows:
+                return {'tool':'host:read_group_context','intent':'socialize',
+                        'result':{'messages':[{'id':r['id'],'direction':r['direction'],'text':r['text'][:500]} for r in reversed(rows)]}}
+        row=db.execute(
+            "SELECT id,title,content FROM lune_workspace WHERE scope IN ('shared',?) AND kind='book' AND deleted=0 AND length(content)>0 ORDER BY updated_at DESC LIMIT 1",
+            (SCOPES[scope][0],)
+        ).fetchone()
+        if row and intent in {'reflect','explore'}:
+            return {'tool':'host:read_book_excerpt','intent':intent,
+                    'result':{'source_id':row['id'],'title':row['title'],'excerpt':row['content'][:4000],'partial':len(row['content'])>4000}}
+        thought=db.execute(
+            "SELECT topic_keys FROM lune_wren_thoughts WHERE scope=? AND visibility='shared' AND state!='retired' ORDER BY updated DESC LIMIT 1",
+            (scope,)
+        ).fetchone()
+    if thought and ob.installed() and intent in {'reflect','explore'}:
         result=await ob.call(scope,'breath_search',{'query':' '.join(json.loads(thought['topic_keys'])[:4]),'max_results':2})
         if not result.get('isError'):
-            return {'tool':'ombre_breath_search','intent':'reflect','result':result}
+            return {'tool':'ombre_breath_search','intent':intent,'result':result}
     return None
 
 
