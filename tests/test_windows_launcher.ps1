@@ -60,6 +60,8 @@ exit /b 7`r
     if ($native.Code -ne 7 -or -not $native.Text.Contains('fixture diagnostic')) {
         throw ('Native failure was hidden or lost its exit status. Code=' + $native.Code + '; Output=' + $native.Text)
     }
+    # The GitHub PowerShell runner propagates LASTEXITCODE after dot-sourcing this test.
+    $global:LASTEXITCODE = 0
     Write-Host 'PASS: syntax; persistent random credentials; private access file; port validation; stable volume project; private HTTPS guards.'
 } finally {
     Remove-Item -LiteralPath $temporary -Recurse -Force
