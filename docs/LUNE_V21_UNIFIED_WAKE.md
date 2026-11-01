@@ -94,7 +94,7 @@
 
 ## Runtime 边界
 
-这条 30 分钟心跳运行在 Luné 的后台模型适配器（本机 `/loop/native/generate`）中，使用该房间配置的模型、人格和独立空间状态。它不是 ChatGPT 官方聊天窗口的远程唤醒。ChatGPT 官方 Scheduled Tasks 目前不能按 30 分钟频率调度；如果坚持让官方 ChatGPT 当前会话本身每 30 分钟醒来，平台目前没有可验证的受支持路径。不要把 Luné API 回合描述成当前 ChatGPT 对话已被唤醒。
+这条 30 分钟心跳运行在 Luné 的后台模型适配器（本机 `/loop/native/generate`）中，使用该房间配置的模型、人格和独立空间状态。它不是 ChatGPT 官方聊天窗口的远程唤醒。OpenAI 官方说明，符合条件的付费计划中，ChatGPT Scheduled Tasks 的循环定时最高为每小时一次，不能承担 30 分钟心跳；Work 的事件触发任务可以响应 Gmail、Slack、GitHub 等支持事件，但不提供任意自我预约或通用 30 分钟定时。参见 [Scheduled tasks in ChatGPT](https://help.openai.com/en/articles/10291617-scheduled-tasks-in-chatgpt)。不要把 Luné API 回合描述成当前 ChatGPT 对话已被唤醒。
 
 ## 验证
 
