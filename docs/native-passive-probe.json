@@ -1,0 +1,606 @@
+{
+  "revision": "835250d080c02d9553d3b96d9a2753773a4a0c3c",
+  "date": "2026-10-24",
+  "source_modified": false,
+  "embedding_model": "BAAI/bge-small-zh-v1.5",
+  "embedding_location": "local_cpu",
+  "fact_floor": 0.42,
+  "fact_floor_note": "native default; documented calibration is for voyage-3.5, not this model",
+  "dataset": "invented fixtures, expectations fixed in script, not a representative benchmark",
+  "packages": {
+    "jieba": "0.42.1",
+    "fastembed": "0.9.0",
+    "onnxruntime": "1.31.0",
+    "numpy": "2.5.4",
+    "tiktoken": "0.14.0"
+  },
+  "facts": [
+    {
+      "id": "f01",
+      "block": "block-01",
+      "fact": "她压力大时喜欢靠着窗听雨，什么都不做。",
+      "event_date": "2026-01-02",
+      "written": "2026-01-03",
+      "tag": "life",
+      "kind": "event"
+    },
+    {
+      "id": "f02",
+      "block": "block-02",
+      "fact": "上一次失眠，我们放了海浪声，她说终于慢慢放松了。",
+      "event_date": "2026-01-02",
+      "written": "2026-01-03",
+      "tag": "life",
+      "kind": "event"
+    },
+    {
+      "id": "f03",
+      "block": "block-03",
+      "fact": "她不喜欢太甜的饮料，常点无糖乌龙。",
+      "event_date": "2026-01-02",
+      "written": "2026-01-03",
+      "tag": "life",
+      "kind": "event"
+    },
+    {
+      "id": "f04",
+      "block": "block-04",
+      "fact": "她曾说，累的时候不需要建议，安静陪一会儿就好。",
+      "event_date": "2026-01-02",
+      "written": "2026-01-03",
+      "tag": "life",
+      "kind": "event"
+    },
+    {
+      "id": "f05",
+      "block": "block-05",
+      "fact": "她给猫买过纸箱，猫偏偏睡在快递包装里。",
+      "event_date": "2026-01-02",
+      "written": "2026-01-03",
+      "tag": "life",
+      "kind": "event"
+    },
+    {
+      "id": "f06",
+      "block": "block-06",
+      "fact": "她对那次被临时取消的约定失望，后来约好变动要提前说。",
+      "event_date": "2026-01-02",
+      "written": "2026-01-03",
+      "tag": "life",
+      "kind": "event"
+    },
+    {
+      "id": "f07",
+      "block": "block-07",
+      "fact": "她为第一次登台紧张，演出结束后说自己比想象中勇敢。",
+      "event_date": "2026-01-02",
+      "written": "2026-01-03",
+      "tag": "life",
+      "kind": "event"
+    },
+    {
+      "id": "f08",
+      "block": "block-08",
+      "fact": "她很喜欢深夜一起读几页书，不急着读完。",
+      "event_date": "2026-01-02",
+      "written": "2026-01-03",
+      "tag": "life",
+      "kind": "event"
+    },
+    {
+      "id": "f09",
+      "block": "block-09",
+      "fact": "她怕忘掉灵感，习惯把零碎的句子写进备忘录。",
+      "event_date": "2026-01-02",
+      "written": "2026-01-03",
+      "tag": "life",
+      "kind": "event"
+    },
+    {
+      "id": "f10",
+      "block": "block-10",
+      "fact": "她点过桂花酒酿，觉得香气柔和但不想喝烈酒。",
+      "event_date": "2026-01-02",
+      "written": "2026-01-03",
+      "tag": "life",
+      "kind": "event"
+    },
+    {
+      "id": "f11",
+      "block": "block-11",
+      "fact": "她赶完稿后想吃热汤面，觉得暖胃。",
+      "event_date": "2026-01-02",
+      "written": "2026-01-03",
+      "tag": "life",
+      "kind": "event"
+    },
+    {
+      "id": "f12",
+      "block": "block-12",
+      "fact": "她喜欢周末去海边看日落，安静坐一会儿。",
+      "event_date": "2026-01-02",
+      "written": "2026-01-03",
+      "tag": "life",
+      "kind": "event"
+    },
+    {
+      "id": "f13",
+      "block": "block-13",
+      "fact": "她曾在苏州生活，后来搬到了杭州。",
+      "event_date": "2026-01-02",
+      "written": "2026-01-03",
+      "tag": "life",
+      "kind": "event"
+    },
+    {
+      "id": "f14",
+      "block": "block-14",
+      "fact": "她目前住在杭州，习惯坐地铁通勤。",
+      "event_date": "2026-01-02",
+      "written": "2026-01-03",
+      "tag": "life",
+      "kind": "event"
+    },
+    {
+      "id": "f15",
+      "block": "block-15",
+      "fact": "她前天丢过一把银色钥匙，后来在包的夹层找到了。",
+      "event_date": "2026-01-02",
+      "written": "2026-01-03",
+      "tag": "life",
+      "kind": "event"
+    },
+    {
+      "id": "f16",
+      "block": "block-16",
+      "fact": "她喜欢用蓝色墨水写信，信封里会夹干花。",
+      "event_date": "2026-01-02",
+      "written": "2026-01-03",
+      "tag": "life",
+      "kind": "event"
+    }
+  ],
+  "chat_model_called": false,
+  "lune_feature_enabled": false,
+  "vector_build_seconds": 0.5213,
+  "vector_dimension": 512,
+  "quality": [
+    {
+      "query": "脑子绷了一整天，我现在不想再动了。",
+      "expected_relevant": [
+        "f01",
+        "f04"
+      ],
+      "received": [
+        "f02",
+        "f04"
+      ],
+      "relevant_received": [
+        "f04"
+      ],
+      "extra_received": [
+        "f02"
+      ],
+      "status": "ready",
+      "reason_codes": [
+        "fact_mode_signal",
+        "w4_assembled",
+        "fact_top2",
+        "fact_score:0.510",
+        "fact_score:0.482",
+        "fact_margin:0.028",
+        "fact_lead:0.113"
+      ],
+      "elapsed_ms": 5.61,
+      "native_payload": "〔历史证据〕\n〔来源：c54ecf0dc43b95a0；2026-01-02〕\n上一次失眠，我们放了海浪声，她说终于慢慢放松了。\n〔来源：25f340cc315bc8e1；2026-01-02〕\n她曾说，累的时候不需要建议，安静陪一会儿就好。\n〔历史证据结束〕"
+    },
+    {
+      "query": "今晚翻来覆去，怎么都睡不着。",
+      "expected_relevant": [
+        "f02"
+      ],
+      "received": [
+        "f08",
+        "f02"
+      ],
+      "relevant_received": [
+        "f02"
+      ],
+      "extra_received": [
+        "f08"
+      ],
+      "status": "ready",
+      "reason_codes": [
+        "fact_mode_signal",
+        "w4_assembled",
+        "fact_top2",
+        "fact_score:0.509",
+        "fact_score:0.507",
+        "fact_margin:0.002",
+        "fact_lead:0.093"
+      ],
+      "elapsed_ms": 4.6,
+      "native_payload": "〔历史证据〕\n〔来源：c763fb925aaf84ff；2026-01-02〕\n她很喜欢深夜一起读几页书，不急着读完。\n〔来源：c54ecf0dc43b95a0；2026-01-02〕\n上一次失眠，我们放了海浪声，她说终于慢慢放松了。\n〔历史证据结束〕"
+    },
+    {
+      "query": "这杯喝着齁得慌，有没有清淡些的？",
+      "expected_relevant": [
+        "f03"
+      ],
+      "received": [
+        "f03",
+        "f10"
+      ],
+      "relevant_received": [
+        "f03"
+      ],
+      "extra_received": [
+        "f10"
+      ],
+      "status": "ready",
+      "reason_codes": [
+        "fact_mode_signal",
+        "w4_assembled",
+        "fact_top2",
+        "fact_score:0.512",
+        "fact_score:0.504",
+        "fact_margin:0.008",
+        "fact_lead:0.129"
+      ],
+      "elapsed_ms": 4.75,
+      "native_payload": "〔历史证据〕\n〔来源：7a485426db328236；2026-01-02〕\n她不喜欢太甜的饮料，常点无糖乌龙。\n〔来源：e86b6f1c0a11bec3；2026-01-02〕\n她点过桂花酒酿，觉得香气柔和但不想喝烈酒。\n〔历史证据结束〕"
+    },
+    {
+      "query": "今天不用替我想办法，让我歇会儿。",
+      "expected_relevant": [
+        "f01",
+        "f04"
+      ],
+      "received": [
+        "f04"
+      ],
+      "relevant_received": [
+        "f04"
+      ],
+      "extra_received": [],
+      "status": "ready",
+      "reason_codes": [
+        "fact_mode_signal",
+        "w4_assembled",
+        "fact_top2",
+        "fact_score:0.472",
+        "fact_margin:0.066",
+        "fact_lead:0.106"
+      ],
+      "elapsed_ms": 5.56,
+      "native_payload": "〔历史证据〕\n〔来源：25f340cc315bc8e1；2026-01-02〕\n她曾说，累的时候不需要建议，安静陪一会儿就好。\n〔历史证据结束〕"
+    },
+    {
+      "query": "小家伙又钻进刚拆的包装里了。",
+      "expected_relevant": [
+        "f05"
+      ],
+      "received": [
+        "f15"
+      ],
+      "relevant_received": [],
+      "extra_received": [
+        "f15"
+      ],
+      "status": "ready",
+      "reason_codes": [
+        "fact_mode_signal",
+        "w4_assembled",
+        "fact_top2",
+        "fact_score:0.490",
+        "fact_margin:0.094",
+        "fact_lead:0.169"
+      ],
+      "elapsed_ms": 4.16,
+      "native_payload": "〔历史证据〕\n〔来源：118a178c2bb50242；2026-01-02〕\n她前天丢过一把银色钥匙，后来在包的夹层找到了。\n〔历史证据结束〕"
+    },
+    {
+      "query": "怎么又到最后一刻才说来不了了。",
+      "expected_relevant": [
+        "f06"
+      ],
+      "received": [
+        "f06",
+        "f09"
+      ],
+      "relevant_received": [
+        "f06"
+      ],
+      "extra_received": [
+        "f09"
+      ],
+      "status": "ready",
+      "reason_codes": [
+        "fact_mode_signal",
+        "w4_assembled",
+        "fact_top2",
+        "fact_score:0.515",
+        "fact_score:0.473",
+        "fact_margin:0.042",
+        "fact_lead:0.115"
+      ],
+      "elapsed_ms": 4.7,
+      "native_payload": "〔历史证据〕\n〔来源：dad4c5cb6309be51；2026-01-02〕\n她对那次被临时取消的约定失望，后来约好变动要提前说。\n〔来源：5cc7261f52e674fd；2026-01-02〕\n她怕忘掉灵感，习惯把零碎的句子写进备忘录。\n〔历史证据结束〕"
+    },
+    {
+      "query": "轮到我上场了，手心都在冒汗。",
+      "expected_relevant": [
+        "f07"
+      ],
+      "received": [],
+      "relevant_received": [],
+      "extra_received": [],
+      "status": "empty",
+      "reason_codes": [
+        "fact_below_floor"
+      ],
+      "elapsed_ms": 3.94,
+      "native_payload": ""
+    },
+    {
+      "query": "睡前还想和你一起翻两页。",
+      "expected_relevant": [
+        "f08"
+      ],
+      "received": [
+        "f08",
+        "f02"
+      ],
+      "relevant_received": [
+        "f08"
+      ],
+      "extra_received": [
+        "f02"
+      ],
+      "status": "ready",
+      "reason_codes": [
+        "fact_mode_signal",
+        "w4_assembled",
+        "fact_top2",
+        "fact_score:0.486",
+        "fact_score:0.454",
+        "fact_margin:0.032",
+        "fact_lead:0.103"
+      ],
+      "elapsed_ms": 4.03,
+      "native_payload": "〔历史证据〕\n〔来源：c763fb925aaf84ff；2026-01-02〕\n她很喜欢深夜一起读几页书，不急着读完。\n〔来源：c54ecf0dc43b95a0；2026-01-02〕\n上一次失眠，我们放了海浪声，她说终于慢慢放松了。\n〔历史证据结束〕"
+    },
+    {
+      "query": "刚闪过一个好句子，怕一会儿就没了。",
+      "expected_relevant": [
+        "f09"
+      ],
+      "received": [
+        "f09",
+        "f04"
+      ],
+      "relevant_received": [
+        "f09"
+      ],
+      "extra_received": [
+        "f04"
+      ],
+      "status": "ready",
+      "reason_codes": [
+        "fact_mode_signal",
+        "w4_assembled",
+        "fact_top2",
+        "fact_score:0.490",
+        "fact_score:0.458",
+        "fact_margin:0.033",
+        "fact_lead:0.100"
+      ],
+      "elapsed_ms": 4.6,
+      "native_payload": "〔历史证据〕\n〔来源：5cc7261f52e674fd；2026-01-02〕\n她怕忘掉灵感，习惯把零碎的句子写进备忘录。\n〔来源：25f340cc315bc8e1；2026-01-02〕\n她曾说，累的时候不需要建议，安静陪一会儿就好。\n〔历史证据结束〕"
+    },
+    {
+      "query": "今晚想小酌一点，别太冲。",
+      "expected_relevant": [
+        "f10"
+      ],
+      "received": [
+        "f10",
+        "f04"
+      ],
+      "relevant_received": [
+        "f10"
+      ],
+      "extra_received": [
+        "f04"
+      ],
+      "status": "ready",
+      "reason_codes": [
+        "fact_mode_signal",
+        "w4_assembled",
+        "fact_top2",
+        "fact_score:0.520",
+        "fact_score:0.492",
+        "fact_margin:0.028",
+        "fact_lead:0.082"
+      ],
+      "elapsed_ms": 4.31,
+      "native_payload": "〔历史证据〕\n〔来源：e86b6f1c0a11bec3；2026-01-02〕\n她点过桂花酒酿，觉得香气柔和但不想喝烈酒。\n〔来源：25f340cc315bc8e1；2026-01-02〕\n她曾说，累的时候不需要建议，安静陪一会儿就好。\n〔历史证据结束〕"
+    },
+    {
+      "query": "写完了，肚子空得难受，想吃点暖乎的。",
+      "expected_relevant": [
+        "f11"
+      ],
+      "received": [
+        "f11",
+        "f09"
+      ],
+      "relevant_received": [
+        "f11"
+      ],
+      "extra_received": [
+        "f09"
+      ],
+      "status": "ready",
+      "reason_codes": [
+        "fact_mode_signal",
+        "w4_assembled",
+        "fact_top2",
+        "fact_score:0.657",
+        "fact_score:0.455",
+        "fact_margin:0.202",
+        "fact_lead:0.248"
+      ],
+      "elapsed_ms": 4.89,
+      "native_payload": "〔历史证据〕\n〔来源：5ea00d882893c82f；2026-01-02〕\n她赶完稿后想吃热汤面，觉得暖胃。\n〔来源：5cc7261f52e674fd；2026-01-02〕\n她怕忘掉灵感，习惯把零碎的句子写进备忘录。\n〔历史证据结束〕"
+    },
+    {
+      "query": "想找个能看晚霞、听潮声的地方待一下午。",
+      "expected_relevant": [
+        "f12"
+      ],
+      "received": [
+        "f12",
+        "f02"
+      ],
+      "relevant_received": [
+        "f12"
+      ],
+      "extra_received": [
+        "f02"
+      ],
+      "status": "ready",
+      "reason_codes": [
+        "fact_mode_signal",
+        "w4_assembled",
+        "fact_top2",
+        "fact_score:0.581",
+        "fact_score:0.455",
+        "fact_margin:0.126",
+        "fact_lead:0.217"
+      ],
+      "elapsed_ms": 4.81,
+      "native_payload": "〔历史证据〕\n〔来源：a1dc974efa48841e；2026-01-02〕\n她喜欢周末去海边看日落，安静坐一会儿。\n〔来源：c54ecf0dc43b95a0；2026-01-02〕\n上一次失眠，我们放了海浪声，她说终于慢慢放松了。\n〔历史证据结束〕"
+    },
+    {
+      "query": "土星的光环由什么组成？",
+      "expected_relevant": [],
+      "received": [],
+      "relevant_received": [],
+      "extra_received": [],
+      "status": "empty",
+      "reason_codes": [
+        "fact_below_floor"
+      ],
+      "elapsed_ms": 4.14,
+      "native_payload": ""
+    },
+    {
+      "query": "帮我算一下十七乘二十九。",
+      "expected_relevant": [],
+      "received": [],
+      "relevant_received": [],
+      "extra_received": [],
+      "status": "empty",
+      "reason_codes": [
+        "fact_below_floor"
+      ],
+      "elapsed_ms": 4.04,
+      "native_payload": ""
+    },
+    {
+      "query": "今天的汇率是多少？",
+      "expected_relevant": [],
+      "received": [],
+      "relevant_received": [],
+      "extra_received": [],
+      "status": "empty",
+      "reason_codes": [
+        "fact_below_floor"
+      ],
+      "elapsed_ms": 3.87,
+      "native_payload": ""
+    },
+    {
+      "query": "嗯嗯",
+      "expected_relevant": [],
+      "received": [],
+      "relevant_received": [],
+      "extra_received": [],
+      "status": "empty",
+      "reason_codes": [
+        "low_information"
+      ],
+      "elapsed_ms": 0.05,
+      "native_payload": ""
+    },
+    {
+      "query": "查一下Linux磁盘占用命令",
+      "expected_relevant": [],
+      "received": [],
+      "relevant_received": [],
+      "extra_received": [],
+      "status": "empty",
+      "reason_codes": [
+        "fact_below_floor"
+      ],
+      "elapsed_ms": 3.87,
+      "native_payload": ""
+    }
+  ],
+  "host_probes": [
+    {
+      "counter": "native_utf8_byte_upper_bound",
+      "state": "ready",
+      "elapsed_ms": 9.099,
+      "injected": true,
+      "source_history_unchanged": true,
+      "utf8_byte_upper_bound": 300,
+      "request_projection": [
+        {
+          "role": "user",
+          "content": "今晚翻来覆去，怎么都睡不着。"
+        },
+        {
+          "role": "system",
+          "content": "〔历史证据〕\n〔来源：c763fb925aaf84ff；2026-01-02〕\n她很喜欢深夜一起读几页书，不急着读完。\n〔来源：c54ecf0dc43b95a0；2026-01-02〕\n上一次失眠，我们放了海浪声，她说终于慢慢放松了。\n〔历史证据结束〕"
+        }
+      ]
+    },
+    {
+      "counter": "o200k_base_probe_not_billing",
+      "state": "ready",
+      "elapsed_ms": 13.796,
+      "injected": true,
+      "source_history_unchanged": true,
+      "utf8_byte_upper_bound": 300,
+      "request_projection": [
+        {
+          "role": "user",
+          "content": "今晚翻来覆去，怎么都睡不着。"
+        },
+        {
+          "role": "system",
+          "content": "〔历史证据〕\n〔来源：c763fb925aaf84ff；2026-01-02〕\n她很喜欢深夜一起读几页书，不急着读完。\n〔来源：c54ecf0dc43b95a0；2026-01-02〕\n上一次失眠，我们放了海浪声，她说终于慢慢放松了。\n〔历史证据结束〕"
+        }
+      ]
+    }
+  ],
+  "checks": {
+    "cooldown_repeat_empty": true,
+    "cooldown_survives_service_restart": true,
+    "cooldown_expires_at_12h": true,
+    "source_file_not_modified": true,
+    "same_delivery_idempotent": true,
+    "derived_not_injected": true,
+    "retracted_source_not_returned": true,
+    "superseded_source_not_returned": true,
+    "no_vectors_reported_explicitly": true,
+    "hidden_not_listed_for_model": true,
+    "ordinary_caller_denied": true,
+    "native_hidden_entry_returns_ready": true,
+    "temporary_mode_does_not_write_history": true
+  },
+  "mechanical_checks_passed": 13,
+  "mechanical_checks_total": 13
+}

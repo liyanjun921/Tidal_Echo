@@ -1,0 +1,3 @@
+# Optional richer scene analysis. Ordinary playback and the FFmpeg baseline
+# observer work without this environment.
+opencv-python-headless>=4.10,<5

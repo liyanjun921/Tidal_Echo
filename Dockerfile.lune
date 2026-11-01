@@ -1,0 +1,18 @@
+FROM python:3.12-slim
+COPY --from=node:24-bookworm-slim /usr/local/bin/node /usr/local/bin/node
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates libstdc++6 libatomic1 ffmpeg && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY examples/requirements.txt /tmp/loop-requirements.txt
+COPY backend/requirements.txt /tmp/backend-requirements.txt
+COPY backend/ombre-requirements.txt /tmp/ombre-requirements.txt
+COPY backend/vendor/open_watch_cinema/observer/requirements.txt /tmp/cinema-observer-requirements.txt
+RUN pip install --no-cache-dir -r /tmp/backend-requirements.txt -r /tmp/loop-requirements.txt -r /tmp/ombre-requirements.txt -r /tmp/cinema-observer-requirements.txt
+COPY backend backend
+COPY examples examples
+COPY web web
+COPY LICENSE NOTICE README.md ./
+COPY docs docs
+COPY scripts scripts
+ENV PORT=8080 RELAY_DB=/data/relay.db RELAY_UPLOAD_DIR=/data/uploads LOOP_CONFIG=/data/api_loop.config.json LOOP_CACHE_DIR=/data/loop_cache RELAY_BRAIN_FILE=/data/brain_target RELAY_APP_PATH=/
+EXPOSE 8080
+CMD ["python", "scripts/run_lune.py"]

@@ -1,5 +1,22 @@
 Companion Channel / Tidal Echo
 
+WrenWen design reference
+------------------------
+Luné V0.13's Room/wake mechanisms are independently implemented from the
+public architecture documentation at https://github.com/liyanjun921/WrenWen,
+revision b987ae0ae9154f782920062358ea693e8388d6a0, originally by ssxl0126.
+That repository publishes documentation, not its private runtime or persona.
+No private WrenWen code, persona or production data is included here.
+
+Desire and circadian design references
+-------------------------------------
+Luné V0.14 independently implements mechanisms described in the user's
+desire_public_for_ai.pdf, desire-system-guide.pdf (2026-09-17, 朝灯 & 哥哥),
+and circadian_appendix_for_ai_2026-06-17_fixed.pdf. The guides credit the
+original drive/action work by 獭獭 (芋圆吱吱), the E experience-axis concept
+from 四叶草 / LMC-5, and related community contributions. Original PDFs,
+private production code and persona text are not redistributed here.
+
 Current project license
 -----------------------
 
@@ -16,3 +33,72 @@ it does not rewrite the license text that accompanied historical revisions.
 
 Copyright and attribution notices belonging to third-party material, if any,
 remain applicable to that material.
+
+Optional Latent runtime
+-----------------------
+Luné V0.7 can invoke a separately installed Latent-memory runtime from
+https://github.com/liyanjun921/Latent-memory at revision
+835250d080c02d9553d3b96d9a2753773a4a0c3c. That runtime has its own
+PolyForm Internal Use License 1.0.0 and is not included or relicensed here.
+The adapter, owner controls and canonical SQLite storage in this repository
+are independent Luné additions. Retain the runtime's own notices and license.
+
+Optional Ombre Brain runtime
+---------------------------
+Luné V0.10 invokes a separately installed, unmodified Ombre Brain 3.6.14
+from https://github.com/liyanjun921/Ombre-Brain at revision
+115d831d979bf67efc7150f976e2cb34c333c935. Ombre Brain is MIT licensed;
+its LICENSE, AUTHORS.md and NOTICE.md remain with that installation.
+The host integration does not replace the original attribution or license.
+
+Ombre Folio enhancements
+-----------------------
+Luné V0.12 integrates additions from the user's optimized fork
+https://github.com/liyanjun921/OmbreBrain-folio at revision
+bf6887575fa8e6fa519279be9dc7e5886a29d2ea, originating from
+https://github.com/ceshihaox-dotcom/OmbreBrain-folio.
+Copyright (c) 2026 P0lar1zzZ (original author), Rin (fork modifications).
+The MIT LICENSE remains in that separately installed checkout. Its V2 UI
+and average-link family clustering are reused with host compatibility
+adaptations. The older Folio server is not run: the existing Ombre 3.6.14
+process, tool registry, data stores, letter locks and native ledger remain
+authoritative. backend/ombre_folio.py implements the integrated runtime
+extensions; the active behavior therefore includes these recorded host
+modifications even though the pinned base source files remain unchanged.
+
+Xinchao runtime integration
+---------------------------
+Lune V0.15 invokes the separately installed MIT-licensed xinchao/ directory
+from https://github.com/liyanjun921/xinchao-nian at revision
+3acbaf48e92508d678dd5d5a90e13f82d900a370 (Xinchao 4.1.1).
+Copyright (c) 2026 Xinchao contributors. Retain xinchao/LICENSE.
+The repository root and bundled ombre-brain/ have separate license terms;
+that bundled Ombre runtime is not executed by this integration.
+The verified source files remain unchanged. scripts/run_xinchao.mjs applies
+host boundary adaptations for loopback binding, current Ombre schemas and
+privacy-aware memory projections, real-output reflux and recall resonance.
+The Luné adapter, owner UI and durable delivery queue are host additions.
+
+still-true native lifecycle integration
+---------------------------------------
+Luné V0.16 vendors MIT-licensed files from the user's fork
+https://github.com/liyanjun921/still-true at revision
+f58d6f38fa6a0c3c3acb502af2d63ccb17b81484.
+Copyright (c) 2026 Rumi, Rune, Serein. See
+backend/vendor/still_true/LICENSE and SOURCE.json for pinned file hashes.
+The native living_context.py, today_state.py, hint_snapshots.py and tools.json
+implement the original lifecycle. The sole vendored source adaptation is a
+Windows import fallback for file locking; host code adds four scoped stores,
+canonical current-turn evidence for model writes, authenticated owner UI,
+private audit metadata and session receipts. An expired item does not imply
+the real-world event ended.
+
+Open Watch Cinema local runtime
+-------------------------------
+Luné V0.19 includes the MIT-licensed Open Watch Cinema fork at
+https://github.com/liyanjun921/open-watch-cinema revision
+6154eec6ef8f8d2a1831169b2f54952ccab71bea.
+Copyright (c) 2026 wynsyl1014. Its original LICENSE and documentation live
+in backend/vendor/open_watch_cinema/. The only vendored source changes add
+an optional idempotency nonce to room messages; Luné's authenticated proxy,
+upload, guest model loop and water-light page are separate host additions.

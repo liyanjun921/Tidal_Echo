@@ -1,0 +1,28 @@
+.wren-intro{padding:20px 2px 12px;border-bottom:1px solid var(--line)}
+.wren-intro .eyebrow{font-size:9px;letter-spacing:.16em;color:var(--muted)}
+.wren-intro p{font:24px/1.6 Georgia,'Songti SC',serif;margin:12px 0 5px}
+.wren-intro small{color:var(--muted);line-height:1.7}
+.wren-tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;background:rgba(108,145,165,.08);border-radius:16px;padding:5px}
+.wren-tabs button{padding:11px 4px;border-radius:12px;color:var(--muted)}
+.wren-tabs button[aria-pressed=true]{background:rgba(255,255,255,.78);color:var(--ink);box-shadow:0 2px 9px #516d7c0d}
+.wren-drives{display:grid;grid-template-columns:1fr 1fr;gap:16px 20px}
+.wren-clock-summary{display:flex;align-items:center;gap:13px;padding:13px 15px;border:1px solid #a3bdcb50;border-radius:19px;background:linear-gradient(125deg,#dcebf279,#ffffff65 60%,#dce8f26e)}
+.wren-clock-summary[hidden]{display:none!important}.wren-clock-summary.is-paused{opacity:.76}
+.wren-clock-face{position:relative;display:grid;place-items:center;flex:none;width:54px;height:54px;border-radius:50%;background:radial-gradient(circle at center,#f7fbf9 0 59%,transparent 61%),conic-gradient(#aec9d9,#d9e5ec,#8faec2,#d4e5eb,#aec9d9);box-shadow:0 4px 14px #617e911b,inset 0 0 0 1px #ffffffa5;font:24px Georgia,serif;color:#668ba4}
+.wren-clock-hand{position:absolute;left:50%;top:50%;width:34%;height:2px;border-radius:3px;background:#527e99;transform-origin:left center;transform:rotate(var(--clock-angle,-90deg))}.wren-clock-face span{transform:translateY(13px);font-size:12px;line-height:1}.wren-clock-face:after{content:'';position:absolute;left:calc(50% - 3px);top:calc(50% - 3px);width:6px;height:6px;border-radius:50%;background:#527e99}
+.wren-clock-copy{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}.wren-clock-copy strong{font-size:12px;font-weight:600}.wren-clock-copy small{font-size:10px;color:var(--muted);line-height:1.5}.wren-clock-shifts{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}.wren-clock-shift{font-size:10px;padding:3px 7px;border-radius:20px;background:#ffffffb3;color:var(--ink);font-variant-numeric:tabular-nums}.wren-clock-summary .quiet-button{flex:none;margin:0;padding:6px;color:var(--accent);font-size:10px}
+.wren-drive{display:grid;grid-template-columns:56px 1fr 48px;align-items:center;gap:7px;font-size:12px}
+.wren-drive small{color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
+.wren-drive meter{width:100%;height:7px;appearance:none;background:#9cb4c322;border:0;border-radius:8px;overflow:hidden}
+.wren-drive meter::-webkit-meter-bar{background:#9cb4c322;border:0;border-radius:8px}
+.wren-drive meter::-webkit-meter-optimum-value{background:#7a9eb2;border-radius:8px}
+.wren-drive meter::-moz-meter-bar{background:#7a9eb2;border-radius:8px}
+.wren-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.wren-links{display:flex;flex-wrap:wrap;gap:6px 14px;border-top:1px solid var(--line);padding-top:12px}
+#wrenRoom .entry-card p{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8}
+#wrenRoom .entry-card h3{font-size:14px;margin:0}
+#wrenRoom summary{cursor:pointer;padding:10px 0}
+@media(max-width:380px){.wren-drives{grid-template-columns:1fr}.wren-pair{gap:8px}}
+@media(max-width:580px){.wren-clock-summary{flex-wrap:wrap}.wren-clock-summary .quiet-button{margin-left:auto}}
+
+.wren-track{position:relative;display:flex;align-items:center;height:12px}.wren-track i{position:absolute;top:0;width:2px;height:12px;background:var(--ink);opacity:.55}.wren-phase{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;align-items:center}

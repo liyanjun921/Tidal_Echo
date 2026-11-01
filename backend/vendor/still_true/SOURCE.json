@@ -1,0 +1,20 @@
+{
+  "repository": "https://github.com/liyanjun921/still-true",
+  "revision": "f58d6f38fa6a0c3c3acb502af2d63ccb17b81484",
+  "license": "MIT",
+  "original_sha256": {
+    "living_context.py": "4e91e071d05927611e326a82a34fc7ee6926a706006761a62bd240af427a3e53",
+    "today_state.py": "3e87b088c22ec4e0c19b2aa82112819e46bd35788da7e7cc35eb8fa2eb62a62a",
+    "hint_snapshots.py": "f20d6d8cf7ce7abf559e787217591144388bd3c3aca43a2cd50656a4dc15e754",
+    "tools.json": "8b1faac910c3e017ea8f20c0503addbefbb32ec4992668938f494007ce3c03b4",
+    "LICENSE": "8353068e2b39f100c213472e9bdb489f60fc42b5bd020ca680efb603c6b86712"
+  },
+  "vendored_sha256": {
+    "living_context.py": "52e1a2a1c0af704c92410a741f899ca6d39f4cafa138a3a87dfd866880e0e369",
+    "today_state.py": "3e87b088c22ec4e0c19b2aa82112819e46bd35788da7e7cc35eb8fa2eb62a62a",
+    "hint_snapshots.py": "f20d6d8cf7ce7abf559e787217591144388bd3c3aca43a2cd50656a4dc15e754",
+    "tools.json": "8b1faac910c3e017ea8f20c0503addbefbb32ec4992668938f494007ce3c03b4",
+    "LICENSE": "8353068e2b39f100c213472e9bdb489f60fc42b5bd020ca680efb603c6b86712"
+  },
+  "adaptation": "living_context.py adds a Windows file-lock import fallback only; lifecycle code unchanged."
+}

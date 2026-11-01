@@ -1,0 +1,133 @@
+/* Shared finishing layer. Keep feature layouts and reader paper preferences intact. */
+:root{--muted:#617c8c;--surface:rgba(255,255,255,.61);--surface-soft:rgba(228,239,244,.65);--edge:rgba(122,155,172,.22);--card-radius:20px;--text:var(--ink)}
+body[data-dark=true]{--muted:#a4bbc8;--surface:#bed4e00c;--surface-soft:#9bbdd415;--edge:#aac9d22b}
+button,a,input,textarea,select,summary{transition:background-color .16s ease,border-color .16s ease,box-shadow .16s ease}
+input:focus-visible,textarea:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+button:disabled{cursor:not-allowed}
+.topbar{background:linear-gradient(180deg,#f5fbfd42,transparent)}
+.peer-pill{min-height:44px;justify-content:center}
+.chat-area{scroll-padding-block:24px}
+.day-separator{font-size:11px;margin-bottom:32px}
+.message-bubble{overflow-wrap:anywhere}
+.message-meta{flex-wrap:wrap;row-gap:2px;font-size:10px}
+.message-meta button{min-height:32px;padding:6px 8px;border-radius:9px;font-size:11px}
+.compose-area{padding-top:10px}
+.connection-line{font-size:10px;line-height:1.6}
+.connection-line i{background:var(--muted)}
+.connection-line[data-connected=true] i{background:#578b82;box-shadow:0 0 0 3px #79aa9c1a}
+.composer:focus-within{box-shadow:inset 0 0 0 1px #8baec18a,0 8px 28px #45647712}
+.composer-tools .icon-button,.send-button{width:42px;height:42px}
+.model-pill{min-width:0;max-width:65%;min-height:40px}
+#modelTag{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.drawer{scrollbar-width:thin;scrollbar-color:#91afbd66 transparent}
+.drawer-head{padding-bottom:18px}
+.nav-row{min-height:46px;border:1px solid transparent}
+.nav-row.active{border-color:var(--edge);background:var(--surface)}
+.nav-row>span[aria-hidden=true]{flex:0 0 18px;text-align:center}
+.nav-row small{font-size:10px}
+.nav-row .room-desc{font-size:11px}
+.nav-label{letter-spacing:.06em;padding-top:24px;font-size:11px}
+#openDuet{margin:0;padding:12px 13px;min-height:46px;width:100%;text-align:left;border-radius:13px;color:var(--ink)}
+#openDuet:hover{background:var(--surface)}
+.sheet{border-color:var(--edge);box-shadow:0 24px 80px #26405226}
+.sheet-head{background:var(--surface);gap:10px}
+.sheet-head>div{min-width:0}
+.sheet-head h2{overflow-wrap:anywhere}
+.sheet-head .eyebrow{font-size:9px;letter-spacing:.16em}
+.sheet-body{scrollbar-color:#91afbd66 transparent;scroll-padding-block:20px}
+.page-toolbar:empty,.page-foot:empty{display:none}
+.page-foot{border-top:1px solid var(--line);font-size:11px;padding-top:12px}
+.page-toolbar .filter,.filter{min-height:40px;font-size:12px}
+.entry-card,.settings-card,.metric{border-color:var(--edge);background:var(--surface);border-radius:var(--card-radius)}
+.entry-card h3{font-size:16px}
+.entry-footer{flex-wrap:wrap;font-size:11px}
+.scope-badge{font-size:10px}
+.section-intro,.form-help,.sheet-note{font-size:12px;line-height:1.85}
+.form-stack label{font-size:12px}
+.form-stack input:not([type=checkbox]),.form-stack select,.form-stack textarea{background:var(--surface);border-color:var(--edge)}
+.primary-button,.soft-button,.file-button{min-height:44px;font-size:13px}
+.primary-button{background:#527c94}
+body[data-dark=true] .primary-button{background:#466e86}
+.soft-button,.file-button{background:var(--surface-soft);border-color:var(--edge)}
+.settings-card>summary{min-height:32px;flex-wrap:wrap;line-height:1.6}
+.settings-card>summary::after{content:'+';font-size:18px;line-height:1;color:var(--muted)}
+.settings-card[open]>summary::after{content:'−'}
+.group-label{font-size:11px;letter-spacing:.1em}
+.search-form input,.reading-search input,.reading-reply-form input,.cinema-composer input{background:var(--surface);border-color:var(--edge)}
+.reading-intro,.reading-continue,.reading-detail,.checklist-banner,.wren-clock-summary{background:linear-gradient(125deg,var(--surface-soft),var(--surface));border-color:var(--edge)}
+.reading-book,.reading-note,.checklist-column,.cinema-library,.cinema-main,.cinema-archive,.cinema-film,.cinema-messages{background:var(--surface);border-color:var(--edge)}
+.reading-action,.reading-chip,.reading-compact,.checklist-button,.cinema-guests{background:var(--surface-soft);border-color:var(--edge)}
+.reading-book:hover,.reading-action:hover,.reading-chip:hover,.reading-compact:hover{background:var(--surface-soft)}
+.reading-chip.active,.reading-compact.active,.cinema-film.selected{background:var(--surface-soft);border-color:var(--accent)}
+.reading-intro h3,.checklist-banner h3{letter-spacing:.02em}
+.reading-scopes{flex-wrap:wrap;overflow:visible;gap:6px}
+.reading-action,.reading-chip,.reading-compact,.checklist-button{min-height:40px}
+.reading-note-tools button{min-height:36px}
+.reading-empty{padding:32px 18px}
+.cinema-page{color:var(--ink)}
+.cinema-main select,.cinema-card-actions select,.cinema-composer select{background:var(--surface-soft);border:1px solid var(--edge);border-radius:10px;padding:9px;font-size:14px;min-width:0;min-height:42px}
+.cinema-composer input{font-size:16px}
+.cinema-film-title{color:var(--ink);min-height:40px}
+.cinema-message.ai span{color:var(--accent)}
+.wren-tabs{display:flex;overflow-x:auto;gap:4px;scrollbar-width:thin;flex-shrink:0}
+.wren-tabs button{flex:1 0 52px;min-height:44px;font-size:13px;white-space:nowrap}
+.wren-tabs button[aria-pressed=true],.living-tabs button[aria-pressed=true]{background:var(--surface);box-shadow:0 2px 6px #344f600a}
+.living-tabs{grid-template-columns:repeat(4,minmax(0,1fr))}
+.living-tabs button{font-size:12px;padding:10px 5px;min-height:44px}
+.xc-nav button{min-width:48px;min-height:44px;flex-shrink:0}
+.wren-clock-shift{background:var(--surface)}
+.wren-pair>*{min-width:0}
+.wren-phase{grid-template-columns:repeat(3,minmax(0,1fr))}
+.wren-clock-summary .quiet-button{min-height:36px;font-size:11px}
+.toast{box-shadow:0 8px 32px #2e52652b;border:1px solid var(--edge);font-size:13px}
+dialog>.toast{bottom:24px;bottom:calc(24px + env(safe-area-inset-bottom,0px));width:max-content;max-width:calc(100% - 36px)}
+body[data-dark=true] .nav-row:hover,body[data-dark=true] .more-menu button:hover,body[data-dark=true] .icon-button:hover{background:var(--surface-soft)}
+body[data-dark=true] .theme-tile,body[data-dark=true] .add-tile,body[data-dark=true] .search-form input{background:var(--surface);border-color:var(--edge)}
+body[data-dark=true] .model-pill,body[data-dark=true] .composer textarea::placeholder{color:var(--muted)}
+body[data-dark=true] .model-pill{border-color:var(--edge)}
+body[data-dark=true] .checklist-tick{background:var(--surface-soft);color:var(--ink)}
+body[data-dark=true] .checklist-row.done .checklist-tick{background:#365a70}
+/* Paper colour is a reader choice, independent of the surrounding app theme. */
+.reading-pages:not([data-tone=night]) .reading-note{color:#304e60;background:#f6fafbe8}
+.reading-pages:not([data-tone=night]) .reading-note small,.reading-pages:not([data-tone=night]) .reading-note blockquote{color:#617c8c}
+@media(min-width:1000px){
+ .page-sheet{width:min(1000px,calc(100vw - 96px));height:90dvh;max-height:90dvh}
+ .page-sheet[data-page=cinema]{width:min(1180px,calc(100vw - 80px))}
+ .page-sheet .sheet-body{padding:28px 36px}
+ .page-toolbar{padding-inline:32px}
+ .cinema-layout{grid-template-columns:minmax(220px,27%) minmax(0,1fr)}
+ .empty-state{padding-block:72px}
+}
+@media(max-width:700px){
+ .icon-button{width:44px;height:44px}
+ .topbar{padding-inline:14px}
+ .message-bubble{font-size:15px;line-height:1.85}
+ .message-meta{font-size:10px}
+ .sheet{max-height:calc(var(--viewport) - 8px)}
+ .page-sheet,.settings-sheet{height:var(--viewport);max-height:var(--viewport)}
+ .page-sheet .sheet-body{padding:20px 16px}
+ .sheet-head{padding-inline:12px}
+ .page-toolbar{padding:12px 12px 0;gap:3px}
+ .page-toolbar .filter{font-size:11px;padding-inline:9px}
+ .page-foot{padding:10px 16px 12px;font-size:10px}
+ .form-stack label{font-size:12px}
+ .form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .settings-actions>*{flex:1 1 140px}
+ .reading-search input,.reading-reply-form input,.reading-compose textarea{font-size:16px}
+ .reading-note-head{align-items:flex-start;flex-wrap:wrap}
+ .reading-intro,.checklist-banner{padding:23px 20px}
+ .reading-intro h3,.checklist-banner h3{font-size:25px}
+ .reading-book-copy strong{font-size:16px;line-height:1.5}
+ .reading-book-copy small,.reading-book-copy span,.checklist-meta,.checklist-alarm-state{font-size:11px}
+ .checklist-tick{width:38px;height:38px;border-radius:13px;margin-top:0}
+ .checklist-main{min-height:38px;justify-content:center}
+ .cinema-library,.cinema-main,.cinema-archive{padding:15px;border-radius:18px}
+ .cinema-card-actions button{min-height:40px;font-size:12px}
+ .wren-drives{grid-template-columns:1fr}
+ .wren-drive{grid-template-columns:62px minmax(0,1fr) 48px}
+ .wren-pair{grid-template-columns:1fr}
+ .appearance-row{flex-wrap:wrap}
+ .appearance-row input[type=range]{flex:1;min-width:100px}
+}
+@media(max-width:360px){.form-grid{grid-template-columns:1fr}.reading-detail{flex-wrap:wrap}.reading-detail-info{width:100%}.reading-grid{gap:8px}.reading-book{padding:12px}.sheet-head .eyebrow{font-size:8px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}.cinema-danmaku{display:none}}

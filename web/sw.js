@@ -1,13 +1,12 @@
 /* Tidal Echo — service worker (offline shell + Web Push).
    IMPORTANT: bump CACHE on every front-end change, or installed clients keep the
    old shell (the precached index.html won't refresh until the SW reinstalls). */
-const AI_NAME = "Claude";          // push-title fallback; keep in sync with index.html CONFIG.AI_NAME
-const CACHE = "companion-v3-api-body";
+const AI_NAME = "Luné";
+const CACHE = "lune-v020-ui-readiness-1";
 const PRECACHE = [
-  "./index.html",
-  "./chat-light.webp", "./chat-harbor.webp",
-  "./menu-light.webp", "./menu-harbor.webp",
-  "./avatar-sea.png",
+  "./index.html", "./styles.css", "./polish.css", "./connection.css", "./app.js", "./reading.js", "./reading.css", "./checklist.js", "./checklist.css", "./cinema.js", "./cinema.css", "./relay-client.js", "./rich-text.js", "./memory.js", "./native-memory.js", "./ombre-memory.js", "./continuity.js", "./wren-room.js", "./wren-room.css", "./xinchao-room.js", "./xinchao-room.css", "./living-context.js", "./living-context.css",
+  "./assets/water-light.webp", "./assets/lily-water.webp",
+  "./assets/water-light-thumb.webp", "./assets/lily-water-thumb.webp",
 ];
 
 self.addEventListener("install", (e) => {
@@ -27,7 +26,7 @@ self.addEventListener("activate", (e) => {
 });
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
-  if (url.pathname.startsWith("/relay/")) return;          // never intercept the API / SSE
+  if (url.pathname.startsWith("/relay/") || url.pathname.startsWith("/ombre/") || e.request.headers.has("Authorization") || url.searchParams.has("token")) return;
   if (e.request.mode === "navigate") {
     // network-first for the page → an online reload always gets the latest index.html
     e.respondWith(fetch(e.request, { cache: "reload" }).catch(() => caches.match("./index.html")));

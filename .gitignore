@@ -3,6 +3,7 @@
 relay.env
 .env
 **/.env
+.lune-local/
 !**/.env.example
 # VAPID / TLS private keys
 *.pem
@@ -17,6 +18,9 @@ last_in_id
 examples/api_loop.config.json
 examples/persona.md
 examples/loop_cache/
+lune-private/
+**/chatgpt-plan*.json*
+**/*chatgpt*connection*.json
 
 # ── build / deps ────────────────────────────────────────────────────────
 node_modules/

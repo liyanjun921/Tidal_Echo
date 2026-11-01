@@ -1,0 +1,85 @@
+{
+  "version": "0.15",
+  "verified_at": "2026-10-25T08:44:20.224991+00:00",
+  "source": {
+    "repository": "liyanjun921/xinchao-nian",
+    "revision": "3acbaf48e92508d678dd5d5a90e13f82d900a370",
+    "runtime": "4.1.1",
+    "directory": "xinchao/",
+    "license": "MIT",
+    "bundled_ombre_started": false
+  },
+  "tests": {
+    "native_node": {
+      "passed": 192,
+      "failed": 0
+    },
+    "python": {
+      "passed": 133,
+      "failed": 0,
+      "skipped": 0
+    },
+    "http_e2e": {
+      "passed": true,
+      "real_runtime": true,
+      "real_local_bge": true,
+      "synthetic_providers": true,
+      "synthetic_official_cli_protocol": true,
+      "scopes": 4,
+      "xinchao_tools": 10,
+      "coverage": [
+        "actor tool execution with private-card redaction",
+        "cross-scope private box isolation",
+        "immutable monthly assessment",
+        "private reasons opt-in",
+        "locked cabin and existing Ombre letter denial",
+        "cabin reply and ledger CRUD",
+        "current memory map and preview",
+        "idempotent real-output reflux",
+        "native SSE bridge into one durable Wren timer and saved reply",
+        "model budget with current connection",
+        "settings process restart",
+        "full supervisor restart persistence",
+        "existing Latent/Ombre/Folio/Duet/Wren/desire/circadian regressions"
+      ]
+    },
+    "browser": {
+      "passed": true,
+      "desktop": true,
+      "responsive_iframe_width": 390,
+      "page_source": "read-only snapshots from actual synthetic HTTP test run",
+      "checks": [
+        "six sections in existing Room",
+        "real tide records only",
+        "14 native personality dimensions",
+        "cabin and memory lock denial",
+        "no private box content",
+        "scope change clears old state",
+        "no horizontal overflow: clientWidth=scrollWidth=388",
+        "local HTTP UUID compatibility"
+      ]
+    },
+    "static": [
+      "JavaScript syntax",
+      "Python compilation",
+      "git diff --check"
+    ]
+  },
+  "not_verified": [
+    "production deployment",
+    "real subscription account",
+    "Docker image build",
+    "physical iPhone"
+  ],
+  "external_services_not_enabled": [
+    "Bark",
+    "public board",
+    "public OAuth",
+    "phone activity monitoring",
+    "Jev shadow model"
+  ],
+  "release": {
+    "merged": false,
+    "deployed": false
+  }
+}
