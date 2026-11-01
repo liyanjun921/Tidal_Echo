@@ -1,0 +1,47 @@
+name: Lune Windows launcher validation
+
+on:
+  push:
+    branches: [main, codex/lune-windows-validation]
+  pull_request:
+    paths:
+      - "Lune-*.cmd"
+      - "scripts/windows/**"
+      - "tests/test_windows_launcher.ps1"
+      - ".gitattributes"
+      - ".github/workflows/lune-windows-launcher.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-powershell-51:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Windows launcher encodings and line endings
+        shell: powershell
+        run: |
+          $cmdFiles = @('Lune-Start.cmd','Lune-Phone.cmd','Lune-Stop.cmd','Lune-Access.cmd')
+          foreach ($name in $cmdFiles) {
+            $bytes = [IO.File]::ReadAllBytes((Join-Path $PWD $name))
+            if ($bytes.Length -eq 0 -or ($bytes | Where-Object { $_ -gt 127 }).Count -gt 0) {
+              throw "$name must be non-empty ASCII without a BOM."
+            }
+            for ($i = 0; $i -lt $bytes.Length; $i++) {
+              if ($bytes[$i] -eq 10 -and ($i -eq 0 -or $bytes[$i - 1] -ne 13)) {
+                throw "$name contains LF without CR; expected CRLF."
+              }
+            }
+          }
+          $psPath = Join-Path $PWD 'scripts/windows/lune.ps1'
+          $psBytes = [IO.File]::ReadAllBytes($psPath)
+          if ($psBytes.Length -lt 3 -or $psBytes[0] -ne 239 -or $psBytes[1] -ne 187 -or $psBytes[2] -ne 191) {
+            throw 'lune.ps1 must have a UTF-8 BOM for Windows PowerShell 5.1 Chinese messages.'
+          }
+          Write-Host 'PASS: CMD ASCII/CRLF and PowerShell UTF-8 BOM.'
+      - name: Run launcher contract tests in Windows PowerShell 5.1
+        shell: powershell
+        run: .\tests\test_windows_launcher.ps1
