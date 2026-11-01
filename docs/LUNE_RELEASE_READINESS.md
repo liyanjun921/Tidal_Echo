@@ -53,3 +53,11 @@ python tests/run_e2e.py --http-only
 ## 尚待目标环境验收
 
 Docker 镜像、Windows 启动器、真实 HTTPS/Serve、真实订阅/API 账号、iPhone Safari/PWA、语音与锁屏通知、实际影片编解码和完整备份恢复。当前没有替用户购买服务器，也没有开启额外后台生成开关。
+
+
+## 2026-11-01 · V0.21 统一唤醒增量验收
+
+- GitHub Actions Linux runner 已成功构建 `Dockerfile.lune`，并以全新 Docker 持久卷启动真实容器。
+- 容器内 `/readyz`、静态入口、Bearer 鉴权和 `/relay` 路由通过；Room 的 30 分钟高陪伴预设可保存，GPT/Claude 私聊设置保持隔离，统一唤醒事件可持久入队并按来源事件 ID 去重。
+- `node --check web/wren-room.js` 通过；wake inbox 6 项、Room 集成 18 项、完整 Python 回归 158 项均通过，其中完整回归有 24 项因 CI 未挂载可选本地资源而跳过。
+- 以上为 CI 合成环境验收；尚未连接用户真实模型账号，也未在用户的 Windows 主机、真实 HTTPS 或 iPhone Safari/PWA 上启动 30 分钟后台服务。正式上线仍需按上方步骤完成备份、部署和真机验收。

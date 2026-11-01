@@ -100,4 +100,5 @@
 
 - `tests/test_wake_orchestrator.py`：事件去重、优先级、租约、有限重试、过期、重启恢复、自主预约；
 - `tests/test_wren.py`：高陪伴预设、30 分钟心跳实际调用模型、外部事件统一决策、自主预约持久化；
+- GitHub Actions Linux runner 已完成 `Dockerfile.lune` 镜像构建，并在全新持久卷中通过真实 `/relay/lune/wren/{scope}` 路由 smoke test：30 分钟预设、GPT/Claude 私聊空间隔离、唤醒事件入队与重复事件去重均通过。该测试不启动真实模型生成，也不代表目标机器或 iPhone 已验收。
 - 真实部署仍需在目标机器验证模型连接、后台常驻、通知投递与 API 成本。
