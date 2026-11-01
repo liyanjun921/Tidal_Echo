@@ -29,6 +29,8 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - name: Install backend test dependencies
         run: python -m pip install -r backend/requirements.txt -r examples/requirements.txt -r backend/ombre-requirements.txt
+      - name: Validate Room UI JavaScript syntax
+        run: node --check web/wren-room.js
       - name: Test durable wake inbox
         run: python -m unittest discover -s tests -p "test_wake_orchestrator.py" -v
       - name: Test Room scheduler and desire integration

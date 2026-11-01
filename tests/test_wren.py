@@ -254,6 +254,15 @@ class WrenTests(unittest.TestCase):
         self.assertAlmostEqual(cfg['baseline']['attachment'], .45)
         self.assertFalse(self.status('claude')['settings']['enabled'])
 
+    def test_high_affection_preset_isolated_for_group_ai_accounts(self):
+        version = self.status('group_gpt')['settings']['version']
+        response = self.client.post('/lune/wren/group_gpt/preset/high-affection', json={'version': version})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertTrue(self.status('group_gpt')['settings']['enabled'])
+        self.assertFalse(self.status('group_claude')['settings']['enabled'])
+        self.assertFalse(self.status('gpt')['settings']['enabled'])
+        self.assertFalse(self.status('claude')['settings']['enabled'])
+
     def test_scheduled_heartbeat_calls_model_even_when_desire_has_no_candidate(self):
         self.stopped()
         cfg = self.status()['settings']
