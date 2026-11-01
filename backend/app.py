@@ -360,13 +360,16 @@ def plugin_payload(msg: dict) -> dict:
 
 
 def brain_target() -> str:
+    default = os.environ.get("RELAY_DEFAULT_BRAIN", "desktop").strip()
+    if default not in ("desktop", "loop"):
+        default = "desktop"
     try:
         target = BRAIN_FILE.read_text(encoding="utf-8").strip()
-        return target if target in ("desktop", "loop") else "desktop"
+        return target if target in ("desktop", "loop") else default
     except FileNotFoundError:
-        return "desktop"
+        return default
     except Exception:
-        return "desktop"
+        return default
 
 
 def _forward_to_loop_sync(msg: dict) -> None:

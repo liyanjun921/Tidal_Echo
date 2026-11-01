@@ -16,6 +16,7 @@ RELAY_UPLOAD_DIR=/data/uploads
 LOOP_CONFIG=/data/api_loop.config.json
 LOOP_CACHE_DIR=/data/loop_cache
 RELAY_BRAIN_FILE=/data/brain_target
+RELAY_DEFAULT_BRAIN=loop
 RELAY_AI_NAME=Luné
 RELAY_APP_PATH=/
 ```

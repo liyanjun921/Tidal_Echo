@@ -22,6 +22,18 @@ import api_loop as loop
 from lune_anthropic import request_body
 
 
+class BrainRouteTests(unittest.TestCase):
+    def test_server_default_and_saved_switch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "brain_target"
+            with patch.object(relay, "BRAIN_FILE", target), patch.dict(os.environ, {"RELAY_DEFAULT_BRAIN": "loop"}):
+                self.assertEqual(relay.brain_target(), "loop")
+                target.write_text("desktop", encoding="utf-8")
+                self.assertEqual(relay.brain_target(), "desktop")
+                target.write_text("loop", encoding="utf-8")
+                self.assertEqual(relay.brain_target(), "loop")
+
+
 class OwnerDataTests(unittest.TestCase):
     def setUp(self):
         relay.init_db()
