@@ -1,4 +1,4 @@
-﻿﻿# Compatible with Windows PowerShell 5.1. UTF-8 BOM is required for Chinese messages.
+# Compatible with Windows PowerShell 5.1. Keep this file ASCII-only for Windows PowerShell 5.1.
 param([ValidateSet('Start', 'Stop', 'Phone', 'Access', 'Status')][string]$Action = 'Start',
       [switch]$KeepOpenOnError)
 $ErrorActionPreference = 'Stop'

@@ -38,10 +38,10 @@ jobs:
           }
           $psPath = Join-Path $PWD 'scripts/windows/lune.ps1'
           $psBytes = [IO.File]::ReadAllBytes($psPath)
-          if ($psBytes.Length -lt 3 -or $psBytes[0] -ne 239 -or $psBytes[1] -ne 187 -or $psBytes[2] -ne 191) {
-            throw 'lune.ps1 must have a UTF-8 BOM for Windows PowerShell 5.1 Chinese messages.'
+          if ($psBytes.Length -eq 0 -or ($psBytes | Where-Object { $_ -gt 127 }).Count -gt 0) {
+            throw 'lune.ps1 must remain ASCII-only for Windows PowerShell 5.1.'
           }
-          Write-Host 'PASS: CMD ASCII/CRLF and PowerShell UTF-8 BOM.'
+          Write-Host 'PASS: CMD ASCII/CRLF and PowerShell ASCII encoding.'
       - name: Run launcher contract tests in Windows PowerShell 5.1
         shell: powershell
         run: .\tests\test_windows_launcher.ps1
