@@ -32,7 +32,7 @@ python -m venv .venv
 .venv/bin/python scripts/run_lune.py
 ```
 
-进程入口 `scripts/run_lune.py` 会启动网页/relay 和内部 api_loop，并在任意一方退出时结束另一方。单实例、单 worker 运行；SQLite 和内存任务表不支持直接横向扩容。Docker 配置文件已提供，但本次环境没有 Docker 引擎，因此镜像构建尚未实测；相同 Python 双进程启动方式已完成浏览器联调。
+进程入口 `scripts/run_lune.py` 会启动网页/relay 和内部 api_loop，并在任意一方退出时结束另一方。单实例、单 worker 运行；SQLite 和内存任务表不支持直接横向扩容。Docker 配置文件已提供。本地开发环境没有 Docker 引擎；2026-11-01 GitHub Actions Linux runner 已成功构建镜像，并在全新持久卷中启动容器，完成 `/readyz`、鉴权、Room 30 分钟预设、四空间隔离及唤醒事件队列 smoke test。该结果证明镜像和容器内路由可启动，不替代目标主机的实际部署、模型连接和真机验收；相同 Python 双进程启动方式也已完成浏览器联调。
 
 免费、不绑卡的 Render / Netlify 比较与实际内存证据见 [免费部署评估](LUNE_FREE_HOSTING.md)。当前容器持久卷方案不能直接当作免费云端方案使用。
 
@@ -48,7 +48,7 @@ python -m venv .venv
 
 Render 路线尚未创建资源。其持久磁盘需要付费服务，不能将无持久盘的免费服务作为这版私人记忆库的正式保存位置。使用 Render 前须确认工作区、服务方案、磁盘和费用；当前部署配置本身不会创建或计费任何云端资源。规格依据为 Render 当前的 [持久磁盘文档](https://render.com/docs/disks)。已有支持 Docker 的服务器也可使用同一份 Compose 配置。
 
-早期部署准备验证：71 项 Python 测试通过（当前整套验收见 [V0.20 上线准备](LUNE_RELEASE_READINESS.md)）；真实本地 HTTP 联调包含 `/readyz`，并完整停止、重启双进程后核对消息、保存的记忆及原版档案仍可读取和检索。Compose 已通过 YAML 结构、引用文件和持久目录检查；当前环境没有 Docker 引擎，尚未执行镜像构建或 Compose 启动，也没有创建正式公网后端。
+早期部署准备验证：71 项 Python 测试通过（当前整套验收见 [V0.20 上线准备](LUNE_RELEASE_READINESS.md)）；真实本地 HTTP 联调包含 `/readyz`，并完整停止、重启双进程后核对消息、保存的记忆及原版档案仍可读取和检索。Compose 已通过 YAML 结构、引用文件和持久目录检查。2026-11-01 CI 已进一步完成 Docker 镜像构建和临时容器启动验收；尚未在用户目标主机部署，也没有创建正式公网后端。
 
 ## Folio 合并增强
 
