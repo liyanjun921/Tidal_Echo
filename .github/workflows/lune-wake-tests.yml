@@ -19,7 +19,7 @@ permissions:
 jobs:
   wake-contract:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -33,3 +33,5 @@ jobs:
         run: python -m unittest discover -s tests -p "test_wake_orchestrator.py" -v
       - name: Test Room scheduler and desire integration
         run: python -m unittest discover -s tests -p "test_wren.py" -v
+      - name: Full Python regression suite
+        run: python -m unittest discover -s tests -p "test_*.py" -v
