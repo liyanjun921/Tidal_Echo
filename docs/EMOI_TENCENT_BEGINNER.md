@@ -16,15 +16,18 @@ if [ ! -d emoi-web ]; then git clone --depth 1 --branch main https://github.com/
 cd emoi-web && git pull --ff-only && bash scripts/deploy_emoi_tencent_light.sh
 ```
 
-脚本会检查 Docker/端口/磁盘/数据卷，随机生成只存在于机器上的 `.env` 密钥，配置固定的 `emoi` Compose 项目，启动轻量独立容器，自动轮询 `/readyz`，只读报告现有 XLC 网关配置挂载位置。它**不开放公网、不更改网关、不迁移原 OB**；显示 `EMOI_READY=YES` 只代表本地基础网页/API 健康，不代表已能从手机访问或模型登录成功。
+脚本会检查 Docker/端口/磁盘/数据卷，随机生成只存在于机器上的 `.env` 密钥，配置固定的 `emoi` Compose 项目，启动轻量独立容器，自动轮询 `/readyz`，只读报告现有 XLC 网关配置挂载位置。如检测到已经存在的 `xlc-gateway_default` Docker 网络，自动通过独立 Compose 覆盖文件将 Émoi 加入网络并提供 `emoi-chat:8080` 内部服务名，不会修改现有 Caddy 路由。它**不开放公网、不更改网关、不迁移原 OB**；显示 `EMOI_READY=YES` 只代表本地基础网页/API 健康，不代表已能从手机访问或模型登录成功。
 
 如果下一步要手机正式使用，需要在**既有** XLC Gateway 上新增一条 HTTPS 路由，把专用域名反代到 Émoi。此操作必须查看现有 Caddy 路由后才能安全进行，不能盲目新增占用 80/443 的网关。等路由完毕后，在手机 Safari 打开 HTTPS 网址、连接私人密钥并添加到主屏幕。
 
 **注意：已进入轻量模式时，后续更新也要保持两个 Compose 文件：**
 
 ```bash
-sudo docker compose -p emoi -f compose.emoi.yaml -f compose.emoi.light.yaml up -d --build
+cd ~/emoi-web
+git pull --ff-only
+bash scripts/deploy_emoi_tencent_light.sh
 ```
+这样脚本会自动保留已存在的 `.env` 和数据卷，且能继续加入现有 XLC 网络。不要只执行两份 Compose 文件而意外移除共享网关网络。
 
 下面是更详细的人工分步教程，供检查/排错使用；新用户不需要重复运行两种部署方法。
 
