@@ -1,4 +1,4 @@
-# Luné V0.16 · still-true 当前背景
+# Émoi V0.16 · still-true 当前背景
 
 入口是 **自主空间 → 当前背景**，记忆设置里也有入口。这里管理的是仍然成立的生活背景，和有日期的原始聊天、Latent/Ombre 长期记忆同时使用。四个空间独立：GPT 私聊、Claude 私聊、群聊 GPT、群聊 Claude；没有引擎切换。来源是用户 fork 的 [still-true](https://github.com/liyanjun921/still-true) 固定提交 `f58d6f38fa6a0c3c3acb502af2d63ccb17b81484`。MIT 许可、源文件哈希和宿主改动记录在 `backend/vendor/still_true/`。
 
@@ -18,7 +18,7 @@ API 路径每轮重新装配完整当前快照，避免无状态请求误以为�
 
 ## 运行与备份
 
-四份原生 JSON、归档和提示回执默认放在现有 `RELAY_DB` 同级的 `lune-private/living-context/`，也可用 `LUNE_LIVING_CONTEXT_DIR` 指定。配置和不含正文的审计存在 relay SQLite；文件夹需要随现有持久卷一起备份。下载聊天导出不等于备份这些原生状态。宿主用文件锁保护跨进程调用，校验损坏文件并保留原件，不以空状态覆盖；运行前校验 vendored 文件哈希。原版不依赖单独模型、服务器或 API key；Python 环境在 Windows 使用宿主锁兼容层。跨日判断是设置时区的 **00:00**，不是用户起床时间。模型关闭设置只停止投影与五工具，不清除保存的事实，面板仍能校正。
+四份原生 JSON、归档和提示回执默认放在现有 `RELAY_DB` 同级的 `emoi-private/living-context/`，也可用 `EMOI_LIVING_CONTEXT_DIR` 指定。配置和不含正文的审计存在 relay SQLite；文件夹需要随现有持久卷一起备份。下载聊天导出不等于备份这些原生状态。宿主用文件锁保护跨进程调用，校验损坏文件并保留原件，不以空状态覆盖；运行前校验 vendored 文件哈希。原版不依赖单独模型、服务器或 API key；Python 环境在 Windows 使用宿主锁兼容层。跨日判断是设置时区的 **00:00**，不是用户起床时间。模型关闭设置只停止投影与五工具，不清除保存的事实，面板仍能校正。
 
 ## 验证范围
 

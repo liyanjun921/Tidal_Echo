@@ -1,4 +1,4 @@
-# Luné V0.11 · 空闲续接与独立日记
+# Émoi V0.11 · 空闲续接与独立日记
 
 本版依据用户提供的《xiaoke-cat-README》补齐会话连续性：常驻 Claude 会话、先落档再重铸、聊天优先的后台任务、有证据的未完线头，以及各自封存的 Duet 日记。采用文档中描述的设计，宿主代码独立实现；没有取得或声称运行小可猫的私有源码。Latent 继续使用此前校验的原版源码，Ombre 也继续使用独立原版实例。本轮只开发和验证，没有正式部署。
 
@@ -20,11 +20,11 @@ Duet 的封锁是应用访问规则，正文以明文保存在私人 SQLite 中�
 
 ## Claude Code 常驻桥接
 
-`examples/lune_claude.py` 使用官方 `claude -p` 的 stream-json 输入输出，同一私聊/群聊角色串行复用一个常驻进程。启动前检查 `claude auth status` 的官方 Claude 身份，清除继承环境中的 API 凭据及云供应商路由；失败明确停止，不回退到已保存的 API Key。此检查不构成额度、套餐权益或实际账单保证。
+`examples/emoi_claude.py` 使用官方 `claude -p` 的 stream-json 输入输出，同一私聊/群聊角色串行复用一个常驻进程。启动前检查 `claude auth status` 的官方 Claude 身份，清除继承环境中的 API 凭据及云供应商路由；失败明确停止，不回退到已保存的 API Key。此检查不构成额度、套餐权益或实际账单保证。
 
-首轮从 Luné 原文历史建立会话；以后发送当前轮与当前背景。完整人格通过私人 system-prompt 文件传入，改变人格/模型/工具集时重新投影历史，避免继续使用旧提示。关闭内建工具、hooks 和外来 MCP，只加载当前回合允许的宿主 MCP；本机派生凭据、房间与有效 run 再次校验，空闲进程没有写工具的有效绑定。临时日记/线头生成另起无工具、不恢复常驻历史的进程。
+首轮从 Émoi 原文历史建立会话；以后发送当前轮与当前背景。完整人格通过私人 system-prompt 文件传入，改变人格/模型/工具集时重新投影历史，避免继续使用旧提示。关闭内建工具、hooks 和外来 MCP，只加载当前回合允许的宿主 MCP；本机派生凭据、房间与有效 run 再次校验，空闲进程没有写工具的有效绑定。临时日记/线头生成另起无工具、不恢复常驻历史的进程。
 
-不透明 thinking 保留在官方会话文件中，不显示为网页可读思考。官方会话会保留历史上曾收到的背景；宿主能更新本轮投影，但无法把已写入官方进程历史的旧背景逐轮抹除。Luné 原文数据库不混入这些背景。尚未测量真实 CLI 的缓存命中率或真实账单。
+不透明 thinking 保留在官方会话文件中，不显示为网页可读思考。官方会话会保留历史上曾收到的背景；宿主能更新本轮投影，但无法把已写入官方进程历史的旧背景逐轮抹除。Émoi 原文数据库不混入这些背景。尚未测量真实 CLI 的缓存命中率或真实账单。
 
 ### 自动重铸的提交条件
 
@@ -37,14 +37,14 @@ Duet 的封锁是应用访问规则，正文以明文保存在私人 SQLite 中�
 桥接默认关闭。以后要启用时，需在**运行 api_loop 的同一环境、同一系统用户**安装并登录官方 CLI，确认该环境的 `claude auth status` 成功，然后给服务进程设置：
 
 ```dotenv
-LUNE_CLAUDE_ENABLED=1
-# 可选；默认在 RELAY_DB 同级的 lune-private/claude-code
-LUNE_CLAUDE_DIR=/data/lune-private/claude-code
-LUNE_CLAUDE_FORGE_THRESHOLD=150000
-LUNE_CLAUDE_FORGE_RETAIN=50000
+EMOI_CLAUDE_ENABLED=1
+# 可选；默认在 RELAY_DB 同级的 emoi-private/claude-code
+EMOI_CLAUDE_DIR=/data/emoi-private/claude-code
+EMOI_CLAUDE_FORGE_THRESHOLD=150000
+EMOI_CLAUDE_FORGE_RETAIN=50000
 ```
 
-`LUNE_CLAUDE_COMMAND` 仅为服务器管理员配置的 JSON argv，默认从 PATH 查找 `claude`；网页不接收命令或官方账号令牌。状态接口只有已成功完成回合的常驻进程才标 ready，安装/开关状态分别呈现。网页中的订阅总览仍提示账号待验收。
+`EMOI_CLAUDE_COMMAND` 仅为服务器管理员配置的 JSON argv，默认从 PATH 查找 `claude`；网页不接收命令或官方账号令牌。状态接口只有已成功完成回合的常驻进程才标 ready，安装/开关状态分别呈现。网页中的订阅总览仍提示账号待验收。
 
 现有 Windows Docker 镜像没有自动安装 Claude CLI，Compose 也没有默认启用此桥接；仅修改 `.env` 不足以让容器获得 CLI 或 Windows 的官方登录。须另行准备容器内运行端与官方配置的私人持久目录，再实际验收。当前不要求用户开始安装或部署。
 
@@ -61,8 +61,8 @@ Python 回归 **91 项通过**。新增断言覆盖逐字来源与 PASS、聊天
 HTTP 联调运行真实原版 Latent、真实本地 BGE、真实原版 Ombre，聊天与 Claude CLI 使用合成供应商/协议进程。覆盖日记独立生成、锁后不可读、解锁与下一轮模型请求、通知去重、无新线头不重复生成、Claude 同房间连续两轮，以及完整停机重启后聊天、Duet、Latent/Ombre 的持久恢复。测试命令：
 
 ```sh
-LUNE_LATENT_SOURCE=/path/to/latent LUNE_PASSIVE_MODEL_CACHE=/path/to/models LUNE_OMBRE_SOURCE=/path/to/ombre python -m unittest discover -s tests -p 'test_*.py'
-LUNE_LATENT_SOURCE=/path/to/latent LUNE_PASSIVE_MODEL_CACHE=/path/to/models LUNE_OMBRE_SOURCE=/path/to/ombre LUNE_CLAUDE_ENABLED=1 LUNE_CLAUDE_COMMAND='["/path/to/python","/path/to/repo/tests/claude_cli_fixture.py"]' python tests/run_e2e.py --http-only
+EMOI_LATENT_SOURCE=/path/to/latent EMOI_PASSIVE_MODEL_CACHE=/path/to/models EMOI_OMBRE_SOURCE=/path/to/ombre python -m unittest discover -s tests -p 'test_*.py'
+EMOI_LATENT_SOURCE=/path/to/latent EMOI_PASSIVE_MODEL_CACHE=/path/to/models EMOI_OMBRE_SOURCE=/path/to/ombre EMOI_CLAUDE_ENABLED=1 EMOI_CLAUDE_COMMAND='["/path/to/python","/path/to/repo/tests/claude_cli_fixture.py"]' python tests/run_e2e.py --http-only
 ```
 
 浏览器检查静态界面入口、自定义锁时长及未连接时禁用操作。本版没有调用正式账号、安装真实 Claude CLI、构建 Docker、运行 Windows/iPhone 真机或进行生产部署。真实官方 CLI 的权限/流式/中断/恢复、套餐额度、长对话召回质量、自然接话分寸与日记风格仍需单独验收，机制通过不等于这些质量已经通过。

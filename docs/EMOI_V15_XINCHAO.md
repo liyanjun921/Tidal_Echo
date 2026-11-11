@@ -1,10 +1,10 @@
-# Luné V0.15 · 心潮接入
+# Émoi V0.15 · 心潮接入
 
 入口是 **自主空间 → 心潮**。在原来的 Room、模型连接与记忆档案上接入 Xinchao 4.1.1，不新增引擎切换器，也不复制用户的聊天或作者的私人状态。
 
 ## 固定的运行源码
 
-来源为用户 fork 的 [xinchao-nian](https://github.com/liyanjun921/xinchao-nian)，固定提交 `3acbaf48e92508d678dd5d5a90e13f82d900a370`。仅运行其中 MIT 许可的 `xinchao/`；保留其 LICENSE。仓库根目录和附带 `ombre-brain/` 的许可不同，不启动那个旧版 Ombre，也不把它重新授权为 Luné 代码。
+来源为用户 fork 的 [xinchao-nian](https://github.com/liyanjun921/xinchao-nian)，固定提交 `3acbaf48e92508d678dd5d5a90e13f82d900a370`。仅运行其中 MIT 许可的 `xinchao/`；保留其 LICENSE。仓库根目录和附带 `ombre-brain/` 的许可不同，不启动那个旧版 Ombre，也不把它重新授权为 Émoi 代码。
 
 `setup_xinchao.py` 校验提交和运行文件哈希；`run_xinchao.mjs` 在导入原版前再次校验。原版源码没有改写。宿主包装器负责回环监听、当前 Ombre 参数兼容、当前档案的只读投影、真实回复回流和检索共振；这些是明确记录的宿主适配。
 
@@ -29,7 +29,7 @@
 
 十个专有工具均进入当前模型工具表：`xinchao_context`、`xinchao_event`、`xinchao_awareness`、`xinchao_handoff_note`、`xinchao_box`、`xinchao_personality_reflect`、`xinchao_personality_stats`、`xinchao_anchor_update`、`xinchao_cabin_inbox`、`xinchao_cabin_note`。旧的 `ombre_` 工具仍由当前 Ombre 提供，不重复暴露原版代理出来的无前缀副本。
 
-Bark、公共留言板、公共 OAuth、手机活动监测和 Jev 外部影子模型依赖独立服务、授权或设备。本次没有替用户注册、公开、发送、监测或开启这些外部服务，也没有把它们标成可用。通知沿用 Luné 现有路径，模型连接沿用房间设置。整套源码仍可查阅，但这些外部能力不属于本前端已经启用的功能。
+Bark、公共留言板、公共 OAuth、手机活动监测和 Jev 外部影子模型依赖独立服务、授权或设备。本次没有替用户注册、公开、发送、监测或开启这些外部服务，也没有把它们标成可用。通知沿用 Émoi 现有路径，模型连接沿用房间设置。整套源码仍可查阅，但这些外部能力不属于本前端已经启用的功能。
 
 ## 与原有系统怎样一起工作
 
@@ -48,15 +48,15 @@ Docker 镜像内已加入 Node 22，iPhone 不需要安装 Node。Compose 加入
 可选环境变量：
 
 ```dotenv
-LUNE_XINCHAO_AUTO_SETUP=1
-LUNE_XINCHAO_SOURCE=/data/lune-private/xinchao/source
-LUNE_XINCHAO_DIR=/data/lune-private/xinchao
-LUNE_XINCHAO_PORT_BASE=18210
+EMOI_XINCHAO_AUTO_SETUP=1
+EMOI_XINCHAO_SOURCE=/data/emoi-private/xinchao/source
+EMOI_XINCHAO_DIR=/data/emoi-private/xinchao
+EMOI_XINCHAO_PORT_BASE=18210
 ```
 
 默认四个原版进程仅监听 `127.0.0.1:18210–18213`，不用向公网开放；前端只访问已有鉴权 relay。服务口令按用途和空间派生，模型任务只进入已有连接，凭据不交给浏览器。宿主不把已有 API Key 或代理环境变量传给原版。
 
-修改设置只重启相应心潮进程，不重启原有 Ombre；使用版本号避免旧设置覆盖新设置。关闭心潮后停止其模型/记忆/桥接入口，保留历史文件。完整备份应在停服务后一并保存原 `/data` 持久目录，包含 SQLite 与 `lune-private/xinchao/` 各房间的状态、月评、黑匣子、小屋、桥队列、日志与设置。普通聊天导出不等于完整运行状态备份，不能只导出聊天就删除数据卷。
+修改设置只重启相应心潮进程，不重启原有 Ombre；使用版本号避免旧设置覆盖新设置。关闭心潮后停止其模型/记忆/桥接入口，保留历史文件。完整备份应在停服务后一并保存原 `/data` 持久目录，包含 SQLite 与 `emoi-private/xinchao/` 各房间的状态、月评、黑匣子、小屋、桥队列、日志与设置。普通聊天导出不等于完整运行状态备份，不能只导出聊天就删除数据卷。
 
 原版 SIGTERM 会等待长连接关闭；宿主限定等待时间并在必要时结束旧进程，再启相同数据目录。运行文件更新由固定提交控制，检测到已有 checkout 被修改会保留并报错，不覆盖用户修改。
 

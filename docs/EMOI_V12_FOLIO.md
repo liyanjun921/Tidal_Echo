@@ -1,4 +1,4 @@
-# Luné V0.12 · Folio 功能合入现有 Ombre
+# Émoi V0.12 · Folio 功能合入现有 Ombre
 
 按用户要求，将新 fork 的新增功能整合进此前接入的 Ombre-Brain 3.6.14。继续使用原来的四个进程、四个记忆空间、原版管理器和档案。没有新增第二套引擎或引擎切换选项。
 
@@ -29,16 +29,16 @@
 
 `scripts/run_ombre.py` 在原版 web 注册完成后装配 `backend/ombre_folio.py`，直接取得同一份运行期引擎。原版所有源文件仍可校验；运行行为中的增强由宿主源码明确记录。新增界面 API 使用 `/api/folio/` 命名空间，复用当前所有者会话鉴权，增强 API 不取得绕过信件锁的权限。
 
-入口：**记忆 → 检索、未完事项与引擎设置 → Ombre-Brain → 打开增强工作台**。原来的“完整管理”入口保留，用于 I、You/Them、承诺、信件和所有原版设置。手机访问工作台首页会落到手机页，继续沿用 Luné 的已鉴权服务，并非另开一个外部账号。
+入口：**记忆 → 检索、未完事项与引擎设置 → Ombre-Brain → 打开增强工作台**。原来的“完整管理”入口保留，用于 I、You/Them、承诺、信件和所有原版设置。手机访问工作台首页会落到手机页，继续沿用 Émoi 的已鉴权服务，并非另开一个外部账号。
 
 Compose 增加：
 
 ```dotenv
-LUNE_FOLIO_AUTO_SETUP=1
-LUNE_FOLIO_SOURCE=/data/lune-private/ombre/folio-source
+EMOI_FOLIO_AUTO_SETUP=1
+EMOI_FOLIO_SOURCE=/data/emoi-private/ombre/folio-source
 ```
 
-固定源码单独下载并校验，只使用所需 UI 和聚类模块，不执行旧 server。手动运行可先执行 `python scripts/setup_folio.py --destination /private/path/folio-source`，再向现有服务进程设置 `LUNE_FOLIO_SOURCE`。新增依赖固定 jieba 和 numpy，仍复用本地 BGE；不新装云端模型，不创建云端服务。
+固定源码单独下载并校验，只使用所需 UI 和聚类模块，不执行旧 server。手动运行可先执行 `python scripts/setup_folio.py --destination /private/path/folio-source`，再向现有服务进程设置 `EMOI_FOLIO_SOURCE`。新增依赖固定 jieba 和 numpy，仍复用本地 BGE；不新装云端模型，不创建云端服务。
 
 V2 手机页改用该固定 checkout 已包含的 React/ReactDOM/Babel，移除其外部字体依赖；脚本和 API 不缓存私密响应，字体/图标可由浏览器私有缓存。配置页显示实际向量模型和维度，不保留原页面写死的 Gemini/768 示例。浏览器内 Babel 编译仍沿用该 UI 的实现，尚未改成预编译生产构建。
 
@@ -57,6 +57,6 @@ V2 手机页改用该固定 checkout 已包含的 React/ReactDOM/Babel，移除�
 浏览器用上述合成 HTTP 结果的只读快照检查时间线、控制台和手机页。托管预览环境不能执行当前 Python 运行环境，因此没有将该浏览器检查写成“浏览器直连后端通过”；后端交互由实际 HTTP 测试验证。真实模型的召回精度、自然叙事和长期使用效果未量化。
 
 ```sh
-LUNE_LATENT_SOURCE=/path/to/latent LUNE_PASSIVE_MODEL_CACHE=/path/to/models LUNE_OMBRE_SOURCE=/path/to/ombre LUNE_FOLIO_SOURCE=/path/to/folio python -m unittest discover -s tests -p 'test_*.py'
-LUNE_LATENT_SOURCE=/path/to/latent LUNE_PASSIVE_MODEL_CACHE=/path/to/models LUNE_OMBRE_SOURCE=/path/to/ombre LUNE_FOLIO_SOURCE=/path/to/folio python tests/run_e2e.py --http-only
+EMOI_LATENT_SOURCE=/path/to/latent EMOI_PASSIVE_MODEL_CACHE=/path/to/models EMOI_OMBRE_SOURCE=/path/to/ombre EMOI_FOLIO_SOURCE=/path/to/folio python -m unittest discover -s tests -p 'test_*.py'
+EMOI_LATENT_SOURCE=/path/to/latent EMOI_PASSIVE_MODEL_CACHE=/path/to/models EMOI_OMBRE_SOURCE=/path/to/ombre EMOI_FOLIO_SOURCE=/path/to/folio python tests/run_e2e.py --http-only
 ```

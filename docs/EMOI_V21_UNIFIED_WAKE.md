@@ -1,6 +1,6 @@
-# Luné · 统一自主唤醒与高陪伴节律
+# Émoi · 统一自主唤醒与高陪伴节律
 
-状态：开发分支实现，尚未部署到生产环境。此文档描述 `codex/lune-v04-integration` 上的统一唤醒实现。
+状态：开发分支实现，尚未部署到生产环境。此文档描述 `codex/emoi-v04-integration` 上的统一唤醒实现。
 
 ## 目标
 
@@ -38,7 +38,7 @@
 
 所有事件使用当前 relay 的 Bearer 鉴权，入口为：
 
-`POST /lune/wren/{scope}/events`
+`POST /emoi/wren/{scope}/events`
 
 示例：
 
@@ -94,11 +94,11 @@
 
 ## Runtime 边界
 
-这条 30 分钟心跳运行在 Luné 的后台模型适配器（本机 `/loop/native/generate`）中，使用该房间配置的模型、人格和独立空间状态。它不是 ChatGPT 官方聊天窗口的远程唤醒。OpenAI 官方说明，符合条件的付费计划中，ChatGPT Scheduled Tasks 的循环定时最高为每小时一次，不能承担 30 分钟心跳；Work 的事件触发任务可以响应 Gmail、Slack、GitHub 等支持事件，但不提供任意自我预约或通用 30 分钟定时。参见 [Scheduled tasks in ChatGPT](https://help.openai.com/en/articles/10291617-scheduled-tasks-in-chatgpt)。不要把 Luné API 回合描述成当前 ChatGPT 对话已被唤醒。
+这条 30 分钟心跳运行在 Émoi 的后台模型适配器（本机 `/loop/native/generate`）中，使用该房间配置的模型、人格和独立空间状态。它不是 ChatGPT 官方聊天窗口的远程唤醒。OpenAI 官方说明，符合条件的付费计划中，ChatGPT Scheduled Tasks 的循环定时最高为每小时一次，不能承担 30 分钟心跳；Work 的事件触发任务可以响应 Gmail、Slack、GitHub 等支持事件，但不提供任意自我预约或通用 30 分钟定时。参见 [Scheduled tasks in ChatGPT](https://help.openai.com/en/articles/10291617-scheduled-tasks-in-chatgpt)。不要把 Émoi API 回合描述成当前 ChatGPT 对话已被唤醒。
 
 ## 验证
 
 - `tests/test_wake_orchestrator.py`：事件去重、优先级、租约、有限重试、过期、重启恢复、自主预约；
 - `tests/test_wren.py`：高陪伴预设、30 分钟心跳实际调用模型、外部事件统一决策、自主预约持久化；
-- GitHub Actions Linux runner 已完成 `Dockerfile.lune` 镜像构建，并在全新持久卷中通过真实 `/relay/lune/wren/{scope}` 路由 smoke test：30 分钟预设、GPT/Claude 私聊空间隔离、唤醒事件入队与重复事件去重均通过。该测试不启动真实模型生成，也不代表目标机器或 iPhone 已验收。
+- GitHub Actions Linux runner 已完成 `Dockerfile.emoi` 镜像构建，并在全新持久卷中通过真实 `/relay/emoi/wren/{scope}` 路由 smoke test：30 分钟预设、GPT/Claude 私聊空间隔离、唤醒事件入队与重复事件去重均通过。该测试不启动真实模型生成，也不代表目标机器或 iPhone 已验收。
 - 真实部署仍需在目标机器验证模型连接、后台常驻、通知投递与 API 成本。
