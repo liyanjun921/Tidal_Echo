@@ -182,7 +182,7 @@ function openHome(){
 }
 function listItem(id,title,subtitle,iconName,handler){
  const b=create('button','ep-list-row');b.type='button';b.dataset.entry=id;
- const ava=create('span','ep-list-avatar');ava.innerHTML=icon(iconName);
+ const ava=create('span','ep-list-avatar');ava.innerHTML=icon(iconName);if(contacts.some(p=>p.id===id))queueMicrotask(()=>window.EmoiAvatars?.paint(ava,id));
  const content=create('span','ep-list-copy');content.append(create('strong','',title),create('small','',subtitle));
  b.append(ava,content);const arrow=create('span','ep-row-chevron');arrow.innerHTML=icon('right');b.append(arrow);b.addEventListener('click',handler);return b;
 }
@@ -261,6 +261,7 @@ function openContactDetail(id){
  const edit=create('button','ep-action-primary','编辑联系人');edit.type='button';edit.onclick=()=>openContactEditor(person.id);body.append(edit);
  const del=create('button','ep-danger-action','删除联系人草稿');del.type='button';del.onclick=()=>{if(!confirm('确认删除这张本机联系人草稿？已有云端数据不会修改。'))return;contacts=contacts.filter(x=>x.id!==id);save(CONTACTS_KEY,contacts);if(window.EmoiRelay?.enabled)void window.EmoiRelay.request('/emoi/v2/contacts/'+encodeURIComponent(id),{method:'DELETE'}).catch(e=>console.warn(e.message));openContacts()};body.append(del);
  root.append(body);
+ void window.EmoiAvatars?.paint(avatar,id);
 }
 function openGroupDetail(id){
  const g=groups.find(x=>x.id===id);if(!g){openMessages();return}
@@ -361,7 +362,7 @@ function openApp(id){
  return launchPage(id);
 }
 function installDialogs(){
- const c=document.createElement('dialog');c.id='epContactDialog';c.className='ep-edit-dialog';c.innerHTML='<form id="epContactForm"><header><strong id="epContactHeading">添加联系人</strong><button type="button" data-ep-close="contact" aria-label="关闭">'+icon('x')+'</button></header><p>每位 AI 都拥有永久独立身份、记忆及欲望命名空间。模型绑定仍需另行完成。</p><label>联系人姓名<input name="name" type="text" required maxlength="50" autocomplete="off" placeholder="自定义名字"></label><label>角色档案 / 人物简介<textarea name="notes" maxlength="300" rows="3" placeholder="可以导入人物档案或手动填写"></textarea></label><label>模型接口别名（可留空）<input name="model_route" maxlength="100" autocomplete="off" placeholder="例如：我自己的云端模型"></label><footer><button type="button" data-ep-close="contact">取消</button><button type="submit">保存联系人</button></footer></form>';
+ const c=document.createElement('dialog');c.id='epContactDialog';c.className='ep-edit-dialog';c.innerHTML='<form id="epContactForm"><header><strong id="epContactHeading">添加联系人</strong><button type="button" data-ep-close="contact" aria-label="关闭">'+icon('x')+'</button></header><p>每位 AI 都拥有永久独立身份、记忆及欲望命名空间。模型绑定仍需另行完成。</p><label>联系人姓名<input name="name" type="text" required maxlength="50" autocomplete="off" placeholder="自定义名字"></label><label>角色档案 / 人物简介<textarea name="notes" maxlength="300" rows="3" placeholder="可以导入人物档案或手动填写"></textarea></label><label>头像（仅存当前设备）<input name="avatar" type="file" accept="image/jpeg,image/png,image/webp"></label><label>模型接口别名（可留空）<input name="model_route" maxlength="100" autocomplete="off" placeholder="例如：我自己的云端模型"></label><footer><button type="button" data-ep-close="contact">取消</button><button type="submit">保存联系人</button></footer></form>';
  const g=document.createElement('dialog');g.id='epGroupDialog';g.className='ep-edit-dialog';g.innerHTML='<form id="epGroupForm"><header><strong>创建群聊草稿</strong><button type="button" data-ep-close="group" aria-label="关闭">'+icon('x')+'</button></header><p>仅保存群组名称与成员，尚未连接群聊消息和记忆授权。</p><label>群聊名称<input name="name" required maxlength="50" placeholder="给群聊起个名字"></label><strong>选择联系人</strong><div id="epGroupMembers" class="ep-member-list"></div><footer><button type="button" data-ep-close="group">取消</button><button type="submit">保存群聊</button></footer></form>';
  document.body.append(c,g);
  c.querySelectorAll('[data-ep-close]').forEach(b=>b.onclick=()=>c.close());
@@ -371,7 +372,12 @@ function installDialogs(){
   const id=c.dataset.editId;let person;
   if(id){person=contacts.find(x=>x.id===id);if(person)Object.assign(person,{name,notes,model_route})}
   else {const cid=crypto.randomUUID();person={id:cid,name,notes,model_route,memory_namespace:'contact:'+cid,desire_namespace:'desire:contact:'+cid,createdAt:new Date().toISOString()};contacts.push(person)}
-  if(!save(CONTACTS_KEY,contacts))return;c.close();void remoteSaveContact(person,!id);id?openContactDetail(id):openContacts();
+  if(!save(CONTACTS_KEY,contacts))return;
+  const avatarFile=form.elements.avatar.files?.[0];c.close();
+  if(avatarFile)void window.EmoiAvatars?.save(person.id,avatarFile).then(()=>{
+   if(screen==='contact-detail')openContactDetail(person.id);else if(screen==='contacts')openContacts();
+  }).catch(err=>alert('头像处理失败：'+err.message));
+  void remoteSaveContact(person,!id);id?openContactDetail(id):openContacts();
  };
  g.querySelector('form').onsubmit=e=>{
   e.preventDefault();const form=e.currentTarget,name=form.elements.name.value.trim();if(!name)return;
