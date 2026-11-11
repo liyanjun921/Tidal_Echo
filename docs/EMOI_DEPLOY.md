@@ -11,7 +11,7 @@
 ```dotenv
 RELAY_SECRET=请替换为随机生成的长连接密钥
 PORT=8080
-RELAY_DB=/data/relay.db
+RELAY_DB=/data/emoi.db
 RELAY_UPLOAD_DIR=/data/uploads
 LOOP_CONFIG=/data/api_loop.config.json
 LOOP_CACHE_DIR=/data/loop_cache
