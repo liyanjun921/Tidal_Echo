@@ -49,7 +49,7 @@ const apps=[
  {id:'more',label:'更多',icon:'more',tone:'silver'},
  {id:'settings',label:'设置',icon:'settings',tone:'blue'}
 ];
-const dockIds=['chat','contacts','reading','settings'];
+const dockIds=['chat','contacts','more','settings'];
 function safeRead(key){
  try{const value=JSON.parse(localStorage.getItem(key));return Array.isArray(value)?value:[];}catch{return [];}
 }
@@ -164,7 +164,7 @@ function openHome(){
  const heading=create('div','ep-app-group-title');heading.append(create('span','','我们的空间'),create('small','','APPLICATIONS'));
  scroll.append(heading);
  const grid=create('div','ep-app-grid');
- for(const a of apps.filter(a=>a.id!=='settings')){
+ for(const a of apps.filter(a=>!['settings','checklist','more'].includes(a.id))){
   const b=create('button','ep-app');b.type='button';b.dataset.epApp=a.id;
   b.innerHTML='<span class="ep-app-icon tone-'+a.tone+'">'+icon(a.icon)+'</span><span class="ep-app-label"></span>';
   b.querySelector('.ep-app-label').textContent=a.label;
