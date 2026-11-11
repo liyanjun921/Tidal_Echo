@@ -1,0 +1,16 @@
+# Preview-only overlay; names, network alias, and named volumes are
+# isolated by Compose project emoi-phone-preview.
+# The same existing XLC Caddy reaches ONLY this dedicated alias.
+services:
+  emoi:
+    mem_limit: 1024m
+    networks:
+      default:
+      xlc_gateway:
+        aliases:
+          - emoi-phone-preview
+
+networks:
+  xlc_gateway:
+    external: true
+    name: xlc-gateway_default
