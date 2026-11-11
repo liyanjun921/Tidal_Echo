@@ -14,12 +14,12 @@ with httpx.Client(base_url='http://127.0.0.1:8089/relay',headers={'Authorization
         response=c.post(path,json=value);response.raise_for_status();return response.json()
 
     def view(scope='gpt'):
-        result=c.get('/lune/living/'+scope);result.raise_for_status();return result.json()
+        result=c.get('/emoi/living/'+scope);result.raise_for_status();return result.json()
 
     def send(room,text):
-        result=post('/lune/rooms/'+room+'/send',{'text':text,'nonce':uuid.uuid4().hex})
+        result=post('/emoi/rooms/'+room+'/send',{'text':text,'nonce':uuid.uuid4().hex})
         for _ in range(600):
-            state=c.get('/lune/rooms/'+room+'/messages').json()
+            state=c.get('/emoi/rooms/'+room+'/messages').json()
             run=next(x for x in state['runs'] if x['id']==result['run']['id'])
             if run['state'] not in {'pending','running'}:
                 assert run['state']=='completed',run
@@ -27,7 +27,7 @@ with httpx.Client(base_url='http://127.0.0.1:8089/relay',headers={'Authorization
             time.sleep(.1)
         raise AssertionError('still-true model turn timeout')
 
-    def requests():return [json.loads(line) for line in Path(os.environ['LUNE_TEST_REQUESTS']).read_text().splitlines()]
+    def requests():return [json.loads(line) for line in Path(os.environ['EMOI_TEST_REQUESTS']).read_text().splitlines()]
     def snapshots():
         return [m['content'] for r in requests() for m in r.get('messages',[])
                 if m.get('role')=='system' and isinstance(m.get('content'),str) and m['content'].startswith('当前背景由 still-true 管理')]
@@ -53,7 +53,7 @@ with httpx.Client(base_url='http://127.0.0.1:8089/relay',headers={'Authorization
     send('gpt','LIVING_FOLLOWUP_TRIGGER 这周的安排呢？')
     next_request=next(r for r in reversed(requests()) if 'LIVING_FOLLOWUP_TRIGGER' in json.dumps(r,ensure_ascii=False))
     assert any(m.get('role')=='system' and '妈妈现在还在我这里' in str(m.get('content')) for m in next_request['messages'])
-    assert all('<state_snapshot' not in str(m.get('content')) for m in c.get('/lune/rooms/gpt/messages').json()['messages'])
+    assert all('<state_snapshot' not in str(m.get('content')) for m in c.get('/emoi/rooms/gpt/messages').json()['messages'])
 
     _,ended=send('gpt','LIVING_DROP_TRIGGER 妈妈今天已经回家了。')
     current=view();assert not current['fresh'] and not current['stale']
@@ -65,20 +65,20 @@ with httpx.Client(base_url='http://127.0.0.1:8089/relay',headers={'Authorization
     assert '未列出的旧项不再作为当前事实' in current_block
     assert current['today']['晚饭']['v']=='今天晚饭吃了青菜'
 
-    set_result=post('/lune/living/gpt/write',{'name':'ctx_set','arguments':{'key':'申请季','value':'这阵子准备材料','ttl_days':21},'nonce':'owner-'+uuid.uuid4().hex,'version':current['version']})
+    set_result=post('/emoi/living/gpt/write',{'name':'ctx_set','arguments':{'key':'申请季','value':'这阵子准备材料','ttl_days':21},'nonce':'owner-'+uuid.uuid4().hex,'version':current['version']})
     assert set_result['ok'] and view()['fresh'][0]['key']=='申请季'
     config=view()['settings']
-    r=c.patch('/lune/living/gpt/settings',json={'enabled':False,'version':config['version']});r.raise_for_status()
+    r=c.patch('/emoi/living/gpt/settings',json={'enabled':False,'version':config['version']});r.raise_for_status()
     send('gpt','LIVING_DISABLED_TRIGGER')
     disabled=next(r for r in reversed(requests()) if 'LIVING_DISABLED_TRIGGER' in json.dumps(r,ensure_ascii=False))
     assert not any(t['function']['name'] in {'today_set','today_get','ctx_set','ctx_get','ctx_drop'} for t in disabled.get('tools',[]) if t.get('type')=='function')
     assert not any(str(m.get('content','')).startswith('当前背景由 still-true 管理') for m in disabled['messages'])
-    r=c.patch('/lune/living/gpt/settings',json={'enabled':True,'version':config['version']+1});r.raise_for_status()
+    r=c.patch('/emoi/living/gpt/settings',json={'enabled':True,'version':config['version']+1});r.raise_for_status()
 
     with sqlite3.connect(os.environ['RELAY_DB']) as db:
-        audit=db.execute('SELECT tool,key,source_id,result FROM lune_living_events WHERE scope=?',('gpt',)).fetchall()
+        audit=db.execute('SELECT tool,key,source_id,result FROM emoi_living_events WHERE scope=?',('gpt',)).fetchall()
         assert all('今天晚饭吃了青菜' not in json.dumps(row,ensure_ascii=False) for row in audit)
-    target=os.environ.get('LUNE_LIVING_PREVIEW_DIR')
+    target=os.environ.get('EMOI_LIVING_PREVIEW_DIR')
     if target:
         p=Path(target);p.mkdir(parents=True,exist_ok=True)
         (p/'living-fixture.json').write_text(json.dumps({'gpt':view(),'claude':view('claude'),'group_gpt':view('group_gpt'),'group_claude':view('group_claude')},ensure_ascii=False))
