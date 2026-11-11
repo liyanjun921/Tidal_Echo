@@ -2,8 +2,9 @@
    Keep the source values/databases as rollback copies; do not send them away. */
 (()=>{
   'use strict';
-  for (const store of [window.localStorage, window.sessionStorage]) {
+  for (const storageType of ['localStorage', 'sessionStorage']) {
     try {
+      const store = window[storageType];
       const keys = Array.from({length:store.length}, (_,i)=>store.key(i)).filter(Boolean);
       for (const oldKey of keys) {
         if (!oldKey.startsWith('lune-')) continue;
