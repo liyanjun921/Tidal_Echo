@@ -10,7 +10,7 @@ import sys
 import uuid
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 SCOPES = {"gpt", "claude", "group_gpt", "group_claude"}
 SOURCES = {"garden", "gmail", "cove", "calendar", "device", "manual", "system"}
@@ -80,6 +80,13 @@ def endpoint():
     return base + "/relay/lune/wren/" + scope + "/events", secret
 
 
+class NoRedirect(HTTPRedirectHandler):
+    """Never forward the relay Bearer token to a redirected endpoint."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def main():
     try:
         raw = sys.stdin.buffer.readline(MAX_BYTES + 1)
@@ -90,7 +97,7 @@ def main():
         payload = json.dumps(event, ensure_ascii=False).encode("utf-8")
         req = Request(url, payload, {"Authorization": "Bearer " + secret,
                                      "Content-Type": "application/json"}, method="POST")
-        with urlopen(req, timeout=10) as response:
+        with build_opener(NoRedirect).open(req, timeout=10) as response:
             result = json.load(response)
         if not result.get("ok"):
             raise ValueError("Émoi did not acknowledge the event")
