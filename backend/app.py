@@ -51,7 +51,7 @@ HUMAN_NAME = os.environ.get("RELAY_HUMAN_NAME", "对方")   # how the AI is told
 
 # --- core config / secrets (all from env) ----------------------------------
 SECRET = os.environ.get("RELAY_SECRET", "")
-DB_PATH = os.environ.get("RELAY_DB", str(Path(__file__).parent / "relay.db"))
+DB_PATH = os.environ.get("RELAY_DB", str(Path(__file__).parent / "emoi.db"))
 PORT = int(os.environ.get("RELAY_PORT", "3011"))
 UPLOAD_DIR = Path(os.environ.get("RELAY_UPLOAD_DIR", str(Path(__file__).parent / "uploads")))
 PUBLIC_PREFIX = os.environ.get("RELAY_PUBLIC_PREFIX", "/relay").rstrip("/")
