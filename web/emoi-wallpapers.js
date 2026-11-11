@@ -179,8 +179,9 @@
       await fileOperation('wallpaper-page:' + context, file, true);
       settings[context] = 'custom';
       saveSettings();
-      await activate(context);
-      if (picker?.open) picker.close();
+      // A slow photo write must not repaint a different page the user opened meanwhile.
+      if (activeContext === context) await activate(context);
+      if (picker?.open && activeContext === context) picker.close();
     } catch (error) {
       inform('保存失败：' + (error?.message || '请检查浏览器可用空间'));
     } finally {
