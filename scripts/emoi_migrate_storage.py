@@ -113,7 +113,19 @@ def migrate(root: Path, apply: bool = False) -> dict:
     if state["old_database_exists"]:
         migrate_sqlite(root / "relay.db", root / "emoi.db")
     if state["old_vault_exists"]:
-        shutil.copytree(root / "lune-private", root / "emoi-private", copy_function=shutil.copy2)
+        destination = root / "emoi-private"
+        shutil.copytree(root / "lune-private", destination, copy_function=shutil.copy2)
+        # Preserve the original checksums while making Émoi's renamed markers
+        # visible to each unchanged third-party engine installer.
+        for legacy_marker, modern_marker in (
+            (".lune-verified.json", ".emoi-verified.json"),
+            ("lune-passive-ready.json", "emoi-passive-ready.json"),
+        ):
+            for item in destination.rglob(legacy_marker):
+                replacement = item.with_name(modern_marker)
+                if replacement.exists():
+                    raise FileExistsError("both marker versions exist: " + str(replacement))
+                shutil.copy2(item, replacement)
     return {"mode": "applied", "source_preserved": True, **inspect(root)}
 
 
