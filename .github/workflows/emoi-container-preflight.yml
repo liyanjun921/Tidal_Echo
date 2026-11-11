@@ -2,7 +2,8 @@ name: Émoi container preflight
 
 on:
   push:
-    branches: [codex/emoi-v04-integration]
+    branches: [main, codex/emoi-internal-migration]
+  pull_request:
   workflow_dispatch:
 
 permissions:
