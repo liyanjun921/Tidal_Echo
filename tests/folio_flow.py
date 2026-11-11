@@ -17,7 +17,7 @@ with httpx.Client(base_url='http://127.0.0.1:8089',headers={'Authorization':'Bea
     def post(path,body):
         r=c.post('/ombre/gpt/api/folio/'+path,json=body);r.raise_for_status();return r.json()
     assert c.get('/ombre/gpt/v2/').status_code==401
-    opened=c.post('/relay/lune/ombre/gpt/open?view=folio',json={});opened.raise_for_status()
+    opened=c.post('/relay/emoi/ombre/gpt/open?view=folio',json={});opened.raise_for_status()
     assert opened.json()['url']=='/ombre/gpt/v2/'
     for path in ['v2/','v2/cells/','v2/network/','v2/console/','v2/console/config/','v2/console/import/','v2/console/breath/','v2/console/trash/','v2/mobile/']:
         r=c.get('/ombre/gpt/'+path);r.raise_for_status()
@@ -108,7 +108,7 @@ with httpx.Client(base_url='http://127.0.0.1:8089',headers={'Authorization':'Bea
     assert get('config/api')['current_effective']['model']=='fixture-gpt'
     assert post('config/api/test',{'id':profile['id']})['ok']
     post('config/api/active',{'id':None})
-    assert get('config/api')['current_effective']['model']=='lune-selected-model'
+    assert get('config/api')['current_effective']['model']=='emoi-selected-model'
     assert get('config/api')['embedding']['model']=='BAAI/bge-small-zh-v1.5'
     assert get('config/api')['embedding']['dim']==512
     noisy=post('bucket/create',{'name':'FOLIO_NOISE','content':'FOLIO_NOISE_BODY'})['id']
@@ -119,8 +119,8 @@ with httpx.Client(base_url='http://127.0.0.1:8089',headers={'Authorization':'Bea
     assert len(asyncio.run(ob.rpc('gpt','tools/list'))['tools'])==16
     for path in ('/api/settings/you','/api/settings/them','/api/self','/api/plans'):
         c.get('/ombre/gpt'+path).raise_for_status()
-    if os.environ.get('LUNE_FOLIO_PREVIEW_DIR'):
-        target=Path(os.environ['LUNE_FOLIO_PREVIEW_DIR'])
+    if os.environ.get('EMOI_FOLIO_PREVIEW_DIR'):
+        target=Path(os.environ['EMOI_FOLIO_PREVIEW_DIR'])
         for path in ('buckets','capabilities','config/api','config/strategy','scoring-config','decay-config','prompts-config','hit-stats','recent-searches','trash','network','breath-debug','import/status','import/results','families'):
             value=get(path);file=target/'api/folio'/path;file.parent.mkdir(parents=True,exist_ok=True);file.write_text(json.dumps(value,ensure_ascii=False))
         for row in get('buckets'):

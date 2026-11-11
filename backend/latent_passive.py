@@ -1,4 +1,4 @@
-"""Luné host adapter for the unmodified Latent Passive Recall implementation.
+"""Émoi host adapter for the unmodified Latent Passive Recall implementation.
 
 The parent supplies an authorized snapshot; only private derived caches persist.
 No chat API, cloud embedding or model-visible hidden tool is exposed here.
@@ -115,7 +115,7 @@ def recall(payload, index):
         # Named reference encoding for a bounded injection, never a billing estimate.
         return len(encoding.encode(json.dumps(message, ensure_ascii=False, separators=(",", ":")))) + 4
     host = PassiveRecallAdapter(PassiveRecallConfig(True, "temporary"), fetch=fetch,
-                 timeout_seconds=2.0, token_counter=count, token_counter_name="lune-o200k-reference-v1")
+                 timeout_seconds=2.0, token_counter=count, token_counter_name="emoi-o200k-reference-v1")
     history = [{"role": "user", "content": payload["query"]}]
     began = time.perf_counter()
     status = host.begin_turn(history, session_id=payload["session_id"], turn_id=delivery,

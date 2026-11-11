@@ -52,7 +52,7 @@ class BridgeContractTests(unittest.TestCase):
         }
         with patch.dict(os.environ, env):
             url, secret = bridge.endpoint()
-            self.assertEqual(url, "http://127.0.0.1:8088/relay/lune/wren/gpt/events")
+            self.assertEqual(url, "http://127.0.0.1:8088/relay/emoi/wren/gpt/events")
             self.assertEqual(secret, "test-only")
         with patch.dict(os.environ, {**env, "EMOI_BASE_URL": "http://example.com"}):
             with self.assertRaises(ValueError):

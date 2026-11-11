@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from backend.ombre_folio import State,SCORING,topic_score,ui_text
-from backend.lune_ombre import themed_html
+from backend.emoi_ombre import themed_html
 
 
 class FolioTests(unittest.TestCase):

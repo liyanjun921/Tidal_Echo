@@ -1,10 +1,10 @@
 .git
-.lune-local
+.emoi-local
 .venv
 venv
 node_modules
-lune-private
-**/lune-private
+emoi-private
+**/emoi-private
 **/chatgpt-plan*.json*
 **/*chatgpt*connection*.json
 **/__pycache__

@@ -1,0 +1,58 @@
+name: Émoi unified wake tests
+
+on:
+  push:
+    branches: [main, codex/emoi-internal-migration, codex/emoi-archive-glass-ui]
+  pull_request:
+    paths:
+      - "backend/emoi_wake.py"
+      - "scripts/emoi_ingest_event.py"
+      - "tests/test_emoi_event_adapter.py"
+      - "tests/test_emoi_migration.py"
+      - "scripts/emoi_migrate_storage.py"
+      - "tests/test_emoi_archive_glass.py"
+      - "web/emoi-wallpapers.js"
+      - "web/emoi-archive-glass.css"
+      - "web/index.html"
+      - "web/app.js"
+      - "web/sw.js"
+      - "backend/emoi_wren.py"
+      - "backend/emoi_desire.py"
+      - "tests/test_wake_orchestrator.py"
+      - "tests/test_wren.py"
+      - ".github/workflows/emoi-wake-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wake-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend test dependencies
+        run: python -m pip install -r backend/requirements.txt -r examples/requirements.txt -r backend/ombre-requirements.txt
+      - name: Validate Room UI JavaScript syntax
+        run: node --check web/wren-room.js
+      - name: Test Émoi external event adapter
+        run: python -m unittest discover -s tests -p "test_emoi_event_adapter.py" -v
+      - name: Test offline Émoi storage migration
+        run: python -m unittest discover -s tests -p "test_emoi_migration.py" -v
+      - name: Validate all Émoi client JavaScript
+        run: |
+          for path in web/*.js; do node --check "$path"; done
+      - name: Check wallpaper and PWA wiring
+        run: python -m unittest discover -s tests -p "test_emoi_archive_glass.py" -v
+      - name: Test durable wake inbox
+        run: python -m unittest discover -s tests -p "test_wake_orchestrator.py" -v
+      - name: Test Room scheduler and desire integration
+        run: python -m unittest discover -s tests -p "test_wren.py" -v
+      - name: Full Python regression suite
+        run: python -m unittest discover -s tests -p "test_*.py" -v

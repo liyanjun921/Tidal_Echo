@@ -1,7 +1,7 @@
 """Read-only local MCP service used only by synthetic E2E tests."""
 from mcp.server.fastmcp import FastMCP
 
-mcp = FastMCP("lune-fixture", host="127.0.0.1", port=8767, stateless_http=True)
+mcp = FastMCP("emoi-fixture", host="127.0.0.1", port=8767, stateless_http=True)
 
 
 @mcp.tool()

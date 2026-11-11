@@ -1,9 +1,9 @@
 /* Xinchao 4.1.1, inside the existing Room. No credentials or sample state. */
 (()=>{'use strict';
-const $=s=>document.querySelector(s),panel=$('#wrenRoom'),R=()=>window.LuneRelay;
+const $=s=>document.querySelector(s),panel=$('#wrenRoom'),R=()=>window.EmoiRelay;
 if(!panel)return;
-const uuid=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join(''),scope=()=>$('#wrenScope').value,base=()=>'/lune/xinchao/'+scope();
-const connected=()=>window.LUNE_PREVIEW!==true&&R()?.enabled;
+const uuid=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join(''),scope=()=>$('#wrenScope').value,base=()=>'/emoi/xinchao/'+scope();
+const connected=()=>window.EMOI_PREVIEW!==true&&R()?.enabled;
 const button=document.createElement('button');Object.assign(button,{type:'button',textContent:'心潮'});button.dataset.wrenTab='xinchao';button.setAttribute('aria-pressed','false');panel.querySelector('.wren-tabs').append(button);
 const page=document.createElement('section');page.dataset.wrenPage='xinchao';page.className='form-stack';page.hidden=true;
 page.innerHTML=`<div class="xc-heading"><div><span class="eyebrow">XINCHAO · A QUIET INNER TIDE</span><h3>心潮</h3><p class="form-help">此刻的心情，慢慢长成的自己。</p></div><button id="xcRefresh" type="button" class="quiet-button">刷新</button></div><p id="xcStatus" class="form-help" role="status">连接后读取心潮。</p>

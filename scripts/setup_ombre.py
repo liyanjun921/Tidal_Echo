@@ -19,7 +19,7 @@ def stamp(destination):
              if p.is_file() and '__pycache__' not in p.parts and p.suffix != '.pyc']
     files += [destination / 'VERSION', destination / 'LICENSE', destination / 'NOTICE.md', destination / 'AUTHORS.md']
     marker = {'revision': REVISION, 'files': {str(p.relative_to(destination)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}}
-    (destination.parent / (destination.name + '.lune-verified.json')).write_text(json.dumps(marker))
+    (destination.parent / (destination.name + '.emoi-verified.json')).write_text(json.dumps(marker))
 
 
 def install(destination):

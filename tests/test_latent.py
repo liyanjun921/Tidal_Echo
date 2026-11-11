@@ -6,8 +6,8 @@ from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-from tests import test_lune as fixtures
-from backend.lune_memory import LatentEngine, MemoryStore
+from tests import test_emoi as fixtures
+from backend.emoi_memory import LatentEngine, MemoryStore
 from backend import app as relay
 
 
@@ -21,32 +21,32 @@ class LatentTests(unittest.TestCase):
         self.store = MemoryStore(relay.DB_PATH)
         self.engine = LatentEngine(relay.DB_PATH)
         with self.store.db() as c:
-            for table in ("lune_memory_details", "lune_memory_loops", "lune_memory_sessions"):
+            for table in ("emoi_memory_details", "emoi_memory_loops", "emoi_memory_sessions"):
                 c.execute("DELETE FROM " + table)
-            c.execute("UPDATE lune_memory_settings SET value=?,version=1", ('{"enabled":true,"auto_recall":true,"model_writes":true}',))
+            c.execute("UPDATE emoi_memory_settings SET value=?,version=1", ('{"enabled":true,"auto_recall":true,"model_writes":true}',))
 
     def enabled(self):
         if not self.engine.installation():
-            self.skipTest("Set LUNE_LATENT_SOURCE to the checkout verified by scripts/setup_latent.py")
+            self.skipTest("Set EMOI_LATENT_SOURCE to the checkout verified by scripts/setup_latent.py")
 
     def search(self, query, view="gpt"):
-        return self.client.post("/lune/memory/search", json={"view": view, "query": query})
+        return self.client.post("/emoi/memory/search", json={"view": view, "query": query})
 
     def edit(self, m, action="edit", content="新内容", **kw):
-        return self.client.patch("/lune/memories/" + m["id"], json={**m, "content": content, "change_type": action, **kw})
+        return self.client.patch("/emoi/memories/" + m["id"], json={**m, "content": content, "change_type": action, **kw})
 
     def active(self, text="记住：我喜欢雨夜读书。", room="gpt", agent="gpt"):
-        msg = relay.save_message("in", "user", text, {"api_session": "lune-" + room})
+        msg = relay.save_message("in", "user", text, {"api_session": "emoi-" + room})
         with self.store.db() as c:
-            c.execute("INSERT INTO lune_runs VALUES(?,?,?,?,?,?,?,?,?)", ("memory-run", room, "memory-nonce", msg["id"], json.dumps([agent]), "running", "", "2026-10-24", "2026-10-24"))
-        return {"agent_id": agent, "room": "lune-" + room, "run_id": "memory-run"}
+            c.execute("INSERT INTO emoi_runs VALUES(?,?,?,?,?,?,?,?,?)", ("memory-run", room, "memory-nonce", msg["id"], json.dumps([agent]), "running", "", "2026-10-24", "2026-10-24"))
+        return {"agent_id": agent, "room": "emoi-" + room, "run_id": "memory-run"}
 
     def test_owner_routes_require_auth_and_settings_version(self):
-        for path in ("/lune/memory/status", "/lune/memory/check", "/lune/memory/search", "/lune/memory/loops", "/lune/assistant/memory"):
+        for path in ("/emoi/memory/status", "/emoi/memory/check", "/emoi/memory/search", "/emoi/memory/loops", "/emoi/assistant/memory"):
             response = self.client.request("GET" if path.endswith("status") else "POST", path, json={}, headers={"Authorization": "Bearer wrong"})
             self.assertEqual(response.status_code, 401, response.text)
-        self.assertEqual(self.client.patch("/lune/memory/settings", json={"version": 1, "auto_recall": False}).status_code, 200)
-        self.assertEqual(self.client.patch("/lune/memory/settings", json={"version": 1, "enabled": False}).status_code, 409)
+        self.assertEqual(self.client.patch("/emoi/memory/settings", json={"version": 1, "auto_recall": False}).status_code, 200)
+        self.assertEqual(self.client.patch("/emoi/memory/settings", json={"version": 1, "enabled": False}).status_code, 409)
 
     def test_real_engine_scope_filtering_happens_before_worker(self):
         self.enabled()
@@ -70,7 +70,7 @@ class LatentTests(unittest.TestCase):
         corrected = self.edit(second, "correct", "实际住在临川北坡。", reason="南坡是误记")
         self.assertEqual(corrected.status_code, 200, corrected.text)
         self.assertNotIn(second["id"], [r["id"] for r in self.search("以前临川南坡").json()["matches"]])
-        self.assertEqual(len(self.client.get("/lune/memories").json()["memories"]), 1)
+        self.assertEqual(len(self.client.get("/emoi/memories").json()["memories"]), 1)
 
     def test_real_engine_owner_edit_delete_and_range_move_no_stale_copy(self):
         self.enabled()
@@ -78,20 +78,20 @@ class LatentTests(unittest.TestCase):
         m = self.edit(m, content="喜欢蓝色围巾。", scope="gpt").json()["memory"]
         self.assertNotIn(original, [r["id"] for r in self.search("蓝色围巾", "claude").json()["matches"]])
         self.assertIn(original, [r["id"] for r in self.search("蓝色围巾").json()["matches"]])
-        self.assertEqual(self.client.delete("/lune/memories/" + original, params={"version": m["version"]}).status_code, 200)
+        self.assertEqual(self.client.delete("/emoi/memories/" + original, params={"version": m["version"]}).status_code, 200)
         self.assertNotIn(original, [r["id"] for r in self.search("蓝色围巾").json()["matches"]])
 
     def test_delete_current_fact_removes_linked_history_from_recall(self):
         m = self.memory("gpt", "旧住址")
         m = self.edit(m, "change", "新住址").json()["memory"]
-        result = self.client.delete("/lune/memories/" + m["id"], params={"version": m["version"]})
+        result = self.client.delete("/emoi/memories/" + m["id"], params={"version": m["version"]})
         self.assertEqual(result.json()["deleted_records"], 2)
         self.assertEqual(self.engine.snapshot("gpt"), [])
 
     def test_worker_does_not_receive_application_keys_or_call_network(self):
         self.enabled()
         with patch.dict(os.environ, {"OPENAI_API_KEY": "private-fixture", "MEMORY_EMBED_PROVIDER": "cloud", "PYTHONPATH": "/wrong"}):
-            result = self.client.post("/lune/memory/check")
+            result = self.client.post("/emoi/memory/check")
         self.assertEqual(result.status_code, 200, result.text)
         self.assertTrue(result.json()["ok"])
 
@@ -101,47 +101,47 @@ class LatentTests(unittest.TestCase):
         absent = self.search("ZXQVV998877")
         self.assertEqual(absent.status_code, 200, absent.text)
         self.assertEqual(absent.json()["matches"], [])
-        with patch.dict(os.environ, {"LUNE_LATENT_SOURCE": "/missing-latent"}):
+        with patch.dict(os.environ, {"EMOI_LATENT_SOURCE": "/missing-latent"}):
             self.assertEqual(self.search("雨夜").status_code, 503)
-            self.assertEqual(self.client.get("/lune/memory/status").json()["engine"], "basic")
+            self.assertEqual(self.client.get("/emoi/memory/status").json()["engine"], "basic")
 
     def test_model_write_requires_current_source_and_only_current_room(self):
         context = self.active()
         for quote in ("编造的事实", ""):
-            self.assertEqual(self.client.post("/lune/assistant/memory", json={**context, "action": "remember", "quote": quote}).status_code, 422)
-        result = self.client.post("/lune/assistant/memory", json={**context, "action": "remember", "quote": "我喜欢雨夜读书。", "scope": "shared"})
+            self.assertEqual(self.client.post("/emoi/assistant/memory", json={**context, "action": "remember", "quote": quote}).status_code, 422)
+        result = self.client.post("/emoi/assistant/memory", json={**context, "action": "remember", "quote": "我喜欢雨夜读书。", "scope": "shared"})
         self.assertEqual(result.status_code, 200, result.text)
         item = result.json()["memory"]
         self.assertEqual(item["scope"], "gpt")
         self.assertEqual(item["content"], "我喜欢雨夜读书。")
         foreign = self.memory("claude", "秘密")
-        self.assertEqual(self.client.post("/lune/assistant/memory", json={**context, "action": "correct", "id": foreign["id"], "version": 1, "quote": "我喜欢雨夜读书。"}).status_code, 403)
+        self.assertEqual(self.client.post("/emoi/assistant/memory", json={**context, "action": "correct", "id": foreign["id"], "version": 1, "quote": "我喜欢雨夜读书。"}).status_code, 403)
 
     def test_model_cannot_write_without_explicit_request_or_after_cancel(self):
         context = self.active("我喜欢下雨。")
-        self.assertEqual(self.client.post("/lune/assistant/memory", json={**context, "action": "remember", "quote": "我喜欢下雨。"}).status_code, 403)
+        self.assertEqual(self.client.post("/emoi/assistant/memory", json={**context, "action": "remember", "quote": "我喜欢下雨。"}).status_code, 403)
         with self.store.db() as c:
-            c.execute("UPDATE lune_runs SET state='cancelled'")
-        self.assertEqual(self.client.post("/lune/assistant/memory", json={**context, "action": "remember", "quote": "我喜欢下雨。"}).status_code, 409)
+            c.execute("UPDATE emoi_runs SET state='cancelled'")
+        self.assertEqual(self.client.post("/emoi/assistant/memory", json={**context, "action": "remember", "quote": "我喜欢下雨。"}).status_code, 409)
 
     def test_unresolved_is_separate_versioned_and_scope_safe(self):
         context = self.active("记下未完事项：周五一起看展。")
-        result = self.client.post("/lune/assistant/memory", json={**context, "action": "unresolved_open", "quote": "周五一起看展。"})
+        result = self.client.post("/emoi/assistant/memory", json={**context, "action": "unresolved_open", "quote": "周五一起看展。"})
         self.assertEqual(result.status_code, 200, result.text)
         item = result.json()["item"]
         self.assertEqual(self.store.loops(["claude"]), [])
-        self.assertEqual(self.client.post("/lune/memory/loops", json={**item, "status": "closed", "version": 0}).status_code, 409)
-        self.assertEqual(self.client.post("/lune/memory/loops", json={**item, "status": "closed"}).status_code, 200)
+        self.assertEqual(self.client.post("/emoi/memory/loops", json={**item, "status": "closed", "version": 0}).status_code, 409)
+        self.assertEqual(self.client.post("/emoi/memory/loops", json={**item, "status": "closed"}).status_code, 200)
         self.assertEqual(self.store.loops(), [])
 
     def test_request_only_context_and_persona_are_separate(self):
         self.enabled()
         self.memory("gpt", "周五一起看画展。")
-        msg = relay.save_message("in", "user", "周五画展", {"api_session": "lune-gpt"})
+        msg = relay.save_message("in", "user", "周五画展", {"api_session": "emoi-gpt"})
         async def build():
             token = fixtures.loop.CURRENT_AGENT.set("gpt")
             try:
-                return await fixtures.loop.build_messages("周五画展", [], before_id=msg["id"], session_id="lune-gpt")
+                return await fixtures.loop.build_messages("周五画展", [], before_id=msg["id"], session_id="emoi-gpt")
             finally:
                 fixtures.loop.CURRENT_AGENT.reset(token)
                 from latent_process import close_native
@@ -172,9 +172,9 @@ class LatentTests(unittest.TestCase):
     def test_backup_preserves_changes_and_unresolved_with_remapped_ids(self):
         m = self.memory("gpt", "以前喜欢银手链")
         latest = self.edit(m, "change", "现在喜欢蓝围巾").json()["memory"]
-        self.client.post("/lune/memory/loops", json={"scope": "gpt", "summary": "去看展"})
-        backup = self.client.get("/lune/export").json()
-        result = self.client.post("/lune/import", json=backup)
+        self.client.post("/emoi/memory/loops", json={"scope": "gpt", "summary": "去看展"})
+        backup = self.client.get("/emoi/export").json()
+        result = self.client.post("/emoi/import", json=backup)
         self.assertEqual(result.status_code, 200, result.text)
         rows = self.store.list(True)
         imported = next(r for r in rows if r["author"] == "imported" and r["status"] == "current")
@@ -187,7 +187,7 @@ class LatentTests(unittest.TestCase):
     def test_basic_mode_also_excludes_retracted_or_superseded_facts(self):
         m = self.memory("gpt", "错的事实")
         self.edit(m, "correct", "正确事实")
-        text = fixtures.memory_context(relay.DB_PATH, "lune-gpt", "gpt", "")
+        text = fixtures.memory_context(relay.DB_PATH, "emoi-gpt", "gpt", "")
         self.assertNotIn("错的事实", text)
         self.assertIn("正确事实", text)
 
@@ -199,14 +199,14 @@ class LatentTests(unittest.TestCase):
         self.assertIsNone(result.json()["memory"]["supersedes"])
         snapshot = self.engine.snapshot("claude")
         self.assertNotIn("私人旧住址", json.dumps(snapshot, ensure_ascii=False))
-        backup = self.client.get("/lune/export").json()
-        self.assertEqual(self.client.post("/lune/import", json=backup).status_code, 200)
+        backup = self.client.get("/emoi/export").json()
+        self.assertEqual(self.client.post("/emoi/import", json=backup).status_code, 200)
 
     def test_bad_backup_does_not_partially_import(self):
         m = self.memory("gpt", "现有记录")
-        backup = self.client.get("/lune/export").json()
+        backup = self.client.get("/emoi/export").json()
         backup["memories"][0]["supersedes"] = m["id"]
-        self.assertEqual(self.client.post("/lune/import", json=backup).status_code, 422)
+        self.assertEqual(self.client.post("/emoi/import", json=backup).status_code, 422)
         self.assertEqual(len(self.store.list()), 1)
 
 

@@ -1,10 +1,10 @@
 # Émoi · 腾讯云轻量服务器与 Garden / CyberBoss / Ombre Brain 集成验收
 
-状态：**准备方案与单向事件入口已经编码，尚未在用户真实腾讯云实例部署或验证账号**。原产品名称 Luné，内部 `lune_*` API、SQLite、路径、容器服务名、卷和启动脚本暂不改名，防止旧数据无法读取。所有密码、模型登录和私人数据只留在服务器私有目录。
+状态：**准备方案与单向事件入口已经编码，尚未在用户真实腾讯云实例部署或验证账号**。Émoi 开发分支已将内部模块、服务路由、数据库表和 Docker 命名统一为 `emoi_*` / `emoi`。历史 Luné 数据仅通过显式离线迁移接入；不会在启动时擅自覆盖原 vault。所有密码、模型登录和私人数据只留在服务器私有目录。
 
 ## 一、能部署，但不等于已在现有服务器运行
 
-当前 `Dockerfile.lune` 使用 Python 3.12、Node 24、FFmpeg 和服务端依赖；`compose.lune.yaml` 将服务的 8080 端口只发布到宿主机回环，并挂载一个持久命名卷。`scripts/run_lune.py` 负责 relay/API loop、影院及各个记忆进程。原项目 CI 已成功在 Linux Docker 中构建镜像、以新卷启动服务并通过基本 HTTP 验收；真实 ChatGPT/Claude 账号、手机 Safari、微信、Garden SSE、云端历史记忆和语音尚未验证。
+当前 `Dockerfile.emoi` 使用 Python 3.12、Node 24、FFmpeg 和服务端依赖；`compose.emoi.yaml` 将服务的 8080 端口只发布到宿主机回环，并挂载一个持久命名卷。`scripts/run_emoi.py` 负责 relay/API loop、影院及各个记忆进程。原项目 CI 已成功在 Linux Docker 中构建镜像、以新卷启动服务并通过基本 HTTP 验收；真实 ChatGPT/Claude 账号、手机 Safari、微信、Garden SSE、云端历史记忆和语音尚未验证。
 
 用户已有腾讯云轻量服务器和其他云端网关时，**不要重新装系统、删旧容器、改既有网关、抢占 8080、替换真实 OB 目录或执行 `down -v`**。先只读清点：
 
@@ -30,19 +30,19 @@ sudo ss -ltnp
 git clone https://github.com/liyanjun921/Tidal_Echo.git emoi
 cd emoi
 # PR 未合并前，可临时取开发分支；合并后直接使用 main
-git checkout codex/emoi-brand-cloud-readiness
-cp lune.env.example .env
+git checkout codex/emoi-internal-migration
+cp emoi.env.example .env
 chmod 600 .env
 # 自行生成长随机 RELAY_SECRET，并在 .env 内设置
 # RELAY_SECRET=（私有随机值）
-# LUNE_PORT=8088
-docker compose -p emoi -f compose.lune.yaml config --quiet
-docker compose -p emoi -f compose.lune.yaml up -d --build
-docker compose -p emoi -f compose.lune.yaml ps
+# EMOI_PORT=8088
+docker compose -p emoi -f compose.emoi.yaml config --quiet
+docker compose -p emoi -f compose.emoi.yaml up -d --build
+docker compose -p emoi -f compose.emoi.yaml ps
 curl -fsS http://127.0.0.1:8088/readyz
 ```
 
-配置需校验模型源代码/向量资源初始化是否完整，`/readyz` 正常也不能代替一条真实的 GPT/Claude 私聊与记忆写读测试。保持固定 Compose 项目名 `emoi`，防止以后改目录名时创建全新的卷。绝不在旧的 Luné/OB 容器运行中盲目并发启动会写入同一组数据目录的新实例。
+配置需校验模型源代码/向量资源初始化是否完整，`/readyz` 正常也不能代替一条真实的 GPT/Claude 私聊与记忆写读测试。保持固定 Compose 项目名 `emoi`，防止以后改目录名时创建全新的卷。新默认数据库是 `/data/emoi.db`；不要把旧 `relay.db` 当成已迁移。绝不在旧的 Luné/OB 容器运行中盲目并发启动会写入同一组数据目录的新实例。
 
 推荐 HTTPS 由现有网关或 Caddy/Nginx 提供；独立 Caddy 例子（**仅在 80/443 没有被已有代理占用时**）：
 
@@ -54,9 +54,27 @@ chat.example.com {
 
 仅对需要的 80/443 放行防火墙，不对公网开放 8088、3020、4182、内部 Ombre 端口或真实数据库。若不想公开入口，改用已授权的私人 VPN / Tailscale HTTPS，不要直接把内部端口暴露公网。反向代理应支持 SSE、不缓存带密钥的接口、视频 Range 与至少 4 MB 请求体；访问日志不记录 token 查询字符串。HTTPS PWA 需在手机 Safari 验证安装、持久登录、推送、后台重连。
 
+## 二点五、旧版本数据迁移（仅已有 Luné 数据的机器）
+
+如果服务器里已有历史 `relay.db` 和 `lune-private/`，**先停止原来写入该目录的进程并备份整个持久卷**。迁移工具只读取旧库和旧 vault，把新表名写入新的 `emoi.db`、新文件目录 `emoi-private/`，**不删除旧数据**。运行一次 dry-run 检查现状：
+
+```sh
+python scripts/emoi_migrate_storage.py --data-dir /data
+```
+
+确认数据库/原始文件已完整备份、所有旧写入端停止且磁盘空间足够后，才明确执行：
+
+```sh
+python scripts/emoi_migrate_storage.py --data-dir /data --apply
+```
+
+如果是 Docker 命名卷，先找到实际旧卷和挂载位置，不要以为更换 Compose 项目名会自动共享同一个卷。请在同时挂载旧数据的**隔离迁移容器**里执行，严禁在原容器仍写入时操作；迁移后逐项验证记录数、Ombre vault、记忆检索及重启持久化。存在新旧同名目标或半成品时脚本直接拒绝覆盖，不应通过删库绕过。
+
+Émoi 新网页还提供 `web/legacy-storage.js`：只在当前浏览器内一次性复制旧 `lune-*` 键和已保存的壁纸/离线缓存到 `emoi-*` 名称，保留旧值作为回滚。微信、Garden、OB 跨端历史并不会因此自动同步。
+
 ## 三、Ombre Brain：代码已集成，现有真实记忆还没有迁入
 
-Émoi 已通过 `LUNE_OMBRE_AUTO_SETUP=1` 在同一个 Compose 持久卷内安装 Ombre Brain，并由 `scripts/run_lune.py` 启动四个隔离空间，接入 16 个原版工具、被动召回、管理页与 Folio。路径保留在 `/data/lune-private/ombre`。这是**新实例/新 vault**，不是自动连接用户原有 PC/云端 OB 的历史数据。原有 OB 可能是另一个实例，不能因为两个实例都有 `breath_search` 就声称记忆相通。
+Émoi 已通过 `EMOI_OMBRE_AUTO_SETUP=1` 在同一个 Compose 持久卷内安装 Ombre Brain，并由 `scripts/run_emoi.py` 启动四个隔离空间，接入 16 个原版工具、被动召回、管理页与 Folio。路径保留在 `/data/emoi-private/ombre`。这是**新实例/新 vault**，不是自动连接用户原有 PC/云端 OB 的历史数据。原有 OB 可能是另一个实例，不能因为两个实例都有 `breath_search` 就声称记忆相通。
 
 两条可选方案：
 
@@ -67,7 +85,7 @@ chat.example.com {
 
 ## 四、Garden：有单向事件接入脚本，但不代表能逛论坛
 
-已有 `POST /relay/lune/wren/{scope}/events`：Bearer 鉴权，`source=garden`，写入真实持久队列；用户空闲时由 Room 决策是否发消息、留手记或静默。Émoi 新增 `scripts/emoi_ingest_event.py`，可作为 `galatea-garden-wake-bridge` 的 **injector** 接受单行 `{"version":1,"type":"garden_wake","reason":"...","message":"..."}`，转换为 Garden 事件并 POST 到 Émoi。
+已有 `POST /relay/emoi/wren/{scope}/events`：Bearer 鉴权，`source=garden`，写入真实持久队列；用户空闲时由 Room 决策是否发消息、留手记或静默。Émoi 新增 `scripts/emoi_ingest_event.py`，可作为 `galatea-garden-wake-bridge` 的 **injector** 接受单行 `{"version":1,"type":"garden_wake","reason":"...","message":"..."}`，转换为 Garden 事件并 POST 到 Émoi。
 
 仅在服务器的可信私有环境设置：
 

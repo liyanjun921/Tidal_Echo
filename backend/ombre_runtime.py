@@ -18,9 +18,9 @@ READ_TOOLS = {'breath', 'breath_search', 'breath_advanced', 'feel', 'pulse', 'le
 
 
 def scope_for(room, agent):
-    if agent not in {'gpt', 'claude'} or room not in {'lune-' + agent, 'lune-group'}:
+    if agent not in {'gpt', 'claude'} or room not in {'emoi-' + agent, 'emoi-group'}:
         raise ValueError('Ombre room and speaker mismatch')
-    return agent if room != 'lune-group' else 'group_' + agent
+    return agent if room != 'emoi-group' else 'group_' + agent
 
 
 def scope_check(scope):
@@ -30,17 +30,17 @@ def scope_check(scope):
 
 
 def root():
-    return Path(os.environ.get('LUNE_OMBRE_DIR') or
-                Path(os.environ.get('RELAY_DB', 'relay.db')).resolve().parent / 'lune-private' / 'ombre')
+    return Path(os.environ.get('EMOI_OMBRE_DIR') or
+                Path(os.environ.get('RELAY_DB', 'relay.db')).resolve().parent / 'emoi-private' / 'ombre')
 
 
 def source():
-    return Path(os.environ.get('LUNE_OMBRE_SOURCE') or root() / 'source')
+    return Path(os.environ.get('EMOI_OMBRE_SOURCE') or root() / 'source')
 
 
 def installed():
     try:
-        marker = json.loads((source().parent / (source().name + '.lune-verified.json')).read_text())
+        marker = json.loads((source().parent / (source().name + '.emoi-verified.json')).read_text())
         return marker['revision'] == REVISION and all(
             hashlib.sha256((source() / name).read_bytes()).hexdigest() == digest
             for name, digest in marker['files'].items())
@@ -58,7 +58,7 @@ def credential(scope, purpose):
 
 def endpoint(scope):
     scope_check(scope)
-    port = int(os.environ.get('LUNE_OMBRE_PORT_BASE', '18110')) + SCOPES.index(scope)
+    port = int(os.environ.get('EMOI_OMBRE_PORT_BASE', '18110')) + SCOPES.index(scope)
     if not 1024 <= port <= 65535:
         raise ValueError('Ombre port range')
     return 'http://127.0.0.1:' + str(port)
@@ -111,7 +111,7 @@ def prepare(scope):
         base = 'http://127.0.0.1:3020/ombre-provider/' + scope + '/v1'
         value = {'transport': 'streamable-http', 'ai_name': 'GPT' if scope.endswith('gpt') else 'Claude',
                  'timezone': 'Asia/Shanghai', 'mcp_require_auth': True, 'mcp_auth_mode': 'hybrid',
-                 'dehydration': {'base_url': base, 'model': 'lune-selected-model', 'api_format': 'openai_compat',
+                 'dehydration': {'base_url': base, 'model': 'emoi-selected-model', 'api_format': 'openai_compat',
                                  'api_key': credential(scope, 'provider'), 'max_tokens': 4096},
                  'embedding': {'enabled': True, 'background_indexing': True, 'backend': 'api',
                                'base_url': base, 'model': 'BAAI/bge-small-zh-v1.5',
@@ -128,10 +128,10 @@ def prepare(scope):
         OMBRE_PORT=endpoint(scope).rsplit(':', 1)[1], OMBRE_MCP_REQUIRE_AUTH='true',
         OMBRE_MCP_TOKEN=credential(scope, 'mcp'), OMBRE_DASHBOARD_PASSWORD=credential(scope, 'dashboard'),
         OMBRE_HOOK_TOKEN=credential(scope, 'hook'), OMBRE_HOOK_SKIP='true')
-    env['LUNE_OMBRE_SOURCE'] = str(source())
+    env['EMOI_OMBRE_SOURCE'] = str(source())
     try:
         from .ombre_folio_runtime import source as folio_source
     except ImportError:
         from ombre_folio_runtime import source as folio_source
-    env['LUNE_FOLIO_SOURCE'] = str(folio_source())
+    env['EMOI_FOLIO_SOURCE'] = str(folio_source())
     return env

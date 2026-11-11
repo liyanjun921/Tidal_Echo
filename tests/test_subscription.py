@@ -17,9 +17,9 @@ import jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 
-from tests import test_lune as fixtures
-import lune_auth as auth
-import lune_plan as plan
+from tests import test_emoi as fixtures
+import emoi_auth as auth
+import emoi_plan as plan
 
 
 class SubscriptionTests(unittest.TestCase):
@@ -53,7 +53,7 @@ class SubscriptionTests(unittest.TestCase):
         tokens = self.tokens(pending["nonce"])
         if scope is not None:
             tokens["scope"] = scope
-        with patch("lune_auth.token_request", return_value=tokens):
+        with patch("emoi_auth.token_request", return_value=tokens):
             return self.store.finish(pending, {"state": pending["state"], "code": "fixture-code", "client_id": "issued-client"})
 
     def test_state_pkce_nonce_and_one_time_callback(self):
@@ -62,18 +62,18 @@ class SubscriptionTests(unittest.TestCase):
         self.assertEqual(query["client_id"], ["dynamic_agent_client"])
         self.assertEqual(query["code_challenge_method"], ["S256"])
         self.assertNotEqual(query["code_challenge"][0], pending["verifier"])
-        with patch("lune_auth.token_request") as exchange:
+        with patch("emoi_auth.token_request") as exchange:
             with self.assertRaises(auth.PlanError):
                 self.store.finish(pending, {"state": "wrong", "code": "c"})
             exchange.assert_not_called()
-        with patch("lune_auth.token_request", return_value=self.tokens(pending["nonce"])) as exchange:
+        with patch("emoi_auth.token_request", return_value=self.tokens(pending["nonce"])) as exchange:
             result = self.store.finish(pending, {"state": pending["state"], "code": "code", "client_id": "issued-client"})
             self.assertEqual(exchange.call_args.args[0]["client_id"], "issued-client")
         self.assertTrue(result["ready"])
         with self.assertRaises(auth.PlanError):
             self.store.finish(pending, {"state": pending["state"], "code": "code", "client_id": "issued-client"})
         bad = self.store.begin("http://127.0.0.1:1455/auth/callback")
-        with patch("lune_auth.token_request", return_value=self.tokens("different-nonce")):
+        with patch("emoi_auth.token_request", return_value=self.tokens("different-nonce")):
             with self.assertRaises(auth.PlanError):
                 self.store.finish(bad, {"state": bad["state"], "code": "code", "client_id": "issued-client"})
 
@@ -81,7 +81,7 @@ class SubscriptionTests(unittest.TestCase):
         status = self.connect()
         pending = self.store.begin("http://127.0.0.1:12345/auth/callback", status["active"])
         self.assertNotIn("agent_name_hint", parse_qs(urlsplit(pending["url"]).query))
-        with patch("lune_auth.token_request") as exchange:
+        with patch("emoi_auth.token_request") as exchange:
             with self.assertRaises(auth.PlanError):
                 self.store.finish(pending, {"state": pending["state"], "code": "code", "client_id": "other-client"})
             exchange.assert_not_called()
@@ -109,7 +109,7 @@ class SubscriptionTests(unittest.TestCase):
             self.assertNotIn("scope", body)
             time.sleep(.03)
             return {"access_token": "next-access", "refresh_token": "next-refresh", "expires_in": 3600}
-        with patch("lune_auth.token_request", side_effect=refresh) as exchange:
+        with patch("emoi_auth.token_request", side_effect=refresh) as exchange:
             with concurrent.futures.ThreadPoolExecutor(2) as pool:
                 results = list(pool.map(lambda _: self.store.access(), range(2)))
             self.assertEqual(exchange.call_count, 1)
@@ -121,7 +121,7 @@ class SubscriptionTests(unittest.TestCase):
     def test_import_preserves_destination_host_and_rejects_expired_or_forged_files(self):
         self.connect()
         source = self.store.read()
-        record = {"format": "lune-chatgpt-session-v1", "session": source["accounts"][source["active"]]}
+        record = {"format": "emoi-chatgpt-session-v1", "session": source["accounts"][source["active"]]}
         target = auth.PlanStore(Path(self.tmp.name) / "target" / "chatgpt-plan.json")
         target.begin("http://127.0.0.1:1456/auth/callback")
         host = target.read()["host_id"]
@@ -135,7 +135,7 @@ class SubscriptionTests(unittest.TestCase):
 
     def test_sign_out_reports_unconfirmed_revocation_and_keeps_registration(self):
         status = self.connect()
-        with patch("lune_auth.httpx.Client.get", side_effect=httpx.ConnectError("unavailable")):
+        with patch("emoi_auth.httpx.Client.get", side_effect=httpx.ConnectError("unavailable")):
             result = self.store.sign_out(status["active"])
         self.assertFalse(result["revoked"])
         self.assertFalse(self.store.status()["ready"])
@@ -144,7 +144,7 @@ class SubscriptionTests(unittest.TestCase):
             self.store.access()
 
     def test_responses_request_keeps_context_images_and_tool_results(self):
-        messages = [{"role": "system", "content": "private persona"}, {"role": "user", "content": [{"type": "text", "text": "ask"}, {"type": "image_url", "image_url": {"url": "data:image/png;base64,YQ=="}}]}, {"role": "assistant", "content": None, "responses_items": [{"type": "reasoning", "encrypted_content": "opaque"}, {"type": "function_call", "call_id": "call-1", "name": "lookup", "namespace": "lune", "arguments": "{}"}]}, {"role": "tool", "tool_call_id": "call-1", "content": "result"}]
+        messages = [{"role": "system", "content": "private persona"}, {"role": "user", "content": [{"type": "text", "text": "ask"}, {"type": "image_url", "image_url": {"url": "data:image/png;base64,YQ=="}}]}, {"role": "assistant", "content": None, "responses_items": [{"type": "reasoning", "encrypted_content": "opaque"}, {"type": "function_call", "call_id": "call-1", "name": "lookup", "namespace": "emoi", "arguments": "{}"}]}, {"role": "tool", "tool_call_id": "call-1", "content": "result"}]
         body = plan.response_body("available-model", messages, [{"type": "function", "function": {"name": "lookup", "parameters": {"type": "object", "properties": {}}}}])
         self.assertFalse(body["store"])
         self.assertTrue(body["stream"])
@@ -165,7 +165,7 @@ class SubscriptionTests(unittest.TestCase):
                 self.assertEqual(request.headers["Authorization"], "Bearer private-access-marker")
                 captured.append(json.loads(request.content))
                 return httpx.Response(200, text="".join("data: " + json.dumps(e) + "\n\n" for e in stream_events), headers={"content-type": "text/event-stream"})
-            with patch("lune_plan.httpx.AsyncClient", side_effect=lambda **kw: real_client(transport=httpx.MockTransport(handle), **kw)):
+            with patch("emoi_plan.httpx.AsyncClient", side_effect=lambda **kw: real_client(transport=httpx.MockTransport(handle), **kw)):
                 return asyncio.run(plan.chat({"model": "available-model"}, [{"role": "user", "content": "hello"}], None, store=self.store))
         output = run([{"type": "response.output_text.delta", "delta": "Hello"}, {"type": "response.completed", "response": {"status": "completed", "output": [], "usage": {"input_tokens": 2}}}])
         self.assertEqual(output["text"], "Hello")
@@ -202,7 +202,7 @@ class SubscriptionTests(unittest.TestCase):
         result = auth.start_login(self.store)
         query = parse_qs(urlsplit(result["authorization_url"]).query)
         callback = query["redirect_uri"][0]
-        with patch("lune_auth.token_request", return_value=self.tokens(query["nonce"][0])):
+        with patch("emoi_auth.token_request", return_value=self.tokens(query["nonce"][0])):
             with httpx.Client(trust_env=False) as client:
                 response = client.get(callback, params={"state": query["state"][0], "code": "test-code", "client_id": "issued-client"})
         self.assertEqual(response.status_code, 200)
@@ -218,7 +218,7 @@ class SubscriptionTests(unittest.TestCase):
             self.assertEqual(request.headers["Authorization"], "Bearer private-access-marker")
             self.assertEqual(str(request.url), auth.RESOURCE + "/models")
             return httpx.Response(200, json={"models": [{"slug": "second", "display_name": "Second", "visibility": "list"}, {"slug": "hidden", "visibility": "hidden"}, {"slug": "first", "visibility": "list"}]})
-        with patch("lune_plan.httpx.AsyncClient", side_effect=lambda **kw: real_client(transport=httpx.MockTransport(handle), **kw)):
+        with patch("emoi_plan.httpx.AsyncClient", side_effect=lambda **kw: real_client(transport=httpx.MockTransport(handle), **kw)):
             result = asyncio.run(plan.models(self.store))
         self.assertEqual([r["id"] for r in result["models"]], ["second", "first"])
 
@@ -226,27 +226,27 @@ class SubscriptionTests(unittest.TestCase):
         self.connect()
         def cancelled():
             raise asyncio.CancelledError()
-        with patch("lune_plan.httpx.AsyncClient") as client:
+        with patch("emoi_plan.httpx.AsyncClient") as client:
             with self.assertRaises(asyncio.CancelledError):
                 asyncio.run(plan.chat({"model": "m"}, [], None, store=self.store, gate=cancelled))
             client.assert_not_called()
         real_client = httpx.AsyncClient
         def handle(request):
-            event = {"type": "response.completed", "response": {"status": "completed", "output": [{"type": "function_call", "call_id": "c", "name": "unauthorized", "namespace": "lune", "arguments": "{}"}]}}
+            event = {"type": "response.completed", "response": {"status": "completed", "output": [{"type": "function_call", "call_id": "c", "name": "unauthorized", "namespace": "emoi", "arguments": "{}"}]}}
             return httpx.Response(200, text="data: " + json.dumps(event) + "\n\n")
-        with patch("lune_plan.httpx.AsyncClient", side_effect=lambda **kw: real_client(transport=httpx.MockTransport(handle), **kw)):
+        with patch("emoi_plan.httpx.AsyncClient", side_effect=lambda **kw: real_client(transport=httpx.MockTransport(handle), **kw)):
             with self.assertRaises(auth.PlanError):
                 asyncio.run(plan.chat({"model": "m"}, [], None, store=self.store))
 
     def test_owner_helper_zip_excludes_credentials_and_uploads(self):
         with TestClient(fixtures.relay.app) as client:
-            self.assertEqual(client.get("/lune/chatgpt-helper").status_code, 401)
-            r = client.get("/lune/chatgpt-helper", headers={"Authorization": "Bearer test-owner-secret-only"})
+            self.assertEqual(client.get("/emoi/chatgpt-helper").status_code, 401)
+            r = client.get("/emoi/chatgpt-helper", headers={"Authorization": "Bearer test-owner-secret-only"})
         self.assertEqual(r.status_code, 200)
         with zipfile.ZipFile(io.BytesIO(r.content)) as archive:
-            self.assertEqual(set(archive.namelist()), {"chatgpt_login.py", "lune_auth.py", "requirements.txt", "README.txt", "start-windows.cmd"})
+            self.assertEqual(set(archive.namelist()), {"chatgpt_login.py", "emoi_auth.py", "requirements.txt", "README.txt", "start-windows.cmd"})
         self.assertFalse(fixtures.loop.attach_allowed(self.store.path))
-        self.assertFalse(fixtures.loop.attach_allowed(Path(fixtures.relay.UPLOAD_DIR) / "lune-chatgpt-connection.json"))
+        self.assertFalse(fixtures.loop.attach_allowed(Path(fixtures.relay.UPLOAD_DIR) / "emoi-chatgpt-connection.json"))
 
 
 if __name__ == "__main__":

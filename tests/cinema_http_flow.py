@@ -12,7 +12,7 @@ with tempfile.TemporaryDirectory() as tmp:
     subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-f','lavfi','-i','testsrc2=size=320x180:rate=12:duration=3',
       '-f','lavfi','-i','sine=frequency=440:duration=3','-c:v','libx264','-pix_fmt','yuv420p','-c:a','aac','-y',str(film)],check=True)
     source=film.read_bytes()
-    base='http://127.0.0.1:8089/relay/lune/cinema'
+    base='http://127.0.0.1:8089/relay/emoi/cinema'
     with httpx.Client(headers={'Authorization':'Bearer fixture-owner-secret'},trust_env=False,timeout=30) as client:
         for _ in range(40):
             if client.get(base+'/status').json()['connected']:break

@@ -9,7 +9,7 @@ import runpy
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
-from lune_memory import LatentEngine
+from emoi_memory import LatentEngine
 
 COMMANDS = {"initialize": "memory_init.py", "import": "memory_import.py", "mcp": "mcp_server.py",
     "archive": "background_archive.py", "forge-session": "forge_session.py", "claude-hook": "claude_code_hook.py",

@@ -7,9 +7,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from tests import test_lune as fixtures
+from tests import test_emoi as fixtures
 relay, loop = fixtures.relay, fixtures.loop
-from backend.lune_memory import LatentEngine, MemoryStore
+from backend.emoi_memory import LatentEngine, MemoryStore
 from backend.latent_process import close_native
 
 
@@ -17,7 +17,7 @@ class FullNativeTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix="latent-full-")
         self.addCleanup(self.tmp.cleanup)
-        self.env = patch.dict(os.environ, {"LUNE_LATENT_FULL_DIR": self.tmp.name})
+        self.env = patch.dict(os.environ, {"EMOI_LATENT_FULL_DIR": self.tmp.name})
         self.env.start()
         self.addCleanup(self.env.stop)
         fixtures.OwnerDataTests.setUp(self)
@@ -25,14 +25,14 @@ class FullNativeTests(unittest.TestCase):
         if not LatentEngine(relay.DB_PATH).installation():
             self.skipTest("original source required")
         with MemoryStore(relay.DB_PATH).db() as c:
-            c.execute("UPDATE lune_memory_settings SET value=?,version=1", (json.dumps({"enabled": True, "auto_recall": True,
+            c.execute("UPDATE emoi_memory_settings SET value=?,version=1", (json.dumps({"enabled": True, "auto_recall": True,
                 "model_writes": True, "native_full": True, "embedding_route": "zero-dep"}),))
 
     def rpc(self, name, arguments=None, view="gpt", method="tools/call"):
         msg = {"jsonrpc": "2.0", "id": 1, "method": method}
         if method == "tools/call":
             msg["params"] = {"name": name, "arguments": arguments or {}}
-        r = self.client.post("/lune/native/" + view + "/mcp", json=msg)
+        r = self.client.post("/emoi/native/" + view + "/mcp", json=msg)
         self.assertEqual(r.status_code, 200, r.text)
         result = r.json()
         return result.get("result", result)
@@ -51,7 +51,7 @@ class FullNativeTests(unittest.TestCase):
             "latent_supersede", "latent_correct", "latent_cleanup", "latent_unresolved", "latent_thread_close",
             "latent_fact_backfill", "latent_note_reply"})
         self.assertEqual(self.rpc("latent_passive_recall")["error"]["code"], -32601)
-        self.assertEqual(self.client.get("/lune/native/status", headers={"Authorization": "Bearer wrong"}).status_code, 401)
+        self.assertEqual(self.client.get("/emoi/native/status", headers={"Authorization": "Bearer wrong"}).status_code, 401)
 
     def test_native_append_preflight_search_restart_and_scope(self):
         preview = self.rpc("latent_append", {"mode": "preflight", "text": "她在海边看蓝色风筝。", "current_state": "已结束"})
@@ -75,7 +75,7 @@ class FullNativeTests(unittest.TestCase):
 
     def test_notes_unresolved_thread_and_admin_views(self):
         self.write()
-        note = self.client.post("/lune/native/gpt/admin/notes", json={"text": "请核对风筝的颜色。"})
+        note = self.client.post("/emoi/native/gpt/admin/notes", json={"text": "请核对风筝的颜色。"})
         self.assertEqual(note.status_code, 200, note.text)
         pending = self.rpc("latent_session_start")
         self.assertIn("请核对风筝的颜色", json.dumps(pending, ensure_ascii=False))
@@ -86,7 +86,7 @@ class FullNativeTests(unittest.TestCase):
             "current_state": "本次聊天结束，周末计划尚未确定。", "unresolvedOps": [{"action": "none"}]}).get("isError"))
         for endpoint in ("days", "top", "facts/stats", "facts", "facts/random", "unresolved", "recalls", "thread", "milestones", "health", "notes"):
             from datetime import date
-            r = self.client.get("/lune/native/gpt/admin/" + endpoint, params={"day": date.today().isoformat()} if endpoint == "facts" else {})
+            r = self.client.get("/emoi/native/gpt/admin/" + endpoint, params={"day": date.today().isoformat()} if endpoint == "facts" else {})
             self.assertEqual(r.status_code, 200, (endpoint, r.text))
 
     def test_native_cleanup_preview_and_delete(self):
@@ -101,10 +101,10 @@ class FullNativeTests(unittest.TestCase):
         self.assertNotIn("她周末在海边看到了蓝色风筝。", json.dumps(self.rpc("latent_search", {"query": "蓝色风筝"}), ensure_ascii=False))
 
     def test_legacy_source_cannot_be_overwritten_by_native_tools(self):
-        m = self.client.post("/lune/memories", json={"scope": "gpt", "title": "既有记忆", "content": "她喜欢在雨天喝桂花乌龙茶。"}).json()["memory"]
+        m = self.client.post("/emoi/memories", json={"scope": "gpt", "title": "既有记忆", "content": "她喜欢在雨天喝桂花乌龙茶。"}).json()["memory"]
         self.assertIn("桂花乌龙", json.dumps(self.rpc("latent_search", {"query": "桂花乌龙茶"}), ensure_ascii=False))
         self.assertTrue(self.rpc("latent_correct", {"quote": m["content"], "reason": "test"})["isError"])
-        self.client.delete("/lune/memories/" + m["id"], params={"version": 1})
+        self.client.delete("/emoi/memories/" + m["id"], params={"version": 1})
         self.assertNotIn(m["content"], json.dumps(self.rpc("latent_search", {"query": "桂花乌龙茶"}), ensure_ascii=False))
 
     def test_original_fact_backfill_lifecycle_with_real_local_vectors(self):
@@ -125,7 +125,7 @@ class FullNativeTests(unittest.TestCase):
         self.assertFalse(submitted.get("isError"), submitted)
         finished = self.rpc("latent_fact_backfill", {"action": "finish"})
         self.assertFalse(finished.get("isError"), finished)
-        stats = self.client.get("/lune/native/gpt/admin/facts/stats")
+        stats = self.client.get("/emoi/native/gpt/admin/facts/stats")
         self.assertEqual(stats.status_code, 200, stats.text)
         self.assertIn("1", stats.text)
 
@@ -138,11 +138,11 @@ class FullNativeTests(unittest.TestCase):
         async def run():
             agent = loop.CURRENT_AGENT.set("gpt")
             try:
-                messages, _ = await loop.build_messages("今天好呀", [], session_id="lune-gpt", use_context=False)
+                messages, _ = await loop.build_messages("今天好呀", [], session_id="emoi-gpt", use_context=False)
                 self.assertIn(original, [m["content"] for m in messages])
                 self.assertTrue(any(t["function"]["name"] == "latent_search" for t in loop.all_tools()))
                 file.write_text(original + "本次确认的新一行。", encoding="utf-8")
-                messages, _ = await loop.build_messages("再聊一句", [], session_id="lune-gpt", use_context=False)
+                messages, _ = await loop.build_messages("再聊一句", [], session_id="emoi-gpt", use_context=False)
                 self.assertIn(original + "本次确认的新一行。", [m["content"] for m in messages])
             finally:
                 loop.CURRENT_AGENT.reset(agent)
@@ -164,17 +164,17 @@ class FullNativeTests(unittest.TestCase):
         self.assertNotIn("她搬到了临川南坡。", json.dumps(self.rpc("latent_search", {"query": "以前临川南坡"}), ensure_ascii=False))
 
     def test_model_cancel_and_write_switch_are_enforced(self):
-        msg = relay.save_message("in", "user", "这是当前回合。", {"api_session": "lune-gpt"})
+        msg = relay.save_message("in", "user", "这是当前回合。", {"api_session": "emoi-gpt"})
         with MemoryStore(relay.DB_PATH).db() as c:
-            c.execute("INSERT INTO lune_runs VALUES(?,?,?,?,?,?,?,?,?)", ("full-run", "gpt", "full-nonce", msg["id"], '["gpt"]', "cancelled", "", "2026-10-24", "2026-10-24"))
-        request = {"room": "lune-gpt", "agent_id": "gpt", "run_id": "full-run", "message": {
+            c.execute("INSERT INTO emoi_runs VALUES(?,?,?,?,?,?,?,?,?)", ("full-run", "gpt", "full-nonce", msg["id"], '["gpt"]', "cancelled", "", "2026-10-24", "2026-10-24"))
+        request = {"room": "emoi-gpt", "agent_id": "gpt", "run_id": "full-run", "message": {
             "jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "latent_append", "arguments": {"text": "取消后不得保存。", "current_state": "测试"}}}}
-        self.assertEqual(self.client.post("/lune/assistant/native", json=request).status_code, 409)
+        self.assertEqual(self.client.post("/emoi/assistant/native", json=request).status_code, 409)
         with MemoryStore(relay.DB_PATH).db() as c:
-            c.execute("UPDATE lune_runs SET state='running' WHERE id='full-run'")
+            c.execute("UPDATE emoi_runs SET state='running' WHERE id='full-run'")
         store = MemoryStore(relay.DB_PATH)
         store.configure({"version": store.config()["version"], "model_writes": False})
-        self.assertEqual(self.client.post("/lune/assistant/native", json=request).status_code, 403)
+        self.assertEqual(self.client.post("/emoi/assistant/native", json=request).status_code, 403)
 
 
 if __name__ == "__main__":

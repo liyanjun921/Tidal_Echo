@@ -1,4 +1,4 @@
-"""Luné living pages: owner CRUD and room-scoped assistant tools.
+"""Émoi living pages: owner CRUD and room-scoped assistant tools.
 
 Independent implementation informed by fang-claude's documented feature model.
 Uses Tidal Echo's existing authenticated relay and SQLite database.
@@ -24,13 +24,13 @@ def now():
 def init(path):
     with sqlite3.connect(path) as c:
         c.executescript("""
-        CREATE TABLE IF NOT EXISTS lune_workspace (
+        CREATE TABLE IF NOT EXISTS emoi_workspace (
           id TEXT PRIMARY KEY, kind TEXT NOT NULL, scope TEXT NOT NULL,
           title TEXT NOT NULL, content TEXT NOT NULL, data TEXT NOT NULL DEFAULT '{}',
           author TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
           version INTEGER NOT NULL DEFAULT 1, deleted INTEGER NOT NULL DEFAULT 0
         );
-        CREATE INDEX IF NOT EXISTS lune_workspace_scope ON lune_workspace(kind,scope,deleted);
+        CREATE INDEX IF NOT EXISTS emoi_workspace_scope ON emoi_workspace(kind,scope,deleted);
         """)
 
 
@@ -117,12 +117,12 @@ def view(row):
 
 
 def whisper_context(path, room, agent):
-    if agent not in {"gpt", "claude"} or room not in {"lune-" + agent, "lune-group"}:
+    if agent not in {"gpt", "claude"} or room not in {"emoi-" + agent, "emoi-group"}:
         return ""
-    allowed = ("shared", "group" if room == "lune-group" else agent)
+    allowed = ("shared", "group" if room == "emoi-group" else agent)
     try:
         with sqlite3.connect(path) as c:
-            rows = c.execute("SELECT title,content FROM lune_workspace WHERE kind='whisper' AND deleted=0 AND scope IN (?,?) ORDER BY updated_at DESC LIMIT 4", allowed).fetchall()
+            rows = c.execute("SELECT title,content FROM emoi_workspace WHERE kind='whisper' AND deleted=0 AND scope IN (?,?) ORDER BY updated_at DESC LIMIT 4", allowed).fetchall()
         return "\n".join(title + "：" + content[:350] for title, content in rows)[:1600]
     except sqlite3.OperationalError:
         return ""
@@ -148,13 +148,13 @@ def register(app, relay):
         ts = now()
         with db() as c:
             c.execute("BEGIN IMMEDIATE")
-            old = c.execute("SELECT * FROM lune_workspace WHERE id=? AND deleted=0", (mid,)).fetchone() if mid else None
+            old = c.execute("SELECT * FROM emoi_workspace WHERE id=? AND deleted=0", (mid,)).fetchone() if mid else None
             if mid and not old:
                 raise HTTPException(404, "条目不存在")
             if old and allowed is not None and old["scope"] not in allowed:
                 raise HTTPException(403, "本会话不能访问这个范围")
             if body["kind"] == "annotation":
-                book = c.execute("SELECT scope,content FROM lune_workspace WHERE id=? AND kind='book' AND deleted=0", (body["data"]["book_id"],)).fetchone()
+                book = c.execute("SELECT scope,content FROM emoi_workspace WHERE id=? AND kind='book' AND deleted=0", (body["data"]["book_id"],)).fetchone()
                 if not book or book["scope"] != body["scope"]:
                     raise HTTPException(422, "批注与书籍的范围必须一致")
                 if "start" in body["data"]:
@@ -177,14 +177,14 @@ def register(app, relay):
                 if body["kind"] != old["kind"]:
                     raise HTTPException(422, "不能改变条目类型")
                 if old["kind"] == "book" and body["scope"] != old["scope"]:
-                    c.execute("UPDATE lune_workspace SET scope=?,version=version+1,updated_at=? WHERE kind='annotation' AND json_extract(data,'$.book_id')=? AND deleted=0", (body["scope"], ts, mid))
-                c.execute("UPDATE lune_workspace SET scope=?,title=?,content=?,data=?,updated_at=?,version=version+1 WHERE id=?", (body["scope"], body["title"], body["content"], json.dumps(body["data"], ensure_ascii=False), ts, mid))
+                    c.execute("UPDATE emoi_workspace SET scope=?,version=version+1,updated_at=? WHERE kind='annotation' AND json_extract(data,'$.book_id')=? AND deleted=0", (body["scope"], ts, mid))
+                c.execute("UPDATE emoi_workspace SET scope=?,title=?,content=?,data=?,updated_at=?,version=version+1 WHERE id=?", (body["scope"], body["title"], body["content"], json.dumps(body["data"], ensure_ascii=False), ts, mid))
             else:
                 mid = uuid.uuid4().hex
-                c.execute("INSERT INTO lune_workspace VALUES(?,?,?,?,?,?,?,?,?,?,0)", (mid, body["kind"], body["scope"], body["title"], body["content"], json.dumps(body["data"], ensure_ascii=False), actor, ts, ts, 1))
-            return view(c.execute("SELECT * FROM lune_workspace WHERE id=?", (mid,)).fetchone())
+                c.execute("INSERT INTO emoi_workspace VALUES(?,?,?,?,?,?,?,?,?,?,0)", (mid, body["kind"], body["scope"], body["title"], body["content"], json.dumps(body["data"], ensure_ascii=False), actor, ts, ts, 1))
+            return view(c.execute("SELECT * FROM emoi_workspace WHERE id=?", (mid,)).fetchone())
 
-    @app.get("/lune/workspace")
+    @app.get("/emoi/workspace")
     async def listing(request: Request, kind: str = "", scope: str = ""):
         relay["check_auth"](request)
         if kind and kind not in KINDS or scope and scope not in SCOPES:
@@ -195,17 +195,17 @@ def register(app, relay):
         if scope:
             where.append("scope=?"); params.append(scope)
         with db() as c:
-            rows = c.execute("SELECT * FROM lune_workspace WHERE " + " AND ".join(where) + " ORDER BY updated_at DESC LIMIT 2000", params).fetchall()
+            rows = c.execute("SELECT * FROM emoi_workspace WHERE " + " AND ".join(where) + " ORDER BY updated_at DESC LIMIT 2000", params).fetchall()
         return {"items": [view(r) for r in rows]}
 
-    @app.post("/lune/workspace")
+    @app.post("/emoi/workspace")
     async def create(request: Request):
         relay["check_auth"](request)
         item = save(await request.json())
         await relay["broadcast"](relay["app_subs"], {"type": "workspace", "kind": item["kind"]})
         return {"item": item}
 
-    @app.patch("/lune/workspace/{mid}")
+    @app.patch("/emoi/workspace/{mid}")
     async def update(mid: str, request: Request):
         relay["check_auth"](request)
         body = await request.json()
@@ -215,40 +215,40 @@ def register(app, relay):
         await relay["broadcast"](relay["app_subs"], {"type": "workspace", "kind": item["kind"]})
         return {"item": item}
 
-    @app.delete("/lune/workspace/{mid}")
+    @app.delete("/emoi/workspace/{mid}")
     async def delete(mid: str, request: Request, version: int):
         relay["check_auth"](request)
         with db() as c:
-            old = c.execute("SELECT kind FROM lune_workspace WHERE id=? AND deleted=0", (mid,)).fetchone()
-            cur = c.execute("UPDATE lune_workspace SET deleted=1,version=version+1,updated_at=? WHERE id=? AND version=? AND deleted=0", (now(), mid, version))
+            old = c.execute("SELECT kind FROM emoi_workspace WHERE id=? AND deleted=0", (mid,)).fetchone()
+            cur = c.execute("UPDATE emoi_workspace SET deleted=1,version=version+1,updated_at=? WHERE id=? AND version=? AND deleted=0", (now(), mid, version))
             if not cur.rowcount:
                 raise HTTPException(409, "条目已经变化，请刷新后再删除")
             if old and old["kind"] == "book":
-                c.execute("UPDATE lune_workspace SET deleted=1,version=version+1,updated_at=? WHERE kind='annotation' AND json_extract(data,'$.book_id')=? AND deleted=0", (now(), mid))
+                c.execute("UPDATE emoi_workspace SET deleted=1,version=version+1,updated_at=? WHERE kind='annotation' AND json_extract(data,'$.book_id')=? AND deleted=0", (now(), mid))
         await relay["broadcast"](relay["app_subs"], {"type": "workspace"})
         return {"ok": True}
 
-    @app.post("/lune/assistant/workspace")
+    @app.post("/emoi/assistant/workspace")
     async def assistant(request: Request):
         relay["check_auth"](request)
         body = await request.json()
         if not isinstance(body, dict):
             raise HTTPException(422, "内容格式不正确")
         agent, room, rid = body.get("agent_id"), body.get("room"), body.get("run_id")
-        if agent not in {"gpt", "claude"} or room not in {"lune-" + agent, "lune-group"}:
+        if agent not in {"gpt", "claude"} or room not in {"emoi-" + agent, "emoi-group"}:
             raise HTTPException(403, "模型与会话不匹配")
         with db() as c:
-            run = c.execute("SELECT room,state FROM lune_runs WHERE id=?", (rid,)).fetchone()
-        if not run or "lune-" + run["room"] != room or run["state"] not in {"pending", "running"}:
+            run = c.execute("SELECT room,state FROM emoi_runs WHERE id=?", (rid,)).fetchone()
+        if not run or "emoi-" + run["room"] != room or run["state"] not in {"pending", "running"}:
             raise HTTPException(409, "会话任务已经停止")
-        allowed = ["shared", "group" if room == "lune-group" else agent]
+        allowed = ["shared", "group" if room == "emoi-group" else agent]
         action = body.get("action", "list")
         if action == "list":
             kind = body.get("kind", "todo")
             if kind not in KINDS:
                 raise HTTPException(422, "页面类型不正确")
             with db() as c:
-                rows = c.execute("SELECT * FROM lune_workspace WHERE deleted=0 AND kind=? AND scope IN (?,?) ORDER BY updated_at DESC LIMIT 10", (kind, *allowed)).fetchall()
+                rows = c.execute("SELECT * FROM emoi_workspace WHERE deleted=0 AND kind=? AND scope IN (?,?) ORDER BY updated_at DESC LIMIT 10", (kind, *allowed)).fetchall()
             items = [view(r) for r in rows]
             for item in items:
                 item["content_truncated"] = len(item["content"]) > 4000
@@ -264,13 +264,13 @@ def register(app, relay):
         await relay["broadcast"](relay["app_subs"], {"type": "workspace", "kind": item["kind"]})
         return {"item": item}
 
-    @app.get("/lune/rooms/{room}/search")
+    @app.get("/emoi/rooms/{room}/search")
     async def search(room: str, request: Request, q: str = ""):
         relay["check_auth"](request)
         if room not in {"gpt", "claude", "group"} or not q.strip() or len(q) > 200:
             raise HTTPException(422, "请选择会话并输入 200 字以内的关键词")
         with db() as c:
-            rows = c.execute("SELECT * FROM messages WHERE json_extract(meta,'$.api_session')=? AND instr(lower(text),lower(?))>0 ORDER BY id DESC LIMIT 50", ("lune-" + room, q.strip())).fetchall()
+            rows = c.execute("SELECT * FROM messages WHERE json_extract(meta,'$.api_session')=? AND instr(lower(text),lower(?))>0 ORDER BY id DESC LIMIT 50", ("emoi-" + room, q.strip())).fetchall()
         return {"messages": [relay["app_payload"](m) for m in relay["rows_to_messages"](rows)]}
 
     return {"init": lambda: init(path)}

@@ -1,15 +1,15 @@
 /* Émoi adapter for Tidal Echo. Model keys are sent to the server, never persisted here. */
 (()=>{'use strict';
 const $=s=>document.querySelector(s);
-const preview=window.LUNE_PREVIEW===true;
+const preview=window.EMOI_PREVIEW===true;
 const defaults={base:'/relay',remember:false};
-let config={...defaults};try{config={...defaults,...JSON.parse(localStorage.getItem('lune-connection')||'{}')}}catch{}
-let secret=sessionStorage.getItem('lune-secret')||(config.remember?localStorage.getItem('lune-secret'):'')||'';
+let config={...defaults};try{config={...defaults,...JSON.parse(localStorage.getItem('emoi-connection')||'{}')}}catch{}
+let secret=sessionStorage.getItem('emoi-secret')||(config.remember?localStorage.getItem('emoi-secret'):'')||'';
 if(preview)secret='';
 let planPoll=null,planState=null,planModels=[];
 let stream=null,poll=null,owner='',activeRoom='gpt',epoch=0,speechVersion=0,speechEpoch=0,speechController=null,speechUrl=null;
 const drafts=new Map(),blobUrls=new Map();
-const emit=(name,detail)=>window.dispatchEvent(new CustomEvent('lune-'+name,{detail}));
+const emit=(name,detail)=>window.dispatchEvent(new CustomEvent('emoi-'+name,{detail}));
 const toast=t=>emit('notice',t);
 const apiUrl=path=>config.base.replace(/\/$/,'')+path;
 async function request(path,opts={}){
@@ -21,14 +21,14 @@ async function request(path,opts={}){
  }finally{clearTimeout(timer);opts.signal?.removeEventListener('abort',abort)}
 }
 const json=(path,method,body)=>request(path,{method,body:JSON.stringify(body)});
-function db(){return new Promise((resolve,reject)=>{const r=indexedDB.open('lune-cloud-cache',1);r.onupgradeneeded=()=>r.result.createObjectStore('rooms');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
+function db(){return Promise.resolve(window.EmoiLegacyStorageReady).then(()=>new Promise((resolve,reject)=>{const r=indexedDB.open('emoi-cloud-cache',1);r.onupgradeneeded=()=>r.result.createObjectStore('rooms');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)}))}
 async function cache(room,rows,limit=100){try{const d=await db(),tx=d.transaction('rooms','readwrite');tx.objectStore('rooms').put(rows.slice(-limit),owner+':'+room);tx.oncomplete=()=>d.close()}catch{}}
 async function cached(room){try{const d=await db();return await new Promise(resolve=>{const r=d.transaction('rooms').objectStore('rooms').get(owner+':'+room);r.onsuccess=()=>{resolve(r.result||[]);d.close()};r.onerror=()=>{resolve([]);d.close()}})}catch{return []}}
 function message(m){return {id:String(m.id),role:m.from==='human'?'user':(m.meta?.agent_id||'gpt'),text:m.text||'',ts:m.ts,kind:m.kind,meta:m.meta||{},time:m.meta?.date_unknown?'导入记录 · 日期未知':new Date(m.ts).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})}}
 async function load(room,{before=0,quiet=false}={}){
  const current=epoch;
  if(!quiet&&!before){const rows=await cached(room);if(rows.length&&current===epoch)emit('room',{room,messages:rows,cached:true})}
- const result=await request(`/lune/rooms/${room}/messages?limit=40${before?'&before='+before:''}`);
+ const result=await request(`/emoi/rooms/${room}/messages?limit=40${before?'&before='+before:''}`);
  if(current!==epoch)return;
  const rows=result.messages.map(message);
  emit('room',{room,messages:rows,older:!!before,hasMore:result.has_more,runs:result.runs});
@@ -43,14 +43,14 @@ function realtime(){
  stream.onopen=()=>{if(current===epoch){emit('status','已连接 · 服务器保存');sync()}};
  stream.onerror=()=>emit('status','正在重连 · 已保存的消息会补取');
  stream.onmessage=e=>{if(current!==epoch)return;let m;try{m=JSON.parse(e.data)}catch{return}
-  if(m.type==='lune_run'){load(m.room,{quiet:true}).catch(()=>{});return}
+  if(m.type==='emoi_run'){load(m.room,{quiet:true}).catch(()=>{});return}
   if(m.type==='workspace'){emit('workspace',m);return}
   if(m.type==='reply_delta'){
-   const room=(m.api_session||'').replace('lune-','');if(!['gpt','claude','group'].includes(room))return;
+   const room=(m.api_session||'').replace('emoi-','');if(!['gpt','claude','group'].includes(room))return;
    const key=m.stream_id;const d=drafts.get(key)||{id:'stream-'+key,role:m.agent_id||room,text:'',kind:'stream',meta:{api_session:m.api_session},time:'正在回复…'};
    d.text+=m.text||'';drafts.set(key,d);emit('draft',{room,message:d});return;
   }
-  if(m.from){const room=(m.meta?.api_session||'').replace('lune-','');if(!['gpt','claude','group'].includes(room))return;
+  if(m.from){const room=(m.meta?.api_session||'').replace('emoi-','');if(!['gpt','claude','group'].includes(room))return;
    if(m.meta?.stream_id){drafts.delete(m.meta.stream_id);emit('draft-remove',{room,id:'stream-'+m.meta.stream_id})}
    emit('message',{room,message:message(m)});
   }
@@ -63,35 +63,35 @@ async function connect(){
  owner=Array.from(new Uint8Array(bytes)).map(n=>n.toString(16).padStart(2,'0')).join('');
  emit('connected',{});
  for(const room of ['gpt','claude','group']){const rows=await cached(room);if(rows.length)emit('room',{room,messages:rows,cached:true})}
- try{await request('/lune/rooms')}catch(e){emit('status','服务器暂不可用 · 已显示本机缓存');throw e}realtime();
+ try{await request('/emoi/rooms')}catch(e){emit('status','服务器暂不可用 · 已显示本机缓存');throw e}realtime();
  await Promise.all(['gpt','claude','group'].map(room=>load(room).catch(e=>toast(e.message))));
  await memories();
 }
-async function memories(){const result=await request('/lune/memories');emit('memories',result.memories.map(m=>({...m,date:m.updated_at.slice(0,10)})));return result.memories}
-function disconnect(){stopSpeech();epoch++;stream?.close();clearInterval(poll);secret='';sessionStorage.removeItem('lune-secret');localStorage.removeItem('lune-secret');drafts.clear();for(const u of blobUrls.values())URL.revokeObjectURL(u);blobUrls.clear();emit('disconnected',{});emit('status','已断开连接')}
-function pending(){try{return JSON.parse(localStorage.getItem('lune-outbox-'+owner)||'[]')}catch{return []}}
-function keepPending(m){const rows=pending().filter(x=>x.nonce!==m.nonce);rows.push({...m,status:'failed',time:'待核对发送状态'});localStorage.setItem('lune-outbox-'+owner,JSON.stringify(rows))}
-function clearPending(nonce){localStorage.setItem('lune-outbox-'+owner,JSON.stringify(pending().filter(x=>x.nonce!==nonce)))}
+async function memories(){const result=await request('/emoi/memories');emit('memories',result.memories.map(m=>({...m,date:m.updated_at.slice(0,10)})));return result.memories}
+function disconnect(){stopSpeech();epoch++;stream?.close();clearInterval(poll);secret='';sessionStorage.removeItem('emoi-secret');localStorage.removeItem('emoi-secret');drafts.clear();for(const u of blobUrls.values())URL.revokeObjectURL(u);blobUrls.clear();emit('disconnected',{});emit('status','已断开连接')}
+function pending(){try{return JSON.parse(localStorage.getItem('emoi-outbox-'+owner)||'[]')}catch{return []}}
+function keepPending(m){const rows=pending().filter(x=>x.nonce!==m.nonce);rows.push({...m,status:'failed',time:'待核对发送状态'});localStorage.setItem('emoi-outbox-'+owner,JSON.stringify(rows))}
+function clearPending(nonce){localStorage.setItem('emoi-outbox-'+owner,JSON.stringify(pending().filter(x=>x.nonce!==nonce)))}
 async function media(att){
  const path=String(att.url||'');if(!/^\/[\w/-]*uploads\/[^/]+$/.test(path)||/[?#]/.test(path))throw new Error('附件来源无效');
  if(blobUrls.has(path))return blobUrls.get(path);
  const file=await request('/uploads/'+encodeURIComponent(path.split('/').pop()),{blob:true});const u=URL.createObjectURL(file);blobUrls.set(path,u);return u;
 }
-function stopSpeech(){speechEpoch++;speechController?.abort();speechController=null;const audio=$('#speechAudio');audio.pause();audio.removeAttribute('src');audio.load();if(speechUrl)URL.revokeObjectURL(speechUrl);speechUrl=null;$('#speechPlayback').hidden=true;$('#speechAudio').hidden=true;window.LuneRelay.audio=null}
+function stopSpeech(){speechEpoch++;speechController?.abort();speechController=null;const audio=$('#speechAudio');audio.pause();audio.removeAttribute('src');audio.load();if(speechUrl)URL.revokeObjectURL(speechUrl);speechUrl=null;$('#speechPlayback').hidden=true;$('#speechAudio').hidden=true;window.EmoiRelay.audio=null}
 async function tts(text){
  if(preview)throw new Error('界面预览不能合成语音，请连接正式服务器');
- if(window.LuneRelay.audio||speechController){stopSpeech();return}
+ if(window.EmoiRelay.audio||speechController){stopSpeech();return}
  if(text.length>900)throw new Error('单次朗读最多 900 字符，请分段朗读');
  const ticket=++speechEpoch,audio=$('#speechAudio');speechController=new AbortController();$('#speechPlayback').hidden=false;$('#speechStatus').textContent='正在合成朗读…';audio.hidden=true;
  try{const blob=await request('/app/tts',{method:'POST',body:JSON.stringify({text}),blob:true,timeout:60000,signal:speechController.signal});if(ticket!==speechEpoch)return;speechController=null;
- speechUrl=URL.createObjectURL(blob);audio.src=speechUrl;audio.hidden=false;window.LuneRelay.audio=audio;$('#speechStatus').textContent='消息朗读';
+ speechUrl=URL.createObjectURL(blob);audio.src=speechUrl;audio.hidden=false;window.EmoiRelay.audio=audio;$('#speechStatus').textContent='消息朗读';
  audio.onended=()=>{if(ticket===speechEpoch)stopSpeech()};audio.onerror=()=>{if(ticket===speechEpoch){stopSpeech();toast('音频未能播放，请重新点击朗读')}};
  try{await audio.play()}catch{if(ticket===speechEpoch)$('#speechStatus').textContent='音频已就绪，请点播放'}
  }catch(e){if(ticket===speechEpoch){stopSpeech();throw e}}
 }
 function paintSpeech(config){speechVersion=config.version;const f=$('#speechForm');f.elements.provider.value=config.provider;for(const [name,p]of Object.entries(config.providers))for(const key of ['key','voice_id','model','base_url','group_id']){const input=f.elements[name+'_'+key];if(!input)continue;if(key==='key'){input.value='';input.placeholder=p.key_set?'已保存；留空保持':'API Key'}else input.value=p[key]||''}speechProvider();$('#speechConfigStatus').textContent=Object.entries(config.providers).map(([n,p])=>(n==='minimax'?'MiniMax':'ElevenLabs')+' · '+(p.ready?'已配置，尚需实际试听':'待填写密钥与音色')).join(' / ')}
 function speechProvider(){const name=$('#speechForm').elements.provider.value;document.querySelectorAll('[data-speech-provider]').forEach(e=>e.hidden=e.dataset.speechProvider!==name)}
-async function speechSettings(){if(!preview&&secret)paintSpeech(await request('/lune/speech'))}
+async function speechSettings(){if(!preview&&secret)paintSpeech(await request('/emoi/speech'))}
 async function notify(){
  if(preview)throw new Error('界面预览不申请通知权限；请在正式应用中订阅');
  if(!('Notification'in window)||!('serviceWorker'in navigator)||!('PushManager'in window))throw new Error('当前环境不支持通知，请在 iPhone 主屏幕应用中检查');
@@ -112,7 +112,7 @@ function openPlan(){if(!$('#planDialog').open)$('#planDialog').showModal();const
 function wirePlan(){for(const name of ['gpt','claude']){$('#agent-'+name).elements.connection_mode.onchange=()=>agentMode(name);agentMode(name)}document.querySelectorAll('[data-plan-open]').forEach(b=>b.onclick=openPlan);$('#refreshPlanModels').onclick=()=>loadPlanModels().catch(e=>toast(e.message));$('#planRefresh').onclick=()=>refreshPlanStatus().catch(e=>toast(e.message));$('#planAccount').onchange=async e=>{if(!e.target.value)return;try{await json('/app/loop/subscriptions/chatgpt/select','POST',{account_id:e.target.value});planModels=[];paintPlanModels('');await refreshPlanStatus();await loadPlanModels()}catch(err){toast(err.message)}};
  $('#planContinue').onclick=async()=>{if(preview||!secret||!['127.0.0.1','localhost'].includes(location.hostname)){toast('请在运行服务的电脑上通过本地地址登录，远程服务器请使用连接助手');return}try{const r=await json('/app/loop/subscriptions/chatgpt/start','POST',{account_id:$('#planAccount').value||null});const a=$('#planAuthorize');a.href=r.authorization_url;a.hidden=false;$('#planConnectionStatus').textContent='登录监听已准备，请点“前往 OpenAI 官方登录页”。完成后回来刷新状态。';clearInterval(planPoll);planPoll=setInterval(()=>{if(!$('#planDialog').open){clearInterval(planPoll);planPoll=null;return}refreshPlanStatus().catch(()=>{})},3000)}catch(e){toast(e.message)}};
  $('#planDialog').addEventListener('close',()=>{clearInterval(planPoll);planPoll=null;$('#planAuthorize').hidden=true;$('#planAuthorize').removeAttribute('href')});
- $('#planDownloadHelper').onclick=async()=>{try{const blob=await request('/lune/chatgpt-helper',{blob:true}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='Lune-ChatGPT-Login-Helper.zip';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}catch(e){toast(e.message)}};
+ $('#planDownloadHelper').onclick=async()=>{try{const blob=await request('/emoi/chatgpt-helper',{blob:true}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='Emoi-ChatGPT-Login-Helper.zip';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}catch(e){toast(e.message)}};
  $('#planImport').onchange=async e=>{const file=e.target.files[0];e.target.value='';if(!file||preview)return;if(!secret){toast('请先连接自己的服务器');return}if(file.size>100000){toast('订阅连接文件过大');return}if(!confirm('此文件含订阅授权，将导入当前连接的私人 Émoi 服务器。确认这是你自己的服务器？'))return;try{await request('/app/loop/subscriptions/chatgpt/import',{method:'POST',body:await file.text()});await refreshPlanStatus();await loadPlanModels();toast('订阅连接已导入，请选择模型并保存')}catch(err){toast(err.message)}};
  $('#planSignOut').onclick=async()=>{const account=$('#planAccount').value;if(!account||!confirm('退出此订阅连接？再次使用需要重新授权。'))return;try{const r=await json('/app/loop/subscriptions/chatgpt/signout','POST',{account_id:account});planModels=[];paintPlanModels('');await refreshPlanStatus();toast(r.message)}catch(e){toast(e.message)}};
 }
@@ -128,20 +128,20 @@ async function settings(){
  }emit('agents',agents);const cfg=await request('/app/loop/config');const f=$('#contextForm');for(const key of ['history_n','history_images','max_tool_steps','vision'])if(cfg[key]!==undefined)f.elements[key].value=cfg[key];await toolStatus()}catch(e){$('#settingsStatus').textContent=e.message}
 }
 async function toolStatus(){const r=await request('/app/loop/mcp');$('#toolStatus').textContent=r.available?'MCP 客户端已安装':'MCP 客户端未安装';const list=$('#mcpServerList');list.replaceChildren();for(const server of r.servers||[]){const row=document.createElement('div');row.className='mcp-item';const text=document.createElement('span');text.textContent=server.name;const status=document.createElement('small');status.textContent=server.status+' · '+(server.tools?.length||0)+' 个工具';text.append(status);row.append(text);for(const [label,action]of [['重连',()=>json('/app/loop/mcp/'+encodeURIComponent(server.name)+'/reconnect','POST',{})],['移除',()=>request('/app/loop/mcp/'+encodeURIComponent(server.name),{method:'DELETE'})]]){const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{try{await action();await toolStatus()}catch(e){toast(e.message)}};row.append(b)}list.append(row)}}
-async function workspace(){try{const result=await request('/lune/workspace');cache('workspace',result.items,2000);return result.items}catch(e){const rows=await cached('workspace');if(rows.length)return rows;throw e}}
+async function workspace(){try{const result=await request('/emoi/workspace');cache('workspace',result.items,2000);return result.items}catch(e){const rows=await cached('workspace');if(rows.length)return rows;throw e}}
 function wire(){
  wirePlan();
  $('#speechStop').onclick=stopSpeech;$('#speechForm').elements.provider.onchange=speechProvider;
- $('#speechForm').onsubmit=async e=>{e.preventDefault();if(!secret){toast('请先连接自己的服务器');return}const f=e.target,name=f.elements.provider.value,values={};for(const key of ['key','voice_id','model','base_url','group_id']){const input=f.elements[name+'_'+key];if(input)values[key]=input.value}try{const config=await json('/lune/speech','PATCH',{provider:name,version:speechVersion,providers:{[name]:values}});paintSpeech(config);toast('朗读设置已保存到服务器')}catch(err){toast(err.message)}};
- $('#speechTest').onclick=async()=>{if(preview){toast('此处仅预览朗读设置，不会提交语音请求');return}if(!secret){toast('请先连接自己的服务器');return}try{await tts('你好，这是 Émoi 的朗读测试。');if(window.LuneRelay.audio){$('#settingsStatus').textContent='试听音频已就绪；如未自动播放，请关闭设置后点播放器。'}}catch(err){toast(err.message)}};
+ $('#speechForm').onsubmit=async e=>{e.preventDefault();if(!secret){toast('请先连接自己的服务器');return}const f=e.target,name=f.elements.provider.value,values={};for(const key of ['key','voice_id','model','base_url','group_id']){const input=f.elements[name+'_'+key];if(input)values[key]=input.value}try{const config=await json('/emoi/speech','PATCH',{provider:name,version:speechVersion,providers:{[name]:values}});paintSpeech(config);toast('朗读设置已保存到服务器')}catch(err){toast(err.message)}};
+ $('#speechTest').onclick=async()=>{if(preview){toast('此处仅预览朗读设置，不会提交语音请求');return}if(!secret){toast('请先连接自己的服务器');return}try{await tts('你好，这是 Émoi 的朗读测试。');if(window.EmoiRelay.audio){$('#settingsStatus').textContent='试听音频已就绪；如未自动播放，请关闭设置后点播放器。'}}catch(err){toast(err.message)}};
 
  document.querySelectorAll('[data-settings]').forEach(b=>b.onclick=settings);
  $('#closeConnection').onclick=()=>$('#connectionDialog').close();
  $('#connectionForm').onsubmit=async e=>{e.preventDefault();const raw=$('#relayBase').value.trim().replace(/\/$/,'');
  if(!raw.startsWith('/')&&!/^https:\/\//.test(raw)&&!/^http:\/\/(127\.0\.0\.1|localhost)(:|\/)/.test(raw)){toast('请使用同站路径或 HTTPS 地址');return}
  config={base:raw||'/relay',remember:$('#rememberConnection').checked};secret=$('#relaySecret').value.trim()||secret;
- localStorage.setItem('lune-connection',JSON.stringify(config));sessionStorage.setItem('lune-secret',secret);
- if(config.remember)localStorage.setItem('lune-secret',secret);else localStorage.removeItem('lune-secret');epoch++;
+ localStorage.setItem('emoi-connection',JSON.stringify(config));sessionStorage.setItem('emoi-secret',secret);
+ if(config.remember)localStorage.setItem('emoi-secret',secret);else localStorage.removeItem('emoi-secret');epoch++;
  try{await connect();$('#relaySecret').value='';$('#settingsStatus').textContent='连接成功';await settings()}catch(e){$('#settingsStatus').textContent=e.message}
  };
  $('#disconnectButton').onclick=()=>{disconnect();$('#connectionDialog').close()};
@@ -153,20 +153,20 @@ function wire(){
  $('#mcpForm').onsubmit=async e=>{e.preventDefault();const f=e.target;try{const auth=f.elements.authorization.value.trim();await json('/app/loop/mcp','POST',{name:f.elements.serverName.value,transport:'http',url:f.elements.url.value,headers:auth?{Authorization:auth}:{},enabled:true});f.elements.authorization.value='';await toolStatus();toast('工具服务器已保存')}catch(e){toast(e.message)}};
  $('#notificationButton').onclick=()=>notify().catch(e=>toast(e.message));
  $('#pushTestButton').onclick=()=>json('/app/push_test','POST',{}).then(()=>toast('已发起通知测试，请检查实际送达')).catch(e=>toast(e.message));
- $('#exportButton').onclick=async()=>{try{const data=secret?await request('/lune/export'):{format:'lune-local-v04',data:window.LuneApp.snapshot()};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='Lune-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}catch(e){toast(e.message)}};
+ $('#exportButton').onclick=async()=>{try{const data=secret?await request('/emoi/export'):{format:'emoi-local-v04',data:window.EmoiApp.snapshot()};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='Emoi-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}catch(e){toast(e.message)}};
  $('#importFile').onchange=async e=>{const file=e.target.files[0];e.target.value='';if(!file)return;if(file.size>20*1024*1024){toast('请选择 20 MB 内的 JSON 备份');return}
  try{const body=JSON.parse(await file.text());if(!confirm('导入会追加聊天与记忆，不覆盖现有数据。示例记忆会跳过。继续？'))return;
- if(secret){const r=await json('/lune/import','POST',body);toast(r.duplicate?'这份备份已导入':`已导入 ${r.messages} 条消息、${r.memories} 条记忆`);await connect()}else await window.LuneApp.importData(body);
+ if(secret){const r=await json('/emoi/import','POST',body);toast(r.duplicate?'这份备份已导入':`已导入 ${r.messages} 条消息、${r.memories} 条记忆`);await connect()}else await window.EmoiApp.importData(body);
  }catch(e){toast('导入失败：'+e.message)}};
  window.addEventListener('online',()=>{if(secret)realtime();sync()});document.addEventListener('visibilitychange',()=>{if(document.hidden){stream?.close();stream=null}else{if(secret)realtime();sync()}});
  navigator.serviceWorker?.addEventListener('message',e=>{if(e.data?.type==='backfill')sync()});
  if(!preview&&'serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>toast('离线缓存暂不可用，在线聊天不受影响'));
 }
-window.LuneRelay={get enabled(){return !!secret},get base(){return config.base},request,json,load,memories,media,tts,settings,connect,wire,pending,keepPending,clearPending,workspace,
- cinemaUrl(path){if(!secret||!/^\/api\/media\/[a-f0-9]{24}\/(?:stream|subtitles\/[a-z0-9-]+)$/.test(path))throw Error('影院资源地址不正确');return apiUrl('/lune/cinema'+path)+'?token='+encodeURIComponent(secret)},
+window.EmoiRelay={get enabled(){return !!secret},get base(){return config.base},request,json,load,memories,media,tts,settings,connect,wire,pending,keepPending,clearPending,workspace,
+ cinemaUrl(path){if(!secret||!/^\/api\/media\/[a-f0-9]{24}\/(?:stream|subtitles\/[a-z0-9-]+)$/.test(path))throw Error('影院资源地址不正确');return apiUrl('/emoi/cinema'+path)+'?token='+encodeURIComponent(secret)},
  select(room){activeRoom=room;if(secret)load(room).catch(e=>toast(e.message))},
- send(room,text,attachments,nonce){return json(`/lune/rooms/${room}/send`,'POST',{text,attachments,nonce})},
+ send(room,text,attachments,nonce){return json(`/emoi/rooms/${room}/send`,'POST',{text,attachments,nonce})},
  async upload(file){return request('/app/upload?name='+encodeURIComponent(file.name),{method:'POST',body:file,headers:{'Content-Type':file.type||'application/octet-stream'}})},
- stop(id){return json('/lune/runs/'+encodeURIComponent(id)+'/stop','POST',{})}
+ stop(id){return json('/emoi/runs/'+encodeURIComponent(id)+'/stop','POST',{})}
 };
 })();

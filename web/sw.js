@@ -2,9 +2,9 @@
    IMPORTANT: bump CACHE on every front-end change, or installed clients keep the
    old shell (the precached index.html won't refresh until the SW reinstalls). */
 const AI_NAME = "Émoi";
-const CACHE = "emoi-v2-brand-complete";
+const CACHE = "emoi-v5-archive-glass-final";
 const PRECACHE = [
-  "./index.html", "./styles.css", "./polish.css", "./connection.css", "./app.js", "./reading.js", "./reading.css", "./checklist.js", "./checklist.css", "./cinema.js", "./cinema.css", "./relay-client.js", "./rich-text.js", "./memory.js", "./native-memory.js", "./ombre-memory.js", "./continuity.js", "./wren-room.js", "./wren-room.css", "./xinchao-room.js", "./xinchao-room.css", "./living-context.js", "./living-context.css",
+  "./index.html", "./legacy-storage.js", "./styles.css", "./polish.css", "./emoi-archive-glass.css", "./emoi-wallpapers.js", "./assets/emoi-archive-botanical.svg", "./assets/emoi-archive-nocturne.svg", "./connection.css", "./app.js", "./reading.js", "./reading.css", "./checklist.js", "./checklist.css", "./cinema.js", "./cinema.css", "./relay-client.js", "./rich-text.js", "./memory.js", "./native-memory.js", "./ombre-memory.js", "./continuity.js", "./wren-room.js", "./wren-room.css", "./xinchao-room.js", "./xinchao-room.css", "./living-context.js", "./living-context.css",
   "./assets/water-light.webp", "./assets/lily-water.webp",
   "./assets/water-light-thumb.webp", "./assets/lily-water-thumb.webp",
 ];

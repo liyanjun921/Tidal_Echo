@@ -77,7 +77,7 @@ def endpoint():
     secret = os.environ.get("EMOI_RELAY_SECRET") or os.environ.get("RELAY_SECRET")
     if not secret:
         raise ValueError("set EMOI_RELAY_SECRET or RELAY_SECRET privately")
-    return base + "/relay/lune/wren/" + scope + "/events", secret
+    return base + "/relay/emoi/wren/" + scope + "/events", secret
 
 
 class NoRedirect(HTTPRedirectHandler):

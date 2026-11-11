@@ -21,18 +21,18 @@ def text(value):return json.dumps(value,ensure_ascii=False)
 
 with httpx.Client(base_url='http://127.0.0.1:8089/relay',headers={'Authorization':'Bearer fixture-owner-secret'},trust_env=False,timeout=120) as c:
     def get(tail):
-        res=c.get('/lune/xinchao/gpt/'+tail);res.raise_for_status();return res.json()
+        res=c.get('/emoi/xinchao/gpt/'+tail);res.raise_for_status();return res.json()
     def post(tail,value):
-        res=c.post('/lune/xinchao/gpt/'+tail,json=value);res.raise_for_status();return res.json()
+        res=c.post('/emoi/xinchao/gpt/'+tail,json=value);res.raise_for_status();return res.json()
     status=get('status');assert status['running'] and len(status['tools'])==10,status
     for scope in xc.SCOPES:
-        other=c.get('/lune/xinchao/'+scope+'/status').json();assert other['running'],other
+        other=c.get('/emoi/xinchao/'+scope+'/status').json();assert other['running'],other
     initial=get('view/snapshot');assert len(initial['drives'])==11
-    assert c.get('/lune/xinchao/gpt/view/box').status_code==404
-    assert c.get('/lune/xinchao/gpt/status',headers={'Authorization':'Bearer wrong'}).status_code==401
-    sent=c.post('/lune/rooms/gpt/send',json={'text':'XC_BOX_TRIGGER 请把自己的测试纸条留在自己的匣子。','nonce':uuid.uuid4().hex}).json()
+    assert c.get('/emoi/xinchao/gpt/view/box').status_code==404
+    assert c.get('/emoi/xinchao/gpt/status',headers={'Authorization':'Bearer wrong'}).status_code==401
+    sent=c.post('/emoi/rooms/gpt/send',json={'text':'XC_BOX_TRIGGER 请把自己的测试纸条留在自己的匣子。','nonce':uuid.uuid4().hex}).json()
     for _ in range(600):
-        room=c.get('/lune/rooms/gpt/messages').json()
+        room=c.get('/emoi/rooms/gpt/messages').json()
         run=next(r for r in room['runs'] if r['id']==sent['run']['id'])
         if run['state'] not in {'running','pending'}:
             assert run['state']=='completed',run;break
@@ -62,16 +62,16 @@ with httpx.Client(base_url='http://127.0.0.1:8089/relay',headers={'Authorization
     letter=post('cabin/note',{'event_id':uuid.uuid4().hex,'from':'ai','content':'XC_LOCKED_USER_LETTER','locked':True})
     assert letter['note']['from']=='user'
     assert 'XC_LOCKED_USER_LETTER' not in text(native('xinchao_cabin_inbox'))
-    res=c.patch('/lune/xinchao/gpt/cabin/note',json={'id':letter['note']['id'],'locked':False});res.raise_for_status()
+    res=c.patch('/emoi/xinchao/gpt/cabin/note',json={'id':letter['note']['id'],'locked':False});res.raise_for_status()
     assert 'XC_LOCKED_USER_LETTER' in text(native('xinchao_cabin_inbox'))
     native('xinchao_cabin_note',{'event_id':uuid.uuid4().hex,'content':'XC_AI_REPLY_LETTER'})
     assert 'XC_AI_REPLY_LETTER' in text(get('view/cabin'))
     for scope in ['claude','group_gpt','group_claude']:
-        assert c.get('/lune/xinchao/'+scope+'/view/cabin').json()['notes']==[]
+        assert c.get('/emoi/xinchao/'+scope+'/view/cabin').json()['notes']==[]
     entry=post('cabin/ledger',{'event_id':uuid.uuid4().hex,'type':'expense','item':'XC_LEDGER','amount':12.34})['entry']
-    res=c.patch('/lune/xinchao/gpt/cabin/ledger',json={'id':entry['id'],'amount':15.5});res.raise_for_status()
+    res=c.patch('/emoi/xinchao/gpt/cabin/ledger',json={'id':entry['id'],'amount':15.5});res.raise_for_status()
     assert get('view/cabin')['totals']['expense']==15.5
-    res=c.request('DELETE','/lune/xinchao/gpt/cabin/ledger',json={'id':entry['id']});res.raise_for_status()
+    res=c.request('DELETE','/emoi/xinchao/gpt/cabin/ledger',json={'id':entry['id']});res.raise_for_status()
     assert get('view/cabin')['totals']['expense']==0
     memory=get('view/memory-map');assert memory['available'] and memory['stats']['source']=='existing-ombre',memory
     assert memory['stars'],memory
@@ -81,34 +81,34 @@ with httpx.Client(base_url='http://127.0.0.1:8089/relay',headers={'Authorization
         hidden=get('view/memory-bucket?id='+locked['id']);assert not hidden['available'] and hidden['preview']=='',hidden
     event_id=uuid.uuid4().hex
     nativebody={'id':event_id,'text':'这是已经发出的合成表达'}
-    first=asyncio.run(xc.request('gpt','/lune-host/reflux','POST',nativebody));second=asyncio.run(xc.request('gpt','/lune-host/reflux','POST',nativebody))
+    first=asyncio.run(xc.request('gpt','/emoi-host/reflux','POST',nativebody));second=asyncio.run(xc.request('gpt','/emoi-host/reflux','POST',nativebody))
     assert first['applied'] and not second['applied'] and first['revision']==second['revision'],(first,second)
     # One native delivery becomes exactly one existing Wren timer and one saved reply.
-    wren=c.get('/lune/wren/gpt').json()
+    wren=c.get('/emoi/wren/gpt').json()
     for pending in wren['timers']:
         if pending['state']=='pending' and pending['nonce'].startswith('xinchao:'):
-            cancelled=c.patch('/lune/wren/gpt/timers/'+pending['id'],json={'version':pending['version']});cancelled.raise_for_status()
-    res=c.patch('/lune/wren/gpt',json={'version':wren['settings']['version'],'daily_limit':10});res.raise_for_status()
+            cancelled=c.patch('/emoi/wren/gpt/timers/'+pending['id'],json={'version':pending['version']});cancelled.raise_for_status()
+    res=c.patch('/emoi/wren/gpt',json={'version':wren['settings']['version'],'daily_limit':10});res.raise_for_status()
     with sqlite3.connect(os.environ['RELAY_DB']) as db:
-        db.execute("UPDATE messages SET ts='2026-01-01T10:00:00+00:00' WHERE json_extract(meta,'$.api_session')='lune-gpt'")
+        db.execute("UPDATE messages SET ts='2026-01-01T10:00:00+00:00' WHERE json_extract(meta,'$.api_session')='emoi-gpt'")
     bridge_body={'event_id':uuid.uuid4().hex,'message':'XC_BRIDGE_REAL_NOTE','reason':'user_note'}
     delivery=post('bridge',bridge_body)
     assert post('bridge',bridge_body)['deliveryId']==delivery['deliveryId']
     for _ in range(1800):
         with sqlite3.connect(os.environ['RELAY_DB']) as db:
-            timer=db.execute('SELECT id,state FROM lune_wren_timers WHERE nonce=?',('xinchao:'+delivery['deliveryId'],)).fetchone()
+            timer=db.execute('SELECT id,state FROM emoi_wren_timers WHERE nonce=?',('xinchao:'+delivery['deliveryId'],)).fetchone()
             if timer and timer[1]=='done':
-                event=db.execute('SELECT state,message_id FROM lune_wren_events WHERE id=?',('timer:'+timer[0]+':1',)).fetchone()
+                event=db.execute('SELECT state,message_id FROM emoi_wren_events WHERE id=?',('timer:'+timer[0]+':1',)).fetchone()
                 break
         time.sleep(.1)
-    else:raise AssertionError(('native SSE bridge did not deliver through Wren',get('status'),c.get('/lune/wren/gpt').json()['events'][:6]))
+    else:raise AssertionError(('native SSE bridge did not deliver through Wren',get('status'),c.get('/emoi/wren/gpt').json()['events'][:6]))
     with sqlite3.connect(os.environ['RELAY_DB']) as db:
-        assert db.execute('SELECT count(*) FROM lune_wren_timers WHERE nonce=?',('xinchao:'+delivery['deliveryId'],)).fetchone()[0]==1
+        assert db.execute('SELECT count(*) FROM emoi_wren_timers WHERE nonce=?',('xinchao:'+delivery['deliveryId'],)).fetchone()[0]==1
         assert db.execute("SELECT count(*) FROM messages WHERE json_extract(meta,'$.wren_event') LIKE ?",('%'+timer[0]+'%',)).fetchone()[0]==1
     native_bridge=json.loads((xc.root()/'gpt/bridge.json').read_text())
     assert next(r for r in native_bridge['deliveries'] if r['id']==delivery['deliveryId'])['status']=='delivered'
     cfg=get('status')['settings']
-    res=c.patch('/lune/xinchao/gpt/settings',json={'version':cfg['version'],'private_dreams':True,'model_enabled':True,'model_daily_limit':1});res.raise_for_status()
+    res=c.patch('/emoi/xinchao/gpt/settings',json={'version':cfg['version'],'private_dreams':True,'model_enabled':True,'model_daily_limit':1});res.raise_for_status()
     for _ in range(100):
         try:
             value=get('view/snapshot')
@@ -122,7 +122,7 @@ with httpx.Client(base_url='http://127.0.0.1:8089/relay',headers={'Authorization
         key={'Authorization':'Bearer '+xc.credential('gpt','provider')}
         assert loop.post(endpoint,json={'messages':[{'role':'user','content':'测试心潮工具外的模型任务'}]},headers=key).status_code==200
         assert loop.post(endpoint,json={'messages':[{'role':'user','content':'第二次应被预算拦下'}]},headers=key).status_code==429
-    cfg=get('status')['settings'];res=c.patch('/lune/xinchao/gpt/settings',json={'version':cfg['version'],'private_dreams':False,'model_enabled':False});res.raise_for_status()
+    cfg=get('status')['settings'];res=c.patch('/emoi/xinchao/gpt/settings',json={'version':cfg['version'],'private_dreams':False,'model_enabled':False});res.raise_for_status()
     for _ in range(100):
         try:
             value=get('view/snapshot')
@@ -131,7 +131,7 @@ with httpx.Client(base_url='http://127.0.0.1:8089/relay',headers={'Authorization
         time.sleep(.2)
     assert 'XC_SECRET_ACTUAL_TOOL_RESULT' not in text(get('status'))
     assert called==xc.TOOLS,(called,xc.TOOLS)
-    target=os.environ.get('LUNE_XINCHAO_PREVIEW_DIR')
+    target=os.environ.get('EMOI_XINCHAO_PREVIEW_DIR')
     if target:
         fixture={'status':get('status')}
         for page in ['snapshot','timeline','cabin','memory-map','personality']:
