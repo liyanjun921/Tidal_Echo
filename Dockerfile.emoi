@@ -13,6 +13,6 @@ COPY web web
 COPY LICENSE NOTICE README.md ./
 COPY docs docs
 COPY scripts scripts
-ENV PORT=8080 RELAY_DB=/data/relay.db RELAY_UPLOAD_DIR=/data/uploads LOOP_CONFIG=/data/api_loop.config.json LOOP_CACHE_DIR=/data/loop_cache RELAY_BRAIN_FILE=/data/brain_target RELAY_APP_PATH=/
+ENV PORT=8080 RELAY_DB=/data/emoi.db RELAY_UPLOAD_DIR=/data/uploads LOOP_CONFIG=/data/api_loop.config.json LOOP_CACHE_DIR=/data/loop_cache RELAY_BRAIN_FILE=/data/brain_target RELAY_APP_PATH=/
 EXPOSE 8080
 CMD ["python", "scripts/run_emoi.py"]
