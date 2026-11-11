@@ -8,7 +8,7 @@ const reduced=matchMedia('(prefers-reduced-motion: reduce)');
 const forced=matchMedia('(forced-colors: active)');
 const instances=new Map();let bg=null,bgImage=null,bgUrl='',sourceTurn=0,enabled=false,raf=0;
 const VS='#version 300 es\nin vec2 position;\nout vec2 uv;\nvoid main(){uv=(position+1.0)*0.5;gl_Position=vec4(position,0.0,1.0);}';
-const FS='#version 300 es\nprecision highp float;\nin vec2 uv;\nout vec4 outColor;\nuniform sampler2D source;\nuniform vec2 res;\nuniform float radius;\nuniform float phase;\nfloat rounded(vec2 p,vec2 size,float r){vec2 q=abs(p)-size+r;return length(max(q,0.0))+min(max(q.x,q.y),0.0)-r;}\nvoid main(){vec2 p=uv*res;float d=rounded(p-res*0.5,res*0.5,min(radius,min(res.x,res.y)*0.5));if(d>1.0)discard;float edge=1.0-smoothstep(-min(res.x,res.y)*0.43,0.0,d);vec2 q=(p-res*0.5)/res;float w=sin(uv.y*8.0+phase*0.48)*cos(uv.x*6.0-phase*0.29);vec2 refraction=q*0.008*(0.18+edge*0.82)+vec2(w,-w)*0.0006*edge;vec3 back=texture(source,clamp(uv+refraction,vec2(0.0),vec2(1.0))).rgb;float line=exp(-pow((d+0.85)/1.6,2.0));float topLeft=pow(max(0.0,(1.0-uv.x)*(1.0-uv.y)),1.8);float bottomRight=pow(max(0.0,uv.x*uv.y),1.6);float glint=line*(topLeft*0.74+bottomRight*0.32);vec3 color=mix(back,vec3(0.97,0.99,1.0),0.15);color=mix(color,vec3(1.0),clamp(glint*0.61,0.0,0.64));float a=(1.0-smoothstep(-0.25,0.95,d))*(0.57+glint*0.15);outColor=vec4(color,a);}';
+const FS='#version 300 es\nprecision highp float;\nin vec2 uv;\nout vec4 outColor;\nuniform sampler2D source;\nuniform vec2 res;\nuniform float radius;\nuniform float phase;\nfloat rounded(vec2 p,vec2 size,float r){vec2 q=abs(p)-size+r;return length(max(q,0.0))+min(max(q.x,q.y),0.0)-r;}\nvoid main(){vec2 p=uv*res;float d=rounded(p-res*0.5,res*0.5,min(radius,min(res.x,res.y)*0.5));float mask=1.0-smoothstep(-0.9,0.9,d);float edge=1.0-smoothstep(-min(res.x,res.y)*0.43,0.0,d);vec2 q=(p-res*0.5)/res;float w=sin(uv.y*8.0+phase*0.48)*cos(uv.x*6.0-phase*0.29);vec2 refraction=q*0.008*(0.18+edge*0.82)+vec2(w,-w)*0.0006*edge;vec3 back=texture(source,clamp(uv+refraction,vec2(0.0),vec2(1.0))).rgb;float line=exp(-pow((d+0.85)/1.6,2.0));float topLeft=pow(max(0.0,(1.0-uv.x)*(1.0-uv.y)),1.8);float bottomRight=pow(max(0.0,uv.x*uv.y),1.6);float glint=line*(topLeft*0.74+bottomRight*0.32);vec3 color=mix(back,vec3(0.97,0.99,1.0),0.065);color=mix(color,vec3(1.0),clamp(glint*0.61,0.0,0.64));float a=mask*(0.42+glint*0.15);outColor=vec4(color,a);}';
 function shader(gl,type,src){
  const sh=gl.createShader(type);gl.shaderSource(sh,src);gl.compileShader(sh);
  if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS)){gl.deleteShader(sh);return null}return sh;
@@ -53,7 +53,7 @@ function loadBackground(){
 function attach(target){
  if(instances.has(target))return;
  const canvas=document.createElement('canvas');canvas.className='ep-optical-canvas';canvas.setAttribute('aria-hidden','true');
- const gl=canvas.getContext('webgl2',{alpha:true,antialias:false,depth:false,stencil:false,powerPreference:'low-power'});
+ const gl=canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:false,antialias:false,depth:false,stencil:false,powerPreference:'low-power'});
  if(!gl)return;
  const program=setup(gl);if(!program)return;
  const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
@@ -97,7 +97,7 @@ function draw(item,now){
  const radius=parseFloat(getComputedStyle(item.target).borderTopLeftRadius)||22;
  gl.uniform1i(uniforms.source,0);gl.uniform2f(uniforms.res,cw,ch);
  gl.uniform1f(uniforms.radius,Math.min(radius,70)*scale);gl.uniform1f(uniforms.phase,now/1000);
- gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.drawArrays(gl.TRIANGLES,0,6);
+ gl.disable(gl.BLEND);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);gl.drawArrays(gl.TRIANGLES,0,6);
  item.target.setAttribute('data-ep-optics-ready','1');
 }
 function schedule(){
