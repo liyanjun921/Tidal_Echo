@@ -303,3 +303,11 @@ body[data-ui-mode=phone] #workspaceDialog .page-foot{font-size:9px}
 @media(forced-colors:active){
  .ep-app-icon,.ep-dock,.ep-hero-widget,.ep-list-panel{border:1px solid CanvasText}
 }
+
+/* Actual iOS/Android already have a native status bar. Keep the safe area
+   but never draw fabricated signal or battery indicators over the real one. */
+.ep-native-device body[data-ui-mode=phone] .ep-statusbar{height:max(12px,env(safe-area-inset-top,0px));padding:0}
+.ep-native-device body[data-ui-mode=phone] .ep-statusbar>*{visibility:hidden}
+@media(max-width:600px){
+ .ep-native-device body[data-ui-mode=phone] .emoi-phone-host .ep-home-top{padding-top:18px}
+}
