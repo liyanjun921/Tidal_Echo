@@ -2,17 +2,17 @@ name: Émoi unified wake tests
 
 on:
   push:
-    branches: [codex/lune-v04-integration]
+    branches: [codex/emoi-v04-integration]
   pull_request:
     paths:
-      - "backend/lune_wake.py"
+      - "backend/emoi_wake.py"
       - "scripts/emoi_ingest_event.py"
       - "tests/test_emoi_event_adapter.py"
-      - "backend/lune_wren.py"
-      - "backend/lune_desire.py"
+      - "backend/emoi_wren.py"
+      - "backend/emoi_desire.py"
       - "tests/test_wake_orchestrator.py"
       - "tests/test_wren.py"
-      - ".github/workflows/lune-wake-tests.yml"
+      - ".github/workflows/emoi-wake-tests.yml"
   workflow_dispatch:
 
 permissions:

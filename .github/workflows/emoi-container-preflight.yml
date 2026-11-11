@@ -1,8 +1,8 @@
-name: Luné container preflight
+name: Émoi container preflight
 
 on:
   push:
-    branches: [codex/lune-v04-integration]
+    branches: [codex/emoi-v04-integration]
   workflow_dispatch:
 
 permissions:
@@ -15,23 +15,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build the release image
-        run: docker build -f Dockerfile.lune -t lune:preflight .
+        run: docker build -f Dockerfile.emoi -t emoi:preflight .
       - name: Check initial routing and saved override
         run: |
           docker run --rm \
             -e RELAY_SECRET=ci-preflight-only \
             -v "$PWD/tests:/app/tests:ro" \
-            lune:preflight \
-            python -m unittest discover -s tests -p test_lune.py -k BrainRouteTests
+            emoi:preflight \
+            python -m unittest discover -s tests -p test_emoi.py -k BrainRouteTests
       - name: Start a fresh persistent volume
         run: |
-          docker volume create lune-preflight
-          docker run -d --name lune-preflight \
+          docker volume create emoi-preflight
+          docker run -d --name emoi-preflight \
             -p 127.0.0.1:18080:8080 \
-            -v lune-preflight:/data \
+            -v emoi-preflight:/data \
             -e RELAY_SECRET=ci-preflight-only \
             -e RELAY_DEFAULT_BRAIN=loop \
-            lune:preflight
+            emoi:preflight
       - name: Verify readiness, routing, and authentication
         run: |
           for attempt in $(seq 1 90); do
@@ -56,30 +56,30 @@ jobs:
                   headers={"Authorization": token, "Content-Type": "application/json"})
               with urllib.request.urlopen(request, timeout=5) as response:
                   return json.load(response)
-          before = call("/lune/wren/gpt")
-          other = call("/lune/wren/claude")
+          before = call("/emoi/wren/gpt")
+          other = call("/emoi/wren/claude")
           assert before["settings"]["enabled"] is False
           assert other["settings"]["enabled"] is False
-          call("/lune/wren/gpt/preset/high-affection", "POST",
+          call("/emoi/wren/gpt/preset/high-affection", "POST",
                {"version": before["settings"]["version"]})
-          after = call("/lune/wren/gpt")
+          after = call("/emoi/wren/gpt")
           assert after["settings"]["enabled"] is True
           assert (after["settings"]["idle_min"], after["settings"]["idle_max"]) == (1800, 1800)
           assert after["settings"]["daily_limit"] == 40
           assert (after["settings"]["quiet_start"], after["settings"]["quiet_end"]) == (1, 9)
           assert after["settings"]["desire"]["enabled"] is True
-          assert call("/lune/wren/claude")["settings"]["enabled"] is False
+          assert call("/emoi/wren/claude")["settings"]["enabled"] is False
           event = {
               "source": "system", "event_id": "container-preflight-event",
               "type": "system.preflight", "summary": "容器内持久唤醒队列验收。",
               "resource_ref": "preflight:1", "priority": 80,
               "not_before": time.time() + 3600, "ttl_seconds": 86400
           }
-          first = call("/lune/wren/gpt/events", "POST", event)
-          duplicate = call("/lune/wren/gpt/events", "POST", event)
+          first = call("/emoi/wren/gpt/events", "POST", event)
+          duplicate = call("/emoi/wren/gpt/events", "POST", event)
           assert first["ok"] and not first["duplicate"]
           assert duplicate["ok"] and duplicate["duplicate"]
-          snapshot = call("/lune/wren/gpt")
+          snapshot = call("/emoi/wren/gpt")
           stored = next(x for x in snapshot["wake_events"] if x["id"] == first["id"])
           assert stored["state"] == "pending"
           assert stored["summary"] == event["summary"]
@@ -88,6 +88,6 @@ jobs:
       - name: Inspect failures and remove test data
         if: always()
         run: |
-          if [ "${{ job.status }}" != success ]; then docker logs --tail 100 lune-preflight 2>/dev/null || true; fi
-          docker rm -f lune-preflight 2>/dev/null || true
-          docker volume rm lune-preflight 2>/dev/null || true
+          if [ "${{ job.status }}" != success ]; then docker logs --tail 100 emoi-preflight 2>/dev/null || true; fi
+          docker rm -f emoi-preflight 2>/dev/null || true
+          docker volume rm emoi-preflight 2>/dev/null || true

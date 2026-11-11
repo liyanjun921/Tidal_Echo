@@ -1,15 +1,15 @@
-name: Lune Windows launcher validation
+name: Emoi Windows launcher validation
 
 on:
   push:
-    branches: [main, codex/lune-windows-validation]
+    branches: [main, codex/emoi-windows-validation]
   pull_request:
     paths:
-      - "Lune-*.cmd"
+      - "Emoi-*.cmd"
       - "scripts/windows/**"
       - "tests/test_windows_launcher.ps1"
       - ".gitattributes"
-      - ".github/workflows/lune-windows-launcher.yml"
+      - ".github/workflows/emoi-windows-launcher.yml"
   workflow_dispatch:
 
 permissions:
@@ -24,7 +24,7 @@ jobs:
       - name: Validate Windows launcher encodings and line endings
         shell: powershell
         run: |
-          $cmdFiles = @('Lune-Start.cmd','Lune-Phone.cmd','Lune-Stop.cmd','Lune-Access.cmd')
+          $cmdFiles = @('Emoi-Start.cmd','Emoi-Phone.cmd','Emoi-Stop.cmd','Emoi-Access.cmd')
           foreach ($name in $cmdFiles) {
             $bytes = [IO.File]::ReadAllBytes((Join-Path $PWD $name))
             if ($bytes.Length -eq 0 -or ($bytes | Where-Object { $_ -gt 127 }).Count -gt 0) {
@@ -36,10 +36,10 @@ jobs:
               }
             }
           }
-          $psPath = Join-Path $PWD 'scripts/windows/lune.ps1'
+          $psPath = Join-Path $PWD 'scripts/windows/emoi.ps1'
           $psBytes = [IO.File]::ReadAllBytes($psPath)
           if ($psBytes.Length -eq 0 -or ($psBytes | Where-Object { $_ -gt 127 }).Count -gt 0) {
-            throw 'lune.ps1 must remain ASCII-only for Windows PowerShell 5.1.'
+            throw 'emoi.ps1 must remain ASCII-only for Windows PowerShell 5.1.'
           }
           Write-Host 'PASS: CMD ASCII/CRLF and PowerShell ASCII encoding.'
       - name: Run launcher contract tests in Windows PowerShell 5.1
