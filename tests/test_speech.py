@@ -5,7 +5,7 @@ import unittest
 import urllib.error
 from unittest.mock import patch
 
-from tests import test_lune as fixtures
+from tests import test_emoi as fixtures
 relay = fixtures.relay
 
 
@@ -14,23 +14,23 @@ class SpeechTests(unittest.TestCase):
     tearDown = fixtures.OwnerDataTests.tearDown
 
     def configure(self, provider="elevenlabs", **values):
-        config = self.client.get("/lune/speech").json()
-        r = self.client.patch("/lune/speech", json={"provider": provider, "version": config["version"], "providers": {provider: {"key": "synthetic-speech-key", "voice_id": "fixture_voice", **values}}})
+        config = self.client.get("/emoi/speech").json()
+        r = self.client.patch("/emoi/speech", json={"provider": provider, "version": config["version"], "providers": {provider: {"key": "synthetic-speech-key", "voice_id": "fixture_voice", **values}}})
         self.assertEqual(r.status_code, 200, r.text)
         return r.json()
 
     def test_auth_masks_keys_retains_blank_and_conflicts(self):
-        for route in ("/lune/speech", "/app/tts"):
-            r = self.client.get(route, headers={"Authorization": "Bearer wrong"}) if route == "/lune/speech" else self.client.post(route, json={"text": "x"}, headers={"Authorization": "Bearer wrong"})
+        for route in ("/emoi/speech", "/app/tts"):
+            r = self.client.get(route, headers={"Authorization": "Bearer wrong"}) if route == "/emoi/speech" else self.client.post(route, json={"text": "x"}, headers={"Authorization": "Bearer wrong"})
             self.assertEqual(r.status_code, 401)
         config = self.configure()
         self.assertTrue(config["providers"]["elevenlabs"]["key_set"])
         self.assertNotIn("synthetic-speech-key", json.dumps(config))
-        r = self.client.patch("/lune/speech", json={"provider": "elevenlabs", "version": config["version"], "providers": {"elevenlabs": {"key": "", "voice_id": "changed"}}})
+        r = self.client.patch("/emoi/speech", json={"provider": "elevenlabs", "version": config["version"], "providers": {"elevenlabs": {"key": "", "voice_id": "changed"}}})
         self.assertTrue(r.json()["providers"]["elevenlabs"]["key_set"])
-        self.assertEqual(self.client.patch("/lune/speech", json={"provider": "minimax", "version": config["version"]}).status_code, 409)
+        self.assertEqual(self.client.patch("/emoi/speech", json={"provider": "minimax", "version": config["version"]}).status_code, 409)
         relay.speech_runtime["init"]()
-        self.assertEqual(self.client.get("/lune/speech").json()["providers"]["elevenlabs"]["voice_id"], "changed")
+        self.assertEqual(self.client.get("/emoi/speech").json()["providers"]["elevenlabs"]["voice_id"], "changed")
 
     def test_elevenlabs_request_and_binary_response(self):
         self.configure(base_url="https://api.elevenlabs.io/v1")
@@ -75,8 +75,8 @@ class SpeechTests(unittest.TestCase):
                 self.assertEqual(self.client.post("/app/tts", json={"text": text}).status_code, 422)
                 send.assert_not_called()
         for base in ("http://example.com", "https://user:password@example.com", "https://example.com?key=secret"):
-            version = self.client.get("/lune/speech").json()["version"]
-            r = self.client.patch("/lune/speech", json={"provider": "elevenlabs", "version": version, "providers": {"elevenlabs": {"base_url": base}}})
+            version = self.client.get("/emoi/speech").json()["version"]
+            r = self.client.patch("/emoi/speech", json={"provider": "elevenlabs", "version": version, "providers": {"elevenlabs": {"base_url": base}}})
             self.assertEqual(r.status_code, 422)
         self.assertEqual(self.client.post("/app/tts", json=[]).status_code, 422)
 
