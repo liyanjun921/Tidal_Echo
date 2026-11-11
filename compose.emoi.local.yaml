@@ -1,4 +1,4 @@
 # For the Windows launcher only; keep the original persistent volume and port.
 services:
-  lune:
+  emoi:
     restart: unless-stopped

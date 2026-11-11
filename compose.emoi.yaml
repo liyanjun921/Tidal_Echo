@@ -1,14 +1,14 @@
 # Single-instance backend. Put HTTPS in front of the loopback-only published port.
 services:
-  lune:
+  emoi:
     build:
       context: .
-      dockerfile: Dockerfile.lune
+      dockerfile: Dockerfile.emoi
     restart: "on-failure:5"
     init: true
     stop_grace_period: 30s
     ports:
-      - "127.0.0.1:${LUNE_PORT:-8080}:8080"
+      - "127.0.0.1:${EMOI_PORT:-8080}:8080"
     env_file:
       - .env
     environment:
@@ -21,20 +21,20 @@ services:
       RELAY_BRAIN_FILE: /data/brain_target
       RELAY_DEFAULT_BRAIN: loop
       RELAY_APP_PATH: /
-      LUNE_LATENT_AUTO_SETUP: "1"
-      LUNE_LATENT_SOURCE: /data/lune-private/latent-source
-      LUNE_PASSIVE_MODEL_CACHE: /data/lune-private/latent-models
-      LUNE_PASSIVE_STATE_DIR: /data/lune-private/passive-state
-      LUNE_LATENT_FULL_DIR: /data/lune-private/latent-full
-      LUNE_OMBRE_AUTO_SETUP: "1"
-      LUNE_OMBRE_SOURCE: /data/lune-private/ombre/source
-      LUNE_OMBRE_DIR: /data/lune-private/ombre
-      LUNE_FOLIO_AUTO_SETUP: "1"
-      LUNE_FOLIO_SOURCE: /data/lune-private/ombre/folio-source
-      LUNE_XINCHAO_AUTO_SETUP: "1"
-      LUNE_XINCHAO_SOURCE: /data/lune-private/xinchao/source
+      EMOI_LATENT_AUTO_SETUP: "1"
+      EMOI_LATENT_SOURCE: /data/emoi-private/latent-source
+      EMOI_PASSIVE_MODEL_CACHE: /data/emoi-private/latent-models
+      EMOI_PASSIVE_STATE_DIR: /data/emoi-private/passive-state
+      EMOI_LATENT_FULL_DIR: /data/emoi-private/latent-full
+      EMOI_OMBRE_AUTO_SETUP: "1"
+      EMOI_OMBRE_SOURCE: /data/emoi-private/ombre/source
+      EMOI_OMBRE_DIR: /data/emoi-private/ombre
+      EMOI_FOLIO_AUTO_SETUP: "1"
+      EMOI_FOLIO_SOURCE: /data/emoi-private/ombre/folio-source
+      EMOI_XINCHAO_AUTO_SETUP: "1"
+      EMOI_XINCHAO_SOURCE: /data/emoi-private/xinchao/source
     volumes:
-      - lune_data:/data
+      - emoi_data:/data
     healthcheck:
       test: [CMD, python, -c, "import json,urllib.request;assert json.load(urllib.request.urlopen('http://127.0.0.1:8080/readyz',timeout=4))['ok']"]
       interval: 15s
@@ -42,4 +42,4 @@ services:
       start_period: 5m
       retries: 3
 volumes:
-  lune_data:
+  emoi_data:
