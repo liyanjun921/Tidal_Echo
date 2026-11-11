@@ -1,4 +1,4 @@
-# Luné V0.6 · 订阅连接
+# Émoi V0.6 · 订阅连接
 
 GPT 新增 `chatgpt_plan` 模式，Claude 新增 `claude_subscription` 预留模式。原有 API / 中转站配置保留，模式独立；订阅模式不会因缺少授权、额度不足或供应商错误而自动调用保存的 API Key。
 
@@ -17,30 +17,30 @@ GPT 新增 `chatgpt_plan` 模式，Claude 新增 `claude_subscription` 预留模
 
 当前官方 OSS 流程要求 `http://127.0.0.1:<port>/auth/callback`。因此在 iPhone 上打开远程服务器时，不能把这个地址当成服务器回调。
 
-本机运行服务时：在同一台电脑上通过本地地址打开 Luné，连接服务后，设置 GPT 为“ChatGPT 订阅额度”，打开“查看订阅连接”，点 Continue with ChatGPT，再点出现的官方授权链接。授权后刷新状态和可用模型，选模型并保存。
+本机运行服务时：在同一台电脑上通过本地地址打开 Émoi，连接服务后，设置 GPT 为“ChatGPT 订阅额度”，打开“查看订阅连接”，点 Continue with ChatGPT，再点出现的官方授权链接。授权后刷新状态和可用模型，选模型并保存。
 
 远程私人服务器时：下载连接助手，电脑需 Python 3.10+ 和浏览器。Windows 解压后双击 `start-windows.cmd`；它在独立虚拟环境安装 `httpx` 与 `PyJWT[crypto]`，再运行官方登录。其他系统：
 
 ```sh
 python -m pip install -r requirements.txt
-python chatgpt_login.py --export ~/.lune/lune-chatgpt-connection.json
+python chatgpt_login.py --export ~/.emoi/emoi-chatgpt-connection.json
 ```
 
-登录成功后，把生成的文件仅导入自己的 HTTPS Luné 服务器。助手导出后清除电脑端活动令牌，服务器接管后续刷新；不要把连接文件发给聊天、仓库、第三方中转站或他人。导入需校验身份和时效，过期则重新运行助手。完成后仍可在 iPhone 使用前端，无需让手机运行 Python。
+登录成功后，把生成的文件仅导入自己的 HTTPS Émoi 服务器。助手导出后清除电脑端活动令牌，服务器接管后续刷新；不要把连接文件发给聊天、仓库、第三方中转站或他人。导入需校验身份和时效，过期则重新运行助手。完成后仍可在 iPhone 使用前端，无需让手机运行 Python。
 
 已在服务器本地完成授权的部署也可直接运行仓库里的助手，设置 `--store` 为服务器的私人连接路径，不使用 `--export`：
 
 ```sh
-python scripts/chatgpt_login.py --store /data/lune-private/chatgpt-plan.json
+python scripts/chatgpt_login.py --store /data/emoi-private/chatgpt-plan.json
 ```
 
-这条命令仍需同机浏览器或正确配置的本地回调转发，纯远程无浏览器终端应采用前述电脑助手。私人目录默认位于 `LOOP_CONFIG` 同级的 `lune-private/`；可用 `CHATGPT_PLAN_FILE` 显式指定文件。备份该目录时按凭据保护；聊天导出不包含它。首次登录需用户亲自审阅 OpenAI 的授权和套餐权限，不应把“已添加代码”视为“账户已经接通”。
+这条命令仍需同机浏览器或正确配置的本地回调转发，纯远程无浏览器终端应采用前述电脑助手。私人目录默认位于 `LOOP_CONFIG` 同级的 `emoi-private/`；可用 `CHATGPT_PLAN_FILE` 显式指定文件。备份该目录时按凭据保护；聊天导出不包含它。首次登录需用户亲自审阅 OpenAI 的授权和套餐权限，不应把“已添加代码”视为“账户已经接通”。
 
 ## Claude 预留接口
 
 设置值：`connection_mode=claude_subscription`；状态接口：`GET /relay/app/loop/subscriptions` 中的 `claude`；预留 transport：`claude_code_interactive`。当前 `ready:false`。选中该模式会保存配置，但生成或测试返回清楚的未连接提示，API 请求次数为零。
 
-方向是用户自己的未修改 Claude Code 交互进程，tmux 负责常驻，官方 hooks 负责结构化事件，Luné 负责手机界面与原文保存。参考了用户提供的终端接前端教程的运行架构，未复制其源码、配置其机器或采集任何 Claude 登录凭据。
+方向是用户自己的未修改 Claude Code 交互进程，tmux 负责常驻，官方 hooks 负责结构化事件，Émoi 负责手机界面与原文保存。参考了用户提供的终端接前端教程的运行架构，未复制其源码、配置其机器或采集任何 Claude 登录凭据。
 
 后续桥接必须独立处理：每房间会话隔离、消息粘贴、回合 ID、流式帧排序去重、回合结束/失败、取消确认、工具权限和进程重启恢复。预期接入合同如下，尚未声称实现或验证 Claude 运行时：
 
@@ -51,7 +51,7 @@ python scripts/chatgpt_login.py --store /data/lune-private/chatgpt-plan.json
 | events | reply_delta、reply_completed、tool/permission、failed；带回合和帧编号 |
 | stop | 请求中断并确认官方进程已停止当前回合；未确认则告知用户 |
 
-Claude 登录必须在官方 Claude Code 流程完成，Luné 不提供第三方 Claude.ai 登录或订阅令牌表单。是否及如何使用官方进程需遵守当时 Anthropic 的适用规则；教程中“始终走订阅”的表述不构成本项目的计费保证。
+Claude 登录必须在官方 Claude Code 流程完成，Émoi 不提供第三方 Claude.ai 登录或订阅令牌表单。是否及如何使用官方进程需遵守当时 Anthropic 的适用规则；教程中“始终走订阅”的表述不构成本项目的计费保证。
 
 ## 验证
 
@@ -60,7 +60,7 @@ Claude 登录必须在官方 Claude Code 流程完成，Luné 不提供第三方
 既有隔离 HTTP 联调继续验证私聊、群聊、附件、MCP、持久待办与双服务朗读。订阅推理使用 HTTP MockTransport 与合成身份测试，不能替代真实订阅账户验收。浏览器检查设置切换、订阅说明与预览禁止真实授权。
 
 ```sh
-python -m unittest tests.test_lune tests.test_speech tests.test_subscription -v
+python -m unittest tests.test_emoi tests.test_speech tests.test_subscription -v
 python tests/run_e2e.py --http-only
 ```
 
