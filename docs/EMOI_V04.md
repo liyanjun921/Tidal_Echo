@@ -1,6 +1,6 @@
-# Luné / OURSPACE V0.4 整合版
+# Émoi / OURSPACE V0.4 整合版
 
-基于 Tidal Echo（AGPL-3.0），沿用用户提供的 Luné V0.3 Water Light / Lily Day 和液态玻璃 UI。LICENSE、NOTICE 和上游文档保留；原界面存于 `web/tidal-original/`。本次只引入最新版网页所需的处理后壁纸，不包含交接包里的原始参考图、历史截图或私人资料。
+基于 Tidal Echo（AGPL-3.0），沿用用户提供的 Émoi V0.3 Water Light / Lily Day 和液态玻璃 UI。LICENSE、NOTICE 和上游文档保留；原界面存于 `web/tidal-original/`。本次只引入最新版网页所需的处理后壁纸，不包含交接包里的原始参考图、历史截图或私人资料。
 
 ## 本版做了什么
 
@@ -41,4 +41,4 @@ JSON 导出包含三间房的记录与当前记忆，不含 API 密钥和附件�
 
 `python tests/run_e2e.py`：通过真实浏览器操作设置→GPT 私聊→来源记忆→双模型群聊→刷新恢复→附件→MCP。请求实际经过网页、HTTP、服务端 API loop、测试模型接口、SSE、SQLite。测试不使用真实供应商凭据，不产生模型 API 费用；Chromium 手机尺寸模拟不能替代 iPhone Safari。
 
-部署入口见 [LUNE_DEPLOY.md](LUNE_DEPLOY.md)。
+部署入口见 [EMOI_DEPLOY.md](EMOI_DEPLOY.md)。
