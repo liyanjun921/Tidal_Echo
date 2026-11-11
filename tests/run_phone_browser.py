@@ -51,7 +51,8 @@ def main():
             assert driver.find_element(By.ID,"emoiPhone").is_displayed()
             assert not driver.find_elements(By.CSS_SELECTOR,'.ep-statusbar,.ep-home-indicator'),"Fake phone furniture must not exist"
             mobile_bounds=driver.execute_script("return document.querySelector('#emoiPhone').getBoundingClientRect().toJSON()")
-            assert abs(mobile_bounds["left"]) <= 1 and abs(mobile_bounds["right"]-390)<=2,mobile_bounds
+            inner_width=driver.execute_script("return window.innerWidth")
+            assert abs(mobile_bounds["left"])<=1 and abs(mobile_bounds["right"]-inner_width)<=2,mobile_bounds
             assert driver.execute_script("return getComputedStyle(document.querySelector('#emoiPhone')).borderTopWidth")=="0px"
             driver.save_screenshot(str(OUT/"responsive-home-390.png"))
             # Crystal glass: all icons are SVG with low-opacity backdrop surfaces,
@@ -163,9 +164,10 @@ def main():
             driver.set_window_size(1440,900);driver.refresh()
             wait(driver,lambda d:d.execute_script("return !!window.EmoiUiMode && document.body.dataset.phoneScreen==='home'"))
             width=driver.execute_script("return Math.round(document.querySelector('#emoiPhone').getBoundingClientRect().width)")
-            assert abs(width-1440)<=2,f"Desktop MUST be a real full-width website, not a 407px phone: {width}"
+            viewport=driver.execute_script("return window.innerWidth")
+            assert abs(width-viewport)<=2,f"Desktop MUST be a full-width website, not a 407px phone: {width} vs {viewport}"
             frame=driver.execute_script("return document.querySelector('#emoiPhone').getBoundingClientRect().toJSON()")
-            assert abs(frame['left'])<=1 and abs(frame['right']-1440)<=2,frame
+            assert abs(frame['left'])<=1 and abs(frame['right']-viewport)<=2,frame
             assert driver.execute_script("return getComputedStyle(document.querySelector('#emoiPhone')).borderTopWidth")=="0px"
             columns=driver.execute_script("return getComputedStyle(document.querySelector('.ep-home-scroll')).gridTemplateColumns")
             assert len(columns.split())==2,f"Expected fluid desktop app launcher columns, got {columns}"
