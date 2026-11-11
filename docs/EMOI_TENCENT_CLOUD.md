@@ -1,6 +1,8 @@
 # Émoi · 腾讯云轻量服务器与 Garden / CyberBoss / Ombre Brain 集成验收
 
-状态：**准备方案与单向事件入口已经编码，尚未在用户真实腾讯云实例部署或验证账号**。Émoi 开发分支已将内部模块、服务路由、数据库表和 Docker 命名统一为 `emoi_*` / `emoi`。历史 Luné 数据仅通过显式离线迁移接入；不会在启动时擅自覆盖原 vault。所有密码、模型登录和私人数据只留在服务器私有目录。
+状态：**云端容器方案、单向事件入口与 Émoi 内部统一命名均已合并进 `main`，但尚未在用户真实腾讯云实例部署或验证账号**。历史 Luné 数据仅通过显式离线迁移接入；不会在启动时擅自覆盖原 vault。所有密码、模型登录和私人数据只留在服务器私有目录。
+
+新手逐步操作请先看 [Émoi 腾讯云部署｜新手照做版](EMOI_TENCENT_BEGINNER.md)。
 
 ## 一、能部署，但不等于已在现有服务器运行
 
@@ -27,18 +29,14 @@ sudo ss -ltnp
 以下只是假设 `8088` 当前空闲的示例；实际端口须先查证。请将 `example.com` 换为自己拥有的域名，所有密钥仅在服务器内生成与保存。
 
 ```sh
-git clone https://github.com/liyanjun921/Tidal_Echo.git emoi
-cd emoi
-# PR 未合并前，可临时取开发分支；合并后直接使用 main
-git checkout codex/emoi-internal-migration
-cp emoi.env.example .env
-chmod 600 .env
-# 自行生成长随机 RELAY_SECRET，并在 .env 内设置
-# RELAY_SECRET=（私有随机值）
-# EMOI_PORT=8088
-docker compose -p emoi -f compose.emoi.yaml config --quiet
-docker compose -p emoi -f compose.emoi.yaml up -d --build
-docker compose -p emoi -f compose.emoi.yaml ps
+# 首次接触腾讯云 Linux 服务器建议先按新手指南只读检查，再执行：
+git clone --depth 1 --branch main https://github.com/liyanjun921/Tidal_Echo.git emoi-web
+cd emoi-web
+# 使用 Python secrets 在私有 .env 中创建 RELAY_SECRET，并设置空闲 EMOI_PORT
+# 详见 docs/EMOI_TENCENT_BEGINNER.md；不要把真实密钥写入 GitHub
+sudo docker compose -p emoi -f compose.emoi.yaml config --quiet
+sudo docker compose -p emoi -f compose.emoi.yaml up -d --build
+sudo docker compose -p emoi -f compose.emoi.yaml ps
 curl -fsS http://127.0.0.1:8088/readyz
 ```
 
