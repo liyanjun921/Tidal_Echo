@@ -1,6 +1,6 @@
 """Install a pinned, separate Latent checkout for the owner's internal use.
 
-No Latent code is bundled in Luné releases or container images.
+No Latent code is bundled in Émoi releases or container images.
 """
 import argparse
 import hashlib
@@ -27,7 +27,7 @@ def prepare_vectors(cache):
     dimension = len(next(iter(model.embed(["公开模型运行检查"]))))
     os.environ["TIKTOKEN_CACHE_DIR"] = str(cache / "tiktoken")
     tiktoken.get_encoding("o200k_base")
-    marker = cache / "lune-passive-ready.json"
+    marker = cache / "emoi-passive-ready.json"
     marker.write_text(json.dumps({"model": MODEL, "dimension": dimension, "runtime": "local_cpu", "tokenizer": "o200k_base"}), encoding="utf-8")
     os.chmod(marker, 0o600)
     return cache
@@ -44,7 +44,7 @@ def stamp(source):
     if "src/memory_retrieval.py" not in files or not (source / "LICENSE").is_file():
         raise ValueError("Latent source is incomplete")
     # Marker lives outside its Git checkout and includes no private memory.
-    marker = source.parent / (source.name + ".lune-verified.json")
+    marker = source.parent / (source.name + ".emoi-verified.json")
     marker.write_text(json.dumps({"revision": REVISION, "files": files}), encoding="utf-8")
     os.chmod(marker, 0o600)
 
@@ -67,11 +67,11 @@ def install(destination):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="安装独立的 Latent 运行源码，不包含或上传私人记忆")
-    parser.add_argument("--destination", type=Path, default=Path(os.environ.get("RELAY_DB", "relay.db")).resolve().parent / "lune-private" / "latent-source")
+    parser.add_argument("--destination", type=Path, default=Path(os.environ.get("RELAY_DB", "relay.db")).resolve().parent / "emoi-private" / "latent-source")
     parser.add_argument("--vectors", action="store_true", help="同时准备原版 Passive Recall 的本地向量与 tokenizer")
     parser.add_argument("--model-cache", type=Path, default=None)
     args = parser.parse_args()
     print("Latent source: " + str(install(args.destination)))
     if args.vectors:
-        cache = args.model_cache or Path(os.environ.get("LUNE_PASSIVE_MODEL_CACHE") or args.destination.parent / "latent-models")
+        cache = args.model_cache or Path(os.environ.get("EMOI_PASSIVE_MODEL_CACHE") or args.destination.parent / "latent-models")
         print("Passive Recall local assets: " + str(prepare_vectors(cache)))

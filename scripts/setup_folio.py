@@ -26,7 +26,7 @@ def install(destination):
     paths = subprocess.check_output(['git', '-C', str(destination), 'ls-files', '-z']).decode().split('\0')
     files = [p for p in paths if p.startswith('v2/') or p in {'LICENSE', 'CHANGES.md', 'dehydrator.py','families.py'}]
     marker = {'revision': REVISION, 'files': {p: hashlib.sha256((destination / p).read_bytes()).hexdigest() for p in files}}
-    (destination.parent / (destination.name + '.lune-verified.json')).write_text(json.dumps(marker))
+    (destination.parent / (destination.name + '.emoi-verified.json')).write_text(json.dumps(marker))
     return destination
 
 

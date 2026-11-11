@@ -26,7 +26,7 @@ def install(destination):
     names=subprocess.check_output(['git','-C',str(destination),'ls-files','-z']).decode().split('\0')
     names=[p for p in names if p.startswith(('xinchao/src/','xinchao/configs/')) or p in {'xinchao/LICENSE','xinchao/package.json'}]
     marker={'revision':REVISION,'files':{name:hashlib.sha256((destination/name).read_bytes()).hexdigest() for name in names}}
-    (destination.parent/(destination.name+'.lune-verified.json')).write_text(json.dumps(marker))
+    (destination.parent/(destination.name+'.emoi-verified.json')).write_text(json.dumps(marker))
     return destination
 
 
