@@ -61,6 +61,7 @@ function open(root,{kind='contact',item,conversationId,goBack,contactNames=[]}){
  person.onclick=more.onclick;
  header.append(back,person,more);
  root.append(header);
+ if(kind==='contact')void window.EmoiAvatars?.paint(avatar,item.id);
  const body=document.createElement('main');body.className='ep-im-timeline';body.setAttribute('aria-label','与'+(item.name||'联系人')+'的消息');
  const content=document.createElement('div');content.className='ep-im-content';
  const initial=document.createElement('div');initial.className='ep-im-conversation-start';
@@ -70,6 +71,7 @@ function open(root,{kind='contact',item,conversationId,goBack,contactNames=[]}){
  initial.append(big,note,hint);content.append(initial);
  const history=document.createElement('div');history.className='ep-im-history';
  content.append(history);body.append(content);root.append(body);
+ if(kind==='contact')void window.EmoiAvatars?.paint(big,item.id);
  const notice=document.createElement('div');notice.className='ep-im-notice';notice.textContent='AI 服务未连接 · 当前只存储消息';root.append(notice);
  const footer=document.createElement('form');footer.className='ep-im-footer';footer.autocomplete='off';
  const attach=document.createElement('button');attach.type='button';attach.className='ep-im-attach';attach.setAttribute('aria-label','添加图片');attach.innerHTML=icon('plus');
