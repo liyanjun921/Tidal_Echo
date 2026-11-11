@@ -28,7 +28,7 @@ def run(payload):
     for row in payload["records"]:
         text = row["title"] + "\n" + row["content"] + "\n当下状态：" + row["current_state"]
         index.add(text, {"record_id": row["id"], "record_id_aliases": [row["id"]],
-                        "source": "Luné/" + row["scope"] + "/" + row["id"],
+                        "source": "Émoi/" + row["scope"] + "/" + row["id"],
                         "heading": row["title"], "layer": "timeline",
                         "timestamp": row["timestamp"], "local_date": tc.local_date(row["timestamp"]),
                         "status": row["status"], "supersedes": row.get("supersedes"),

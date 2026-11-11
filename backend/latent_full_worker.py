@@ -26,19 +26,19 @@ def governance(server, records, roots, directory):
         if file.is_file():
             retractions.update(json.loads(file.read_text(encoding="utf-8")))
     for row in records:
-        rid = hashlib.sha256(("lune:" + row["id"]).encode()).hexdigest()[:16]
+        rid = hashlib.sha256(("emoi:" + row["id"]).encode()).hexdigest()[:16]
         old, new = row.get("supersedes"), row.get("superseded_by")
         if old or new:
             supersessions[rid] = {"status": row["status"],
-                "supersedes": hashlib.sha256(("lune:" + old).encode()).hexdigest()[:16] if old else None,
-                "superseded_by": hashlib.sha256(("lune:" + new).encode()).hexdigest()[:16] if new else None}
+                "supersedes": hashlib.sha256(("emoi:" + old).encode()).hexdigest()[:16] if old else None,
+                "superseded_by": hashlib.sha256(("emoi:" + new).encode()).hexdigest()[:16] if new else None}
     sp, rp = directory / ".effective-supersessions.json", directory / ".effective-retractions.json"
     _atomic(sp, json.dumps(supersessions, ensure_ascii=False))
     _atomic(rp, json.dumps(retractions, ensure_ascii=False))
     server.index.load_supersessions(sp)
     server.index.load_retractions(rp)
     for i, meta in enumerate(server.index.meta):
-        if meta.get("lune_legacy"):
+        if meta.get("emoi_legacy"):
             row = next(r for r in records if meta["source"].endswith("/" + r["id"]))
             if row["status"] == "superseded":
                 meta["status"] = "superseded"
@@ -80,7 +80,7 @@ def get_state(p):
     shared.mkdir(parents=True, exist_ok=True, mode=0o700)
     roots = [corpus] + ([shared] if view != "shared" else [])
     compiled = directory / "initialization" / "memory"
-    if compiled.is_dir() and (directory / "initialization" / ".lune-shipped").is_file():
+    if compiled.is_dir() and (directory / "initialization" / ".emoi-shipped").is_file():
         roots.append(compiled)
     route = p.get("embedding_route", "local")
     provider = None
@@ -88,7 +88,7 @@ def get_state(p):
         from latent_passive import native_provider
         provider = native_provider(Path(p["model_cache"]))
     elif route == "cloud":
-        if os.environ.get("LUNE_LATENT_CLOUD_CONSENT") != "1":
+        if os.environ.get("EMOI_LATENT_CLOUD_CONSENT") != "1":
             raise ValueError("cloud_not_consented")
         from embedding_provider import resolve_provider
         provider = resolve_provider("cloud")
@@ -106,12 +106,12 @@ def get_state(p):
                             cache_path=directory / ".embedding-cache.json" if provider else None)
         for r in records:
             # Stable source identity; native tools cannot mutate this source.
-            rid = hashlib.sha256(("lune:" + r["id"]).encode()).hexdigest()[:16]
+            rid = hashlib.sha256(("emoi:" + r["id"]).encode()).hexdigest()[:16]
             index.add(r["title"] + "\n" + r["content"] + "\n当下状态：" + r["current_state"],
-                      {"source": "LuneSQLite/" + r["scope"] + "/" + r["id"], "record_id": rid,
+                      {"source": "EmoiSQLite/" + r["scope"] + "/" + r["id"], "record_id": rid,
                        "record_id_aliases": [rid], "layer": "timeline", "heading": r["title"],
                        "timestamp": r["timestamp"], "local_date": r["written_date"],
-                       "status": r["status"], "lune_legacy": True})
+                       "status": r["status"], "emoi_legacy": True})
             if r["status"] == "superseded":
                 index.superseded.add(len(index.chunks) - 1)
         return index.build()
@@ -142,8 +142,8 @@ def guard_write(state, name, args):
         if meta.get("record_id") not in ids and not (quote and quote in s.index.chunks[i]):
             continue
         source = str(s.index.paths[i] or "")
-        if meta.get("lune_legacy"):
-            raise PermissionError("这是 Luné 原有记忆，请在原记忆编辑器中修改，不能另写一份覆盖。")
+        if meta.get("emoi_legacy"):
+            raise PermissionError("这是 Émoi 原有记忆，请在原记忆编辑器中修改，不能另写一份覆盖。")
         try:
             Path(source).resolve().relative_to(corpus)
         except ValueError:
@@ -243,5 +243,5 @@ def dispatch(p):
             return {"text": opening, "passive": passive, "tools": tools,
                     "instructions": server.instructions,
                     "persona": persona.read_text(encoding="utf-8") if persona.is_file() else "",
-                    "native_records": sum(not m.get("lune_legacy") for m in server.index.meta)}
+                    "native_records": sum(not m.get("emoi_legacy") for m in server.index.meta)}
         raise ValueError("unknown_full_action")

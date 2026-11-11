@@ -20,7 +20,7 @@ class UTF8Capture(io.StringIO):
 
 
 def generate(prompt, agent):
-    endpoint = os.environ["LUNE_JOB_LOOP"] + "/loop/native/generate"
+    endpoint = os.environ["EMOI_JOB_LOOP"] + "/loop/native/generate"
     request = urllib.request.Request(endpoint, json.dumps({"prompt": prompt, "agent": agent}).encode(),
         headers={"Content-Type": "application/json", "Authorization": "Bearer " + os.environ["RELAY_SECRET"]})
     with urllib.request.urlopen(request, timeout=650) as response:
@@ -34,7 +34,7 @@ def run(p, source):
         raise ValueError("view")
     directory, kind = root / view, p["kind"]
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-    cfg = SimpleNamespace(url=os.environ["LUNE_JOB_RELAY"] + "/lune/native/" + view + "/mcp",
+    cfg = SimpleNamespace(url=os.environ["EMOI_JOB_RELAY"] + "/emoi/native/" + view + "/mcp",
                           token=os.environ["RELAY_SECRET"])
     import background_archive as ba
     def call(name, args):
@@ -74,7 +74,7 @@ def run(p, source):
         out.mkdir(exist_ok=True)
         previous_state = out / "init_state.json"
         if previous_state.is_file():
-            history = out / ".lune-init-history"
+            history = out / ".emoi-init-history"
             history.mkdir(exist_ok=True)
             shutil.copyfile(previous_state, history / (uuid.uuid4().hex + ".json"))
         argv = [str(source / "src/memory_init.py"), "--out", str(out), "--client", "generic", "--timezone", "Asia/Shanghai", "--step", step]
@@ -127,7 +127,7 @@ def run(p, source):
                 temp = directory / ".persona-active"
                 temp.write_bytes(result.read_bytes())
                 temp.replace(directory / "persona.md")
-                (out / ".lune-shipped").write_text("verified native ship", encoding="utf-8")
+                (out / ".emoi-shipped").write_text("verified native ship", encoding="utf-8")
         return {"status": "done" if code == 0 else "failed", "step": step, "output": capture.getvalue(), "exit_code": code}
     if kind == "import":
         from memory_import import load_any
@@ -162,7 +162,7 @@ def run(p, source):
                     archive.write(file, str(file.relative_to(directory)))
         os.chmod(temp, 0o600)
         temp.replace(destination)
-        return {"status": "done", "download": "/lune/native/" + view + "/backup"}
+        return {"status": "done", "download": "/emoi/native/" + view + "/backup"}
     raise ValueError("kind")
 
 

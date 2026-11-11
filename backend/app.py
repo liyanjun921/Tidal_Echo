@@ -148,9 +148,9 @@ def save_message(direction: str, kind: str, text: str, meta: dict) -> dict:
     msg={"id": mid, "ts": ts, "direction": direction, "kind": kind, "text": text, "meta": meta}
     if direction=='out' and kind=='reply':
         try:
-            from .lune_desire import record_reply
+            from .emoi_desire import record_reply
         except ImportError:
-            from lune_desire import record_reply
+            from emoi_desire import record_reply
         try:
             record_reply(DB_PATH,msg)
         except (ValueError,KeyError,TypeError,sqlite3.Error):
@@ -658,7 +658,7 @@ def check_auth(request: Request) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    lune_runtime["init"]()
+    emoi_runtime["init"]()
     workspace_runtime["init"]()
     checklist_runtime["init"]()
     cinema_runtime["init"]()
@@ -685,10 +685,10 @@ async def lifespan(app: FastAPI):
     await wren_runtime["shutdown"]()
     await continuity_runtime["shutdown"]()
     await native_runtime["shutdown"]()
-    for task in list(lune_runtime["tasks"].values()):
+    for task in list(emoi_runtime["tasks"].values()):
         task.cancel()
-    if lune_runtime["tasks"]:
-        await asyncio.gather(*list(lune_runtime["tasks"].values()), return_exceptions=True)
+    if emoi_runtime["tasks"]:
+        await asyncio.gather(*list(emoi_runtime["tasks"].values()), return_exceptions=True)
     try:
         from .latent_process import close_native
     except ImportError:
@@ -729,7 +729,7 @@ async def channel_out(request: Request):
     run_id = str(body.get("run_id") or "")
     if run_id:
         with db() as conn:
-            run = conn.execute("SELECT state FROM lune_runs WHERE id=?", (run_id,)).fetchone()
+            run = conn.execute("SELECT state FROM emoi_runs WHERE id=?", (run_id,)).fetchone()
             if not run or run["state"] not in {"pending", "running"}:
                 raise HTTPException(status_code=409, detail="generation is no longer active")
             if kind == "reply" or (kind == "reply_delta" and body.get("done")):
@@ -899,7 +899,7 @@ async def app_tts(request: Request):
     )
 
 
-@app.get("/lune/chatgpt-helper")
+@app.get("/emoi/chatgpt-helper")
 async def chatgpt_login_helper(request: Request):
     """Download only public helper sources, never runtime credentials."""
     check_auth(request)
@@ -909,11 +909,11 @@ async def chatgpt_login_helper(request: Request):
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.write(root / "scripts" / "chatgpt_login.py", "chatgpt_login.py")
-        archive.write(root / "examples" / "lune_auth.py", "lune_auth.py")
+        archive.write(root / "examples" / "emoi_auth.py", "emoi_auth.py")
         archive.writestr("requirements.txt", "httpx==0.28.1\nPyJWT[crypto]==2.15.1\n")
-        archive.writestr("start-windows.cmd", '@echo off\r\ncd /d "%~dp0"\r\npy -3 -m venv .login-env\r\nif errorlevel 1 goto end\r\n.login-env\\Scripts\\python.exe -m pip install -r requirements.txt\r\nif errorlevel 1 goto end\r\n.login-env\\Scripts\\python.exe chatgpt_login.py --export "%USERPROFILE%\\.lune\\lune-chatgpt-connection.json"\r\n:end\r\npause\r\n')
-        archive.writestr("README.txt", "Luné ChatGPT 订阅连接助手\n\n需要电脑上的 Python 3.10+ 和浏览器，无需 Node。Windows 解压后双击 start-windows.cmd。其他系统安装 requirements.txt 后运行 python chatgpt_login.py --export ~/.lune/lune-chatgpt-connection.json。\n\n登录只在 OpenAI 官方页面完成。授权成功后，在自己的 HTTPS Luné 设置中导入电脑私人目录里的连接文件。不要把它发给聊天、代码仓库或他人。首次登录与文件导入完成后，可继续从 iPhone 使用自己的 Luné 服务器。导出后助手清除电脑端的活动令牌，由导入端负责刷新。账户权限与可用模型以实际授权结果为准。\n")
-    return Response(buffer.getvalue(), media_type="application/zip", headers={"Cache-Control": "no-store", "Content-Disposition": 'attachment; filename="Lune-ChatGPT-Login-Helper.zip"'})
+        archive.writestr("start-windows.cmd", '@echo off\r\ncd /d "%~dp0"\r\npy -3 -m venv .login-env\r\nif errorlevel 1 goto end\r\n.login-env\\Scripts\\python.exe -m pip install -r requirements.txt\r\nif errorlevel 1 goto end\r\n.login-env\\Scripts\\python.exe chatgpt_login.py --export "%USERPROFILE%\\.emoi\\emoi-chatgpt-connection.json"\r\n:end\r\npause\r\n')
+        archive.writestr("README.txt", "Émoi ChatGPT 订阅连接助手\n\n需要电脑上的 Python 3.10+ 和浏览器，无需 Node。Windows 解压后双击 start-windows.cmd。其他系统安装 requirements.txt 后运行 python chatgpt_login.py --export ~/.emoi/emoi-chatgpt-connection.json。\n\n登录只在 OpenAI 官方页面完成。授权成功后，在自己的 HTTPS Émoi 设置中导入电脑私人目录里的连接文件。不要把它发给聊天、代码仓库或他人。首次登录与文件导入完成后，可继续从 iPhone 使用自己的 Émoi 服务器。导出后助手清除电脑端的活动令牌，由导入端负责刷新。账户权限与可用模型以实际授权结果为准。\n")
+    return Response(buffer.getvalue(), media_type="application/zip", headers={"Cache-Control": "no-store", "Content-Disposition": 'attachment; filename="Emoi-ChatGPT-Login-Helper.zip"'})
 
 
 # ---------------------------------------------------------------------------
@@ -1138,15 +1138,15 @@ async def loop_proxy_delete(request: Request, path: str):
 
 
 try:
-    from .lune import register as register_lune
+    from .emoi import register as register_emoi
 except ImportError:
-    from lune import register as register_lune
+    from emoi import register as register_emoi
 
-lune_runtime = register_lune(app, globals())
+emoi_runtime = register_emoi(app, globals())
 try:
-    from .lune_memory import register as register_memory
+    from .emoi_memory import register as register_memory
 except ImportError:
-    from lune_memory import register as register_memory
+    from emoi_memory import register as register_memory
 register_memory(app, globals())
 try:
     from .workspace import register as register_workspace
@@ -1154,16 +1154,16 @@ except ImportError:
     from workspace import register as register_workspace
 workspace_runtime = register_workspace(app, globals())
 try:
-    from .lune_checklist import register as register_checklist
+    from .emoi_checklist import register as register_checklist
 except ImportError:
-    from lune_checklist import register as register_checklist
+    from emoi_checklist import register as register_checklist
 checklist_runtime = register_checklist(app, globals())
 try:
-    from .lune_cinema import register as register_cinema
-    from .lune_cinema_companion import register as register_cinema_companion
+    from .emoi_cinema import register as register_cinema
+    from .emoi_cinema_companion import register as register_cinema_companion
 except ImportError:
-    from lune_cinema import register as register_cinema
-    from lune_cinema_companion import register as register_cinema_companion
+    from emoi_cinema import register as register_cinema
+    from emoi_cinema_companion import register as register_cinema_companion
 register_cinema(app, globals())
 cinema_runtime = register_cinema_companion(app, globals())
 try:
@@ -1172,39 +1172,39 @@ except ImportError:
     from speech import register as register_speech
 speech_runtime = register_speech(app, globals())
 try:
-    from .lune_native import register as register_native
+    from .emoi_native import register as register_native
 except ImportError:
-    from lune_native import register as register_native
+    from emoi_native import register as register_native
 native_runtime = register_native(app, globals())
 
 try:
-    from .lune_ombre import register as register_ombre
+    from .emoi_ombre import register as register_ombre
 except ImportError:
-    from lune_ombre import register as register_ombre
+    from emoi_ombre import register as register_ombre
 register_ombre(app, globals())
 
 try:
-    from .lune_continuity import register as register_continuity
+    from .emoi_continuity import register as register_continuity
 except ImportError:
-    from lune_continuity import register as register_continuity
+    from emoi_continuity import register as register_continuity
 continuity_runtime = register_continuity(app, globals())
 
 try:
-    from .lune_wren import register as register_wren
+    from .emoi_wren import register as register_wren
 except ImportError:
-    from lune_wren import register as register_wren
+    from emoi_wren import register as register_wren
 wren_runtime = register_wren(app, globals())
 
 try:
-    from .lune_xinchao import register as register_xinchao
+    from .emoi_xinchao import register as register_xinchao
 except ImportError:
-    from lune_xinchao import register as register_xinchao
+    from emoi_xinchao import register as register_xinchao
 xinchao_runtime=register_xinchao(app,globals())
 
 try:
-    from .lune_living_context import register as register_living
+    from .emoi_living_context import register as register_living
 except ImportError:
-    from lune_living_context import register as register_living
+    from emoi_living_context import register as register_living
 living_runtime=register_living(app,globals())
 
 if __name__ == "__main__":
