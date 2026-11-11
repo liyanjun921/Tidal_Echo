@@ -19,14 +19,14 @@
   ];
 
   const LABELS = {
-    memory:'记忆档案', todo:'定时清单', calendar:'日历',
+    home:'小手机桌面', memory:'记忆档案', todo:'定时清单', calendar:'日历',
     journal:'生活日记', whisper:'悄悄话', reading:'共读书房',
     cinema:'双人影院', report:'日报', health:'健康记录',
     repo:'仓库', appearance:'外观', search:'搜索', capacity:'上下文',
     gpt:'GPT 私聊', claude:'Claude 私聊', group:'三人聊天室'
   };
   const DEFAULTS = {
-    'page:memory':'archive', 'page:reading':'archive', 'page:journal':'archive',
+    'page:home':'water', 'page:memory':'archive', 'page:reading':'archive', 'page:journal':'archive',
     'page:cinema':'nocturne', 'page:report':'archive',
     'page:whisper':'archive', 'page:health':'lily',
     'page:calendar':'water', 'page:todo':'water'
