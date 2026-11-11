@@ -168,15 +168,18 @@ function openHome(){
   const b=create('button','ep-app');b.type='button';b.dataset.epApp=a.id;
   b.innerHTML='<span class="ep-app-icon tone-'+a.tone+'">'+icon(a.icon)+'</span><span class="ep-app-label"></span>';
   b.querySelector('.ep-app-label').textContent=a.label;
+  b.querySelector('.ep-app-icon').setAttribute('data-ep-optics','');
   b.addEventListener('click',()=>openApp(a.id));grid.append(b);
  }
  scroll.append(grid);
- const caption=create('p','ep-home-caption','THE SMALL THINGS ARE THE BIG THINGS.');
- scroll.append(caption);
+ const search=create('button','ep-home-search');search.type='button';search.setAttribute('aria-label','搜索联系人');
+ search.innerHTML=icon('search')+'<span>搜索联系人</span>';
+ search.addEventListener('click',()=>openContacts());
+ scroll.append(search);
  root.append(scroll);
  const dock=create('nav','ep-dock');dock.setAttribute('aria-label','常用应用');
  for(const id of dockIds){const a=apps.find(x=>x.id===id);const b=create('button','ep-dock-app');b.type='button';b.setAttribute('aria-label',a.label);
- b.innerHTML='<span class="ep-dock-icon tone-'+a.tone+'">'+icon(a.icon)+'</span>';b.addEventListener('click',()=>openApp(id));dock.append(b)}
+ b.innerHTML='<span class="ep-dock-icon tone-'+a.tone+'">'+icon(a.icon)+'</span>';b.querySelector('.ep-dock-icon').setAttribute('data-ep-optics','');b.addEventListener('click',()=>openApp(id));dock.append(b)}
  dock.setAttribute('data-ep-optics','');root.append(dock);
  updateClock();
 }
