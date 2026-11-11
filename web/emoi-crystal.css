@@ -413,3 +413,42 @@ body[data-ui-mode=phone] .ep-list-avatar svg{color:white}
   color:CanvasText;background:Canvas;border:1px solid CanvasText
  }
 }
+
+/* v3 layout polish — show ALL home icons and the real search control
+   without hiding a third row under the glass Dock. */
+body[data-ui-mode=phone] .ep-home-scroll{padding-top:12px;padding-bottom:8px}
+body[data-ui-mode=phone] .ep-hero-widget{
+ min-height:165px;
+ margin-bottom:19px;
+}
+body[data-ui-mode=phone] .ep-app-group-title{margin-bottom:13px}
+body[data-ui-mode=phone] .ep-app-grid{row-gap:13px}
+body[data-ui-mode=phone] .ep-home-search{margin:12px auto 3px}
+body[data-ui-mode=phone] .ep-dock{flex-shrink:0}
+body[data-ui-mode=phone] .ep-dock-icon.tone-silver,
+body[data-ui-mode=phone] .ep-dock-icon.tone-silver svg{
+ --ep-icon-ink:#fff;color:#fff;
+ background:linear-gradient(155deg,rgba(255,255,255,.12),rgba(255,255,255,.015) 67%);
+}
+body[data-ui-mode=phone] .ep-dock-icon.tone-silver svg{background:none}
+body[data-ui-mode=phone] .ep-im-conversation-start{
+  border-radius:23px;
+  background:linear-gradient(145deg,rgba(4,29,36,.13),rgba(6,35,42,.06));
+  border:1px solid rgba(255,255,255,.17);
+  -webkit-backdrop-filter:blur(2.4px) saturate(140%);
+  backdrop-filter:blur(2.4px) saturate(140%);
+  padding:19px 18px;
+}
+@media(max-width:600px){
+ body[data-ui-mode=phone] .ep-home-scroll{padding-top:10px}
+ body[data-ui-mode=phone] .ep-hero-widget{min-height:156px}
+ body[data-ui-mode=phone] .ep-app-grid{row-gap:11px}
+ body[data-ui-mode=phone] .ep-home-search{margin-top:11px}
+}
+@media(max-height:740px){
+ body[data-ui-mode=phone] .ep-home-top{padding-top:8px}
+ body[data-ui-mode=phone] .ep-hero-widget{min-height:144px}
+ body[data-ui-mode=phone] .ep-app-icon{width:58px;height:58px}
+ body[data-ui-mode=phone] .ep-app-grid{row-gap:10px}
+ body[data-ui-mode=phone] .ep-home-search{margin:8px auto 2px}
+}
