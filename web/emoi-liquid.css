@@ -1,0 +1,157 @@
+/* Émoi Liquid Glass 2 / iOS-inspired modular optics.
+   Based on two owner-supplied technical reference PDFs, not copied materials.
+   CSS shell controls shape; WebGL2 optics controls refraction; fallback stays legible.
+*/
+:root{
+ --ep-glass-blur:16px;
+ --ep-glass-highlight:rgba(255,255,255,.82);
+ --ep-glass-border:rgba(255,255,255,.40);
+ --ep-glass-ink:#183c63;
+ --ep-glass-shadow:rgba(31,64,105,.13);
+ --ep-glass-fill:linear-gradient(145deg,rgba(255,255,255,.30),rgba(222,240,255,.09) 65%,rgba(255,255,255,.18));
+ --ep-glass-control:linear-gradient(150deg,rgba(255,255,255,.44),rgba(224,239,253,.14));
+ --ep-glass-edge:0 0 0 1px rgba(255,255,255,.58),inset 0 1px 0 rgba(255,255,255,.94),inset 0 -1px 0 rgba(104,159,215,.16),0 8px 25px var(--ep-glass-shadow);
+}
+body[data-ui-mode=phone] .emoi-phone-host{color:var(--ep-glass-ink);background-color:#d5e8f8}
+body[data-ui-mode=phone] .emoi-phone-host::before{
+ background-image:radial-gradient(ellipse at 15% 0%,rgba(255,255,255,.34),transparent 42%),
+  linear-gradient(170deg,rgba(248,251,255,.12),rgba(224,239,251,.08) 70%,rgba(168,201,229,.18)),
+  var(--emoi-active-wallpaper,url('assets/water-light.webp'));
+}
+body[data-ui-mode=phone] .emoi-phone-host::after{
+ background:radial-gradient(ellipse at 78% 16%,rgba(243,249,255,.22),transparent 52%),linear-gradient(180deg,transparent 35%,rgba(236,245,255,.10));
+}
+body[data-ui-mode=phone] .ep-home-brand h1{font-size:42px;color:#183b61;letter-spacing:-.053em;font-weight:400}
+body[data-ui-mode=phone] .ep-home-brand small{color:#567fa4}
+body[data-ui-mode=phone] .ep-overline{letter-spacing:.17em;color:#5e7d9a}
+body[data-ui-mode=phone] .ep-home-top{padding:16px 22px 9px}
+body[data-ui-mode=phone] .ep-home-scroll{padding:18px 21px 15px}
+body[data-ui-mode=phone] .ep-home-caption{display:none}
+body[data-ui-mode=phone] .ep-hero-widget{
+ min-height:183px;
+ border:1px solid rgba(255,255,255,.52);
+ border-radius:29px;
+ background:linear-gradient(145deg,rgba(255,255,255,.29),rgba(214,233,250,.10));
+ box-shadow:0 0 0 1px rgba(255,255,255,.37),inset 0 1px 2px rgba(255,255,255,.83),0 12px 32px rgba(42,94,139,.12);
+ -webkit-backdrop-filter:blur(var(--ep-glass-blur)) saturate(134%);
+ backdrop-filter:blur(var(--ep-glass-blur)) saturate(134%);
+}
+body[data-ui-mode=phone] .ep-hero-widget::before{
+ right:-18px;top:-84px;width:211px;height:211px;
+ border:1px solid rgba(255,255,255,.44);
+ box-shadow:0 0 0 24px rgba(225,240,254,.08),0 0 0 59px rgba(221,239,251,.05),0 0 0 85px rgba(245,252,255,.06);
+}
+body[data-ui-mode=phone] .ep-hero-widget::after{
+ border-color:rgba(255,255,255,.62);
+ box-shadow:inset 0 1px 1px rgba(255,255,255,.37),0 0 18px rgba(224,244,255,.21);
+}
+body[data-ui-mode=phone] .ep-widget-date{color:#315f87}
+body[data-ui-mode=phone] .ep-widget-clock{font-weight:250;color:#153d65;font-size:51px}
+body[data-ui-mode=phone] .ep-widget-footer strong{color:#294e72}
+body[data-ui-mode=phone] .ep-widget-footer small{color:#53728d}
+body[data-ui-mode=phone] .ep-app-grid{row-gap:21px;column-gap:8px}
+body[data-ui-mode=phone] .ep-app-label{font-weight:520;color:#284d70;text-shadow:0 1px 3px rgba(240,248,255,.7)}
+body[data-ui-mode=phone] .ep-app-icon{
+ border-radius:21px;width:63px;height:63px;
+ background:linear-gradient(150deg,rgba(248,253,255,.50),rgba(224,239,255,.19) 65%,rgba(186,216,246,.22));
+ color:var(--ep-icon-ink,#2d638d);
+ border:1px solid rgba(255,255,255,.52);
+ box-shadow:0 0 0 1px rgba(255,255,255,.28),inset 0 1px 1px rgba(255,255,255,.85),inset 0 -2px 3px rgba(86,153,216,.10),0 8px 16px rgba(37,79,117,.14);
+ -webkit-backdrop-filter:blur(12px) saturate(135%);
+ backdrop-filter:blur(12px) saturate(135%);
+}
+body[data-ui-mode=phone] .ep-app-icon::before{
+ background:linear-gradient(150deg,rgba(255,255,255,.47),rgba(255,255,255,.08) 34%,transparent 58%);
+ border-radius:18px;inset:2px;
+}
+body[data-ui-mode=phone] .ep-app-icon svg{stroke-width:1.65;width:29px;height:29px;filter:drop-shadow(0 1px 1px rgba(255,255,255,.68))}
+body[data-ui-mode=phone] .ep-app:active .ep-app-icon{transform:scale(.94);filter:brightness(1.05)}
+body[data-ui-mode=phone] .ep-dock{
+ position:relative;isolation:isolate;
+ background:linear-gradient(150deg,rgba(255,255,255,.36),rgba(232,244,255,.13));
+ border:1px solid rgba(255,255,255,.61);
+ box-shadow:0 0 0 1px rgba(255,255,255,.19),inset 0 1px 1px rgba(255,255,255,.88),0 9px 32px rgba(41,80,129,.17);
+ -webkit-backdrop-filter:blur(20px) saturate(135%);backdrop-filter:blur(20px) saturate(135%);
+ border-radius:29px;min-height:81px;
+}
+body[data-ui-mode=phone] .ep-dock-icon{border-radius:18px;width:54px;height:54px;background:linear-gradient(140deg,rgba(255,255,255,.62),rgba(218,236,252,.31));box-shadow:0 0 0 1px rgba(255,255,255,.28),inset 0 1px 1px rgba(255,255,255,.95),0 5px 14px rgba(53,94,134,.10)}
+body[data-ui-mode=phone] .ep-dock-icon svg{width:27px;height:27px;stroke-width:1.65}
+body[data-ui-mode=phone] .ep-round{
+ border-radius:50%;position:relative;isolation:isolate;
+ background:linear-gradient(145deg,rgba(255,255,255,.36),rgba(226,241,255,.13));
+ border:1px solid rgba(255,255,255,.52);
+ box-shadow:var(--ep-glass-edge);
+ -webkit-backdrop-filter:blur(14px) saturate(136%);backdrop-filter:blur(14px) saturate(136%);
+}
+body[data-ui-mode=phone] .ep-round svg{width:18px;height:18px;stroke-width:1.8}
+body[data-ui-mode=phone] .ep-list-screen,
+body[data-ui-mode=phone] .ep-detail-screen,
+body[data-ui-mode=phone] .ep-settings{
+ background:linear-gradient(180deg,rgba(244,250,255,.55),rgba(235,244,255,.27) 72%,rgba(229,239,250,.35));
+}
+body[data-ui-mode=phone] .ep-list-panel,
+body[data-ui-mode=phone] .ep-settings-panel{
+ background:linear-gradient(145deg,rgba(255,255,255,.48),rgba(236,246,255,.25));
+ border:1px solid rgba(255,255,255,.62);
+ box-shadow:0 0 0 1px rgba(255,255,255,.18),inset 0 1px 1px rgba(255,255,255,.87),0 9px 27px rgba(46,82,128,.11);
+ -webkit-backdrop-filter:blur(18px) saturate(133%);backdrop-filter:blur(18px) saturate(133%);
+}
+body[data-ui-mode=phone] .ep-page-header{
+ background:linear-gradient(155deg,rgba(249,253,255,.41),rgba(235,244,255,.17));
+ border-bottom:1px solid rgba(255,255,255,.53);
+ -webkit-backdrop-filter:blur(16px) saturate(135%);backdrop-filter:blur(16px) saturate(135%);
+}
+body[data-ui-mode=phone] .ep-statusbar{color:#1d4569}
+body[data-ui-mode=phone] .ep-statusbar .ep-status-island{background:#1f3750}
+/* Shared optical surfaces. Original glass engine draws only when WebGL2 works.
+   Content remains above its canvas; optical failure uses this CSS material. */
+body[data-ui-mode=phone] [data-ep-optics]{position:relative;isolation:isolate;overflow:hidden}
+body[data-ui-mode=phone] [data-ep-optics] > :not(.ep-optical-canvas){position:relative;z-index:2}
+body[data-ui-mode=phone] .ep-optical-canvas{
+ position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;
+ opacity:.82;
+}
+body[data-ui-mode=phone] [data-ep-optics-ready="1"]{
+ -webkit-backdrop-filter:none;backdrop-filter:none;
+ background:rgba(244,251,255,.08);
+}
+body[data-ui-mode=phone] [data-ep-optics-ready="1"]::before{
+ opacity:.18;
+}
+/* Glass inputs MUST be isolated from the background's compositing layer.
+   This avoids iOS virtual-keyboard caret glitches in contenteditable/textarea. */
+body[data-ui-mode=phone] .ep-im-composer{
+ isolation:isolate;position:relative;overflow:visible;
+ background:transparent;border:0;box-shadow:none;
+ -webkit-backdrop-filter:none;backdrop-filter:none;
+}
+body[data-ui-mode=phone] .ep-im-composer::before{
+ content:"";position:absolute;inset:0;border-radius:inherit;z-index:-1;pointer-events:none;
+ border:1px solid rgba(255,255,255,.62);
+ background:linear-gradient(145deg,rgba(255,255,255,.51),rgba(219,237,253,.25));
+ box-shadow:0 0 0 1px rgba(255,255,255,.31),inset 0 1px 0 rgba(255,255,255,.88),0 6px 23px rgba(34,78,127,.10);
+ -webkit-backdrop-filter:blur(var(--ep-glass-blur)) saturate(134%);
+ backdrop-filter:blur(var(--ep-glass-blur)) saturate(134%);
+}
+body[data-ui-mode=phone] .ep-im-composer textarea{
+ background:none;outline:0;position:relative;z-index:2;
+ -webkit-backdrop-filter:none;backdrop-filter:none;
+}
+/* Installed PWA, ordinary Safari, keyboard and accessible motion. */
+@media(max-width:600px){
+ body[data-ui-mode=phone] .ep-home-scroll{padding-left:18px;padding-right:18px}
+ body[data-ui-mode=phone] .ep-dock{margin-left:16px;margin-right:16px}
+}
+@media(max-height:740px){
+ body[data-ui-mode=phone] .ep-home-scroll{padding-top:8px}
+ body[data-ui-mode=phone] .ep-app-grid{row-gap:12px}
+ body[data-ui-mode=phone] .ep-hero-widget{min-height:148px;margin-bottom:17px}
+ body[data-ui-mode=phone] .ep-dock{min-height:70px}
+}
+@media(prefers-reduced-motion:reduce),(forced-colors:active){
+ body[data-ui-mode=phone] .ep-optical-canvas{display:none!important}
+ body[data-ui-mode=phone] [data-ep-optics-ready="1"]{
+  background:linear-gradient(145deg,rgba(255,255,255,.67),rgba(218,235,249,.46));
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+ }
+}
