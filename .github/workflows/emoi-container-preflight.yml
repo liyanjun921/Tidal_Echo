@@ -105,7 +105,7 @@ jobs:
           docker volume rm emoi-preflight 2>/dev/null || true
 
   phone-visual-smoke:
-    if: github.event_name == 'pull_request' && github.head_ref == 'design/emoi-dual-mode-phone-v1'
+    if: github.event_name == 'pull_request' && (github.head_ref == 'design/emoi-dual-mode-phone-v1' || github.head_ref == 'design/emoi-crystal-glass-v3')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
