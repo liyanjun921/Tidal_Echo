@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="1700" viewBox="0 0 1100 1700">
+ <defs>
+  <linearGradient id="paper" x2="1" y2="1"><stop stop-color="#e4eaf0"/><stop offset=".42" stop-color="#d4dfe9"/><stop offset="1" stop-color="#b8c9d8"/></linearGradient>
+  <radialGradient id="mist"><stop stop-color="#fff" stop-opacity=".7"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+  <pattern id="dots" width="33" height="35" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r=".65" fill="#31495c" opacity=".16"/></pattern>
+  <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency=".43" numOctaves="2" seed="4" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="linear" slope=".075"/></feComponentTransfer></filter>
+ </defs>
+ <rect width="1100" height="1700" fill="url(#paper)"/>
+ <rect width="1100" height="1700" fill="url(#dots)"/>
+ <ellipse cx="650" cy="390" rx="560" ry="630" fill="url(#mist)"/>
+ <g fill="none" stroke="#536677" stroke-width="1.4" opacity=".21">
+  <circle cx="824" cy="480" r="265"/><circle cx="824" cy="480" r="205"/><circle cx="824" cy="480" r="122"/>
+  <path d="M0 460h1100M824 0v1050M500 160l460 750M25 970Q550 780 1100 1020"/>
+  <path stroke-dasharray="4 13" d="M215 1020c440-480 620-400 840-200M90 1420c300-260 700-160 940-350"/>
+ </g>
+ <g fill="none" stroke="#3a515a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity=".4">
+  <path d="M103 1600C270 1450 225 1230 304 1020s230-294 287-480"/>
+  <path d="M302 1020c-48-65-104-108-178-107M340 937c-13-88-42-130-118-162M382 856c96-25 130-62 158-130M451 735c-14-95-6-140 58-202M495 690c64 12 113-10 168-56"/>
+  <path d="M227 1320c85 0 155-28 206-112M228 1320c-100-43-142-123-157-209"/>
+  <path d="M177 1440c94-22 151-7 232 21M215 1180c-110-24-136-63-158-136"/>
+ </g>
+ <g fill="#b8c6b8" fill-opacity=".23" stroke="#405b62" stroke-opacity=".36" stroke-width="1.5">
+  <path d="M302 1020c-120-80-170-68-178-107 92-17 146 0 178 107Z"/>
+  <path d="M340 937c-90-96-134-100-118-162 89 30 127 83 118 162Z"/>
+  <path d="M382 856c35-97 105-151 158-130-35 79-75 117-158 130Z"/>
+  <path d="M451 735c-30-111 5-177 58-202 20 98-4 155-58 202Z"/>
+  <path d="M495 690c84-95 129-93 168-56-57 60-95 70-168 56Z"/>
+  <path d="M227 1320c76-103 150-124 206-112-44 88-117 122-206 112Z"/>
+  <path d="M227 1320c-110-35-153-116-157-209 74 45 129 126 157 209Z"/>
+  <path d="M177 1440c92-62 170-50 232 21-110 30-184 12-232-21Z"/>
+ </g>
+ <g stroke="#8a4c52" stroke-width="3" opacity=".6" fill="none" stroke-linecap="round">
+  <path d="M5 540C190 595 233 770 370 742c105-24 171-72 253 30 54 65 201 108 462 44"/>
+  <path d="M735 828c63-30 130-30 208 6"/>
+ </g>
+ <g font-family="Georgia,serif" fill="#304958" opacity=".5" letter-spacing="7">
+  <text x="84" y="150" font-size="24">ÉMOI / ARCHIVE</text>
+  <text x="84" y="177" font-size="10" letter-spacing="4">MEMORY IN BLOOM • 007</text>
+  <text x="854" y="1160" font-size="16">07 / XI</text>
+  <text x="700" y="1210" font-size="11" letter-spacing="3">BOTANICAL NOTES</text>
+ </g>
+ <rect width="1100" height="1700" filter="url(#grain)" opacity=".6"/>
+</svg>
