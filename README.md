@@ -1,4 +1,8 @@
-# Luné / OURSPACE · V0.16 当前背景
+# Émoi / OURSPACE · 私人聊天空间
+
+> 原名 Luné。改名仅影响产品展示、PWA 标题和通知默认名称；`lune_*` 数据键、服务路径、脚本、Docker 卷与历史文档保留原样，确保旧聊天和 Ombre 档案无需迁移。腾讯云部署与 Garden / CyberBoss / Ombre 连接边界见 [Émoi 云端部署与集成验收](docs/EMOI_TENCENT_CLOUD.md)。
+
+## 历史开发说明：Luné V0.16
 
 已把用户 fork 的 **still-true** 接入现有 Luné：**自主空间 → 当前背景** 与记忆页均可打开同一面板，维护今日状态、跨天持续的事、待复核和归档。原版五个工具进入已有聊天，按 GPT/Claude 私聊和群聊成员分四份保存；写入须引用本轮用户原话。API 每轮装配当前快照，Claude 常驻会话按内容变化或压缩后补挂。到期归档不推断事情已经结束，也不会自动写入长期记忆。原版源码、验证与恢复说明见 [V0.16 当前背景](docs/LUNE_V16_STILL_TRUE.md)。
 
