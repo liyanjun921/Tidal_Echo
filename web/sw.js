@@ -2,7 +2,7 @@
    IMPORTANT: bump CACHE on every front-end change, or installed clients keep the
    old shell (the precached index.html won't refresh until the SW reinstalls). */
 const AI_NAME = "Émoi";
-const CACHE = "emoi-v1-brand-refresh";
+const CACHE = "emoi-v2-brand-complete";
 const PRECACHE = [
   "./index.html", "./styles.css", "./polish.css", "./connection.css", "./app.js", "./reading.js", "./reading.css", "./checklist.js", "./checklist.css", "./cinema.js", "./cinema.css", "./relay-client.js", "./rich-text.js", "./memory.js", "./native-memory.js", "./ombre-memory.js", "./continuity.js", "./wren-room.js", "./wren-room.css", "./xinchao-room.js", "./xinchao-room.css", "./living-context.js", "./living-context.css",
   "./assets/water-light.webp", "./assets/lily-water.webp",
