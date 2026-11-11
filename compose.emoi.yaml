@@ -14,7 +14,7 @@ services:
     environment:
       RELAY_SECRET: ${RELAY_SECRET:?Set RELAY_SECRET in the private .env file}
       PORT: "8080"
-      RELAY_DB: /data/relay.db
+      RELAY_DB: /data/emoi.db
       RELAY_UPLOAD_DIR: /data/uploads
       LOOP_CONFIG: /data/api_loop.config.json
       LOOP_CACHE_DIR: /data/loop_cache
