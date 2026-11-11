@@ -101,3 +101,30 @@ jobs:
           if [ "${{ job.status }}" != success ]; then docker logs --tail 100 emoi-preflight 2>/dev/null || true; fi
           docker rm -f emoi-preflight 2>/dev/null || true
           docker volume rm emoi-preflight 2>/dev/null || true
+
+  phone-visual-smoke:
+    if: github.event_name == 'pull_request' && github.head_ref == 'design/emoi-dual-mode-phone-v1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Chinese font and browser driver
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fonts-noto-cjk
+          python -m pip install selenium
+          fc-cache -f >/dev/null
+      - name: Check small-phone UI, contacts and both display modes
+        env:
+          EMOI_SCREENSHOT_DIR: ${{ runner.temp }}/emoi-phone-views
+        run: python tests/run_phone_browser.py
+      - name: Upload real browser screenshots for design review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emoi-phone-ui-real-screenshots
+          path: ${{ runner.temp }}/emoi-phone-views/*.png
+          if-no-files-found: ignore
