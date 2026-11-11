@@ -121,6 +121,11 @@ jobs:
           fc-cache -f >/dev/null
       - name: Test authenticated dynamic multi-AI scopes
         run: python -m unittest discover -s tests -p test_emoi_contacts_v2.py -v
+      - name: Check Crystal shaders and frontend JS syntax
+        run: |
+          node --check web/emoi-optics.js
+          node --check web/emoi-phone.js
+          node --check web/emoi-imessage.js
       - name: Check small-phone UI, contacts and both display modes
         env:
           EMOI_SCREENSHOT_DIR: ${{ runner.temp }}/emoi-phone-views
