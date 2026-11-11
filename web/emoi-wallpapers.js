@@ -11,6 +11,7 @@
 
   const PRESETS = [
     {id:'inherit', name:'跟随全局', caption:'沿用外观设置', value:null},
+    {id:'aura', name:'珍珠蓝光', caption:'液态玻璃 · 雾白蓝', value:"url('assets/emoi-phone-aura.svg')"},
     {id:'archive', name:'植物档案', caption:'雾蓝 · 纸张 · 红线', value:"url('assets/emoi-archive-botanical.svg')"},
     {id:'nocturne', name:'星轨夜色', caption:'深蓝 · 轨道 · 微光', value:"url('assets/emoi-archive-nocturne.svg')"},
     {id:'water', name:'流动水光', caption:'清透的蓝色', value:"url('assets/water-light.webp')"},
@@ -26,7 +27,7 @@
     gpt:'GPT 私聊', claude:'Claude 私聊', group:'三人聊天室'
   };
   const DEFAULTS = {
-    'page:home':'water', 'page:memory':'archive', 'page:reading':'archive', 'page:journal':'archive',
+    'page:home':'aura', 'page:memory':'archive', 'page:reading':'archive', 'page:journal':'archive',
     'page:cinema':'nocturne', 'page:report':'archive',
     'page:whisper':'archive', 'page:health':'lily',
     'page:calendar':'water', 'page:todo':'water'
