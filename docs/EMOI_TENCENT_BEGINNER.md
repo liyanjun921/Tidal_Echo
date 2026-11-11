@@ -12,7 +12,7 @@
 
 ```bash
 cd ~
-if [ ! -d emoi-web ]; then git clone --depth 1 --branch main https://github.com/liyanjun921/Tidal_Echo.git emoi-web || exit 1; fi
+if [ ! -d emoi-web/.git ]; then git clone --depth 1 --branch main https://github.com/liyanjun921/Tidal_Echo.git emoi-web; fi
 cd emoi-web && git pull --ff-only && bash scripts/deploy_emoi_tencent_light.sh
 ```
 
