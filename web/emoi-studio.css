@@ -59,7 +59,7 @@ body{background:#17202b}
 .emoi-home-head{display:flex;justify-content:space-between;align-items:center;padding:calc(34px + env(safe-area-inset-top,0px)) 28px 12px;position:relative;z-index:1}
 .emoi-home-head h1{font:italic 48px/1.05 Georgia,'Times New Roman',serif;font-weight:400;letter-spacing:-.035em;margin:5px 0 0;color:#fff}
 .emoi-home-kicker{font-size:9px;letter-spacing:.28em;color:#d3dbe6}
-.emoi-home-wall{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;color:#fff}
+.emoi-home-actions{display:flex;align-items:center;gap:8px}.emoi-home-wall{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;color:#fff}
 .emoi-home-scroll{flex:1;min-height:0;overflow:auto;padding:4px 22px 50px;position:relative;z-index:1;scrollbar-width:thin}
 .emoi-home-hero{min-height:260px;border:1px solid #ffffff47;border-radius:28px;position:relative;overflow:hidden;padding:22px 23px;background:radial-gradient(ellipse at 69% 36%,#a3c2df35,transparent 52%),linear-gradient(150deg,#93a1b421,#1a233058 70%);box-shadow:inset 0 1px 1px #ffffff38,0 16px 40px #07132433;-webkit-backdrop-filter:blur(23px);backdrop-filter:blur(23px)}
 .emoi-home-hero::before{content:"";position:absolute;inset:0;opacity:.27;background-image:url('assets/emoi-archive-nocturne.svg');background-size:cover;background-position:center}
