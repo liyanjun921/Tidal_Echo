@@ -1,0 +1,15 @@
+# Optional overlay: attach Émoi to the existing XLC gateway network.
+# Allows Caddy inside xlc-gateway-gateway-1 to reach http://emoi-chat:8080
+# without exposing port 8088 publicly or changing any existing Caddy route.
+services:
+  emoi:
+    networks:
+      default:
+      xlc_gateway:
+        aliases:
+          - emoi-chat
+
+networks:
+  xlc_gateway:
+    external: true
+    name: xlc-gateway_default
