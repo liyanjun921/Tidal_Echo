@@ -10,7 +10,7 @@ from pathlib import Path
 root = Path(__file__).resolve().parents[1]
 os.chdir(root)
 if not os.environ.get("RELAY_SECRET"):
-    raise SystemExit("Set RELAY_SECRET to a long, unique password before starting Luné")
+    raise SystemExit("Set RELAY_SECRET to a long, unique password before starting Émoi")
 for key in ("RELAY_DB", "LOOP_CONFIG"):
     if os.environ.get(key):
         Path(os.environ[key]).parent.mkdir(parents=True, exist_ok=True)
