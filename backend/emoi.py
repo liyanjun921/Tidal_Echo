@@ -316,7 +316,7 @@ def register(app, relay):
             body = json.loads(raw)
         except (ValueError, TypeError):
             raise HTTPException(422, "备份不是有效 JSON")
-        if not isinstance(body, dict) or body.get("format") not in {"emoi-v03", "emoi-v04", "emoi-local-v04"}:
+        if not isinstance(body, dict) or body.get("format") not in {"emoi-v03", "emoi-v04", "emoi-local-v04", "lune-v03", "lune-v04", "lune-local-v04"}:
             raise HTTPException(422, "无法识别的备份格式")
         source = body.get("data", body)
         if not isinstance(source, dict):
@@ -365,7 +365,8 @@ def register(app, relay):
                 if not isinstance(m, dict) or not isinstance(m.get("meta", {}), dict):
                     raise HTTPException(422, "消息格式不正确")
                 meta = m.get("meta", {}) if isinstance(m, dict) else {}
-                room = str(meta.get("api_session", "")).removeprefix("emoi-")
+                session = str(meta.get("api_session", ""))
+                room = session.removeprefix("emoi-").removeprefix("lune-")
                 if room not in ROOMS or m.get("from") not in {"human", "ai"}:
                     raise HTTPException(422, "消息范围不正确")
                 normalized.append({"old_id": m.get("id"), "room": room, "direction": "in" if m["from"] == "human" else "out", "kind": "act" if m.get("kind") == "act" else ("user" if m["from"] == "human" else "reply"), "text": m.get("text", ""), "ts": m.get("ts"), "meta": {**imported_meta(m), "agent_id": meta.get("agent_id", "")}})
