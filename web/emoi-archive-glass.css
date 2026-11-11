@@ -234,6 +234,18 @@ body[data-dark=true] .page-sheet .sheet-head,body[data-dark=true] .more-menu,bod
 }
 body[data-dark=true] .page-sheet .section-intro{color:#b9cbd9}
 body[data-dark=true] .soft-button,body[data-dark=true] .file-button,body[data-dark=true] .filter,body[data-dark=true] .page-head-actions .icon-button{background:rgba(55,77,101,.58);border-color:rgba(202,223,239,.2);color:#e4eef6}
+/* iMessage-like grouping: adjacent bubbles feel like one natural text turn.
+   Keep tool receipts and timestamps accessible even when visual spacing is tighter. */
+.chat-stream > .message.user + .message.user,
+.chat-stream > .message.ai + .message.ai{margin-top:-8px}
+.chat-stream > .message.ai + .message.ai .message-label{display:none}
+.chat-stream > .message.ai + .message.ai .message-bubble{border-top-left-radius:18px}
+.chat-stream > .message.user + .message.user .message-bubble{border-top-right-radius:18px}
+.message-bubble:focus-within{box-shadow:inset 0 1px 1px rgba(255,255,255,.84),0 0 0 2px rgba(103,145,203,.27)}
+body[data-dark=true] .day-separator{
+  background:rgba(38,59,79,.66);border-color:rgba(203,220,235,.19);color:#d2e1ef
+}
+body[data-dark=true] .message-meta,body[data-dark=true] .message-label{color:#b4c5d4}
 /* Current-page wallpaper palette. The buttons use real controls, not decorative images. */
 .emoi-wallpaper-picker{
   width:min(620px,calc(100vw - 28px));
