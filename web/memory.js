@@ -7,7 +7,7 @@ const node=(tag,text,cls='')=>{const n=document.createElement(tag);n.textContent
 const notice=text=>$('#memoryEngineStatus').textContent=text;
 function disabled(value){document.querySelectorAll('#memorySettingsForm input,#memorySettingsForm button,#memorySearchForm button,#memoryLoopForm input,#memoryLoopForm select,#memoryLoopForm button,#memoryEngineCheck,#memoryHistory').forEach(n=>n.disabled=value)}
 async function refresh(){
- if(preview||!relay().enabled){disabled(true);notice(preview?'界面预览 · 未连接真实记忆服务。这里展示操作入口，不生成示例检索结果。':'请先连接自己的 Luné 服务器。原有本机记忆仍可查看。');return}
+ if(preview||!relay().enabled){disabled(true);notice(preview?'界面预览 · 未连接真实记忆服务。这里展示操作入口，不生成示例检索结果。':'请先连接自己的 Émoi 服务器。原有本机记忆仍可查看。');return}
  disabled(false);const status=await relay().request('/lune/memory/status');settings=status.settings;
  for(const name of ['enabled','auto_recall','model_writes'])$('#memorySettingsForm').elements[name].checked=!!settings[name];
  notice(status.message+(status.engine==='basic'?'\n当前引擎：基础记忆':'\n主动检索：Latent')+'\n'+(status.passive.enabled?status.passive.message:'原版 Passive Recall 已关闭；主动检索仍可使用。'));
