@@ -1,4 +1,4 @@
-"""Luné owner controls and model routing into unmodified, isolated Ombre apps."""
+"""Émoi owner controls and model routing into unmodified, isolated Ombre apps."""
 import asyncio
 import hmac
 import json
@@ -13,10 +13,10 @@ import httpx
 
 try:
     from . import ombre_runtime as ob
-    from .lune_memory import MemoryStore
+    from .emoi_memory import MemoryStore
 except ImportError:
     import ombre_runtime as ob
-    from lune_memory import MemoryStore
+    from emoi_memory import MemoryStore
 
 FEATURES = [
     ('Folio 合并增强', '同一引擎与档案：新版时间线/记忆格/手机页、中文检索、精修预览与回收恢复'),
@@ -35,14 +35,14 @@ FEATURES = [
 
 def init(path):
     with sqlite3.connect(path) as db:
-        db.execute('CREATE TABLE IF NOT EXISTS lune_ombre_settings (scope TEXT PRIMARY KEY, enabled INTEGER NOT NULL, automatic INTEGER NOT NULL)')
-        db.executemany('INSERT OR IGNORE INTO lune_ombre_settings VALUES(?,1,1)', [(s,) for s in ob.SCOPES])
+        db.execute('CREATE TABLE IF NOT EXISTS emoi_ombre_settings (scope TEXT PRIMARY KEY, enabled INTEGER NOT NULL, automatic INTEGER NOT NULL)')
+        db.executemany('INSERT OR IGNORE INTO emoi_ombre_settings VALUES(?,1,1)', [(s,) for s in ob.SCOPES])
 
 
 def settings(path, scope):
     ob.scope_check(scope)
     with sqlite3.connect(path) as db:
-        row = db.execute('SELECT enabled,automatic FROM lune_ombre_settings WHERE scope=?', (scope,)).fetchone()
+        row = db.execute('SELECT enabled,automatic FROM emoi_ombre_settings WHERE scope=?', (scope,)).fetchone()
     return {'enabled': bool(row[0]), 'automatic': bool(row[1])}
 
 
@@ -63,7 +63,7 @@ async def context(path, room, agent, query, opening=None,event_id=''):
         # The host records completed turns independently of either engine.
         if opening is None:
             with sqlite3.connect(path) as db:
-                row = db.execute('SELECT last_at FROM lune_memory_sessions WHERE room=? AND agent=?',
+                row = db.execute('SELECT last_at FROM emoi_memory_sessions WHERE room=? AND agent=?',
                                  (room, agent)).fetchone()
             opening = row is None or time.time() - row[0] > 1800
         parts = []
@@ -86,7 +86,7 @@ async def context(path, room, agent, query, opening=None,event_id=''):
         value['text'] = text if len(text) <= 24000 else ''
         value['projection_omitted'] = len(text) > 24000
         if coordinates and event_id:
-            try:await xc.request(scope,'/lune-host/resonance','POST',{'id':'recall:'+event_id,'text':text[:24000]})
+            try:await xc.request(scope,'/emoi-host/resonance','POST',{'id':'recall:'+event_id,'text':text[:24000]})
             except (httpx.HTTPError,ValueError,RuntimeError):pass
     return value
 
@@ -95,7 +95,7 @@ def register(app, relay):
     path = relay['DB_PATH']
     init(path)
 
-    @app.get('/lune/ombre/status')
+    @app.get('/emoi/ombre/status')
     async def status(request: Request):
         relay['check_auth'](request)
         rows = []
@@ -118,7 +118,7 @@ def register(app, relay):
                 'folio_installed': folio.installed(), 'folio_revision': folio.REVISION,
                 'scopes': rows, 'features': [{'name': n, 'detail': d} for n, d in FEATURES]}
 
-    @app.patch('/lune/ombre/{scope}/settings')
+    @app.patch('/emoi/ombre/{scope}/settings')
     async def configure(scope: str, request: Request):
         relay['check_auth'](request)
         try:
@@ -132,11 +132,11 @@ def register(app, relay):
                     raise HTTPException(422, '开关需要布尔值')
                 current[key] = data[key]
         with sqlite3.connect(path) as db:
-            db.execute('UPDATE lune_ombre_settings SET enabled=?,automatic=? WHERE scope=?',
+            db.execute('UPDATE emoi_ombre_settings SET enabled=?,automatic=? WHERE scope=?',
                        (int(current['enabled']), int(current['automatic']), scope))
         return current
 
-    @app.post('/lune/ombre/{scope}/open')
+    @app.post('/emoi/ombre/{scope}/open')
     async def open_dashboard(scope: str, request: Request):
         relay['check_auth'](request)
         try:
@@ -147,12 +147,12 @@ def register(app, relay):
             raise HTTPException(503, '尚未安装或校验通过原版 Ombre-Brain')
         view = request.query_params.get('view', '')
         response = JSONResponse({'url': '/ombre/' + scope + ('/v2/' if view == 'folio' else '/')})
-        response.set_cookie('lune_ombre_' + scope, ob.owner_ticket(scope), httponly=True,
+        response.set_cookie('emoi_ombre_' + scope, ob.owner_ticket(scope), httponly=True,
                             secure=request.url.scheme == 'https', samesite='strict',
                             path='/ombre/' + scope + '/', max_age=3600)
         return response
 
-    @app.post('/lune/assistant/ombre')
+    @app.post('/emoi/assistant/ombre')
     async def model_tool(request: Request):
         relay['check_auth'](request)
         data = await request.json()
@@ -180,8 +180,8 @@ def register(app, relay):
         result=await ob.call(scope,native,args)
         if native in {'breath','breath_advanced'} and not result.get('isError'):
             try:
-                try:from .lune_living_context import projection
-                except ImportError:from lune_living_context import projection
+                try:from .emoi_living_context import projection
+                except ImportError:from emoi_living_context import projection
                 current=projection(path,data['room'],data['agent_id'])
                 if current['text']:result={**result,'content':[*result.get('content',[]),{'type':'text','text':current['text']}]}
             except (RuntimeError,ValueError,OSError):pass
@@ -216,8 +216,8 @@ def register_proxy(app):
             ob.scope_check(scope)
         except ValueError:
             raise HTTPException(404) from None
-        if not ob.owner_valid(scope, request.cookies.get('lune_ombre_' + scope, '')):
-            raise HTTPException(401, '请从 Luné 的 Ombre 面板重新打开管理页')
+        if not ob.owner_valid(scope, request.cookies.get('emoi_ombre_' + scope, '')):
+            raise HTTPException(401, '请从 Émoi 的 Ombre 面板重新打开管理页')
         if request.headers.get('sec-fetch-site') == 'cross-site':
             raise HTTPException(403, '拒绝跨站请求')
         origin = request.headers.get('origin')
@@ -278,7 +278,7 @@ def register_proxy(app):
             response = StreamingResponse(stream(), status_code=result.status_code, headers=response_headers)
             if tail == 'auth/logout':
                 sessions.pop(scope, None)
-                response.delete_cookie('lune_ombre_' + scope, path='/ombre/' + scope + '/')
+                response.delete_cookie('emoi_ombre_' + scope, path='/ombre/' + scope + '/')
             return response
         except httpx.HTTPError:
             await client.aclose()
@@ -309,9 +309,9 @@ def register_provider(app, runtime):
             raise HTTPException(422, '向量输入过大或格式不正确')
         try:
             try:
-                from .lune_memory import LatentEngine
+                from .emoi_memory import LatentEngine
             except ImportError:
-                from lune_memory import LatentEngine
+                from emoi_memory import LatentEngine
             vectors = (await LatentEngine(runtime['RELAY_DB']).worker({'operation': 'embed', 'input': texts}))['vectors']
             return {'object': 'list', 'model': 'BAAI/bge-small-zh-v1.5', 'data': [
                 {'object': 'embedding', 'index': i, 'embedding': v} for i, v in enumerate(vectors)]}
@@ -345,8 +345,8 @@ def register_provider(app, runtime):
             result = await task
             if result.get('tool_calls'):
                 raise HTTPException(502, '整理模型返回了工具调用')
-            return {'id': 'lune-ombre-' + str(time.time_ns()), 'object': 'chat.completion', 'created': int(time.time()),
-                    'model': result.get('model', 'lune-selected-model'),
+            return {'id': 'emoi-ombre-' + str(time.time_ns()), 'object': 'chat.completion', 'created': int(time.time()),
+                    'model': result.get('model', 'emoi-selected-model'),
                     'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': result['text']}, 'finish_reason': 'stop'}]}
         except runtime['ModelError']:
             raise HTTPException(503, '所选模型连接尚不可用；订阅模式不会自动改用 API') from None

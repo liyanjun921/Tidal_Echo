@@ -1,4 +1,4 @@
-"""Luné rooms and memory, extending Tidal Echo's relay without replacing it.
+"""Émoi rooms and memory, extending Tidal Echo's relay without replacing it.
 
 Single-owner deployment: all public routes use the relay's existing auth.
 Model-visible memory is filtered again in api_loop; browser filters are not ACLs.
@@ -18,9 +18,9 @@ from pathlib import Path
 import httpx
 from fastapi import HTTPException, Request
 try:
-    from .lune_memory import MemoryStore, init as init_memory
+    from .emoi_memory import MemoryStore, init as init_memory
 except ImportError:
-    from lune_memory import MemoryStore, init as init_memory
+    from emoi_memory import MemoryStore, init as init_memory
 try:
     from .workspace import validate as validate_workspace, view as workspace_view
 except ImportError:
@@ -37,44 +37,44 @@ def now():
 def init(db_path):
     with sqlite3.connect(db_path) as c:
         c.executescript("""
-        CREATE TABLE IF NOT EXISTS lune_memories (
+        CREATE TABLE IF NOT EXISTS emoi_memories (
             id TEXT PRIMARY KEY, scope TEXT NOT NULL, title TEXT NOT NULL,
             content TEXT NOT NULL, source_message_id INTEGER, created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1,
             deleted INTEGER NOT NULL DEFAULT 0
         );
-        CREATE TABLE IF NOT EXISTS lune_memory_revisions (
+        CREATE TABLE IF NOT EXISTS emoi_memory_revisions (
             memory_id TEXT NOT NULL, version INTEGER NOT NULL, snapshot TEXT NOT NULL,
             PRIMARY KEY(memory_id, version)
         );
-        CREATE TABLE IF NOT EXISTS lune_runs (
+        CREATE TABLE IF NOT EXISTS emoi_runs (
             id TEXT PRIMARY KEY, room TEXT NOT NULL, nonce TEXT NOT NULL UNIQUE,
             message_id INTEGER NOT NULL, targets TEXT NOT NULL, state TEXT NOT NULL,
             error TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL
         );
-        CREATE INDEX IF NOT EXISTS lune_runs_room ON lune_runs(room, created_at);
-        CREATE INDEX IF NOT EXISTS lune_memory_scope ON lune_memories(scope, deleted);
-        CREATE TABLE IF NOT EXISTS lune_imports (digest TEXT PRIMARY KEY, created_at TEXT NOT NULL);
+        CREATE INDEX IF NOT EXISTS emoi_runs_room ON emoi_runs(room, created_at);
+        CREATE INDEX IF NOT EXISTS emoi_memory_scope ON emoi_memories(scope, deleted);
+        CREATE TABLE IF NOT EXISTS emoi_imports (digest TEXT PRIMARY KEY, created_at TEXT NOT NULL);
         """)
         # A restart does not prove a tool or upstream request was not executed.
         # Leave interrupted work inspectable; never automatically replay it.
-        c.execute("UPDATE lune_runs SET state='interrupted', error='服务已重启，请核对已有回复后继续', updated_at=? WHERE state IN ('pending','running')", (now(),))
+        c.execute("UPDATE emoi_runs SET state='interrupted', error='服务已重启，请核对已有回复后继续', updated_at=? WHERE state IN ('pending','running')", (now(),))
     init_memory(db_path)
 
 
 def memory_context(db_path, room, agent, query, budget=4000):
     """Read only explicitly permitted scopes. Keep raw messages untouched."""
     allowed = ["shared"]
-    if room == "lune-group":
+    if room == "emoi-group":
         allowed.append("group")
-    elif room == "lune-" + agent and agent in {"gpt", "claude"}:
+    elif room == "emoi-" + agent and agent in {"gpt", "claude"}:
         allowed.append(agent)
     else:
         return ""
     with sqlite3.connect(db_path) as c:
         c.row_factory = sqlite3.Row
         try:
-            rows = c.execute("SELECT m.* FROM lune_memories m LEFT JOIN lune_memory_details d ON d.memory_id=m.id WHERE m.deleted=0 AND COALESCE(d.status,'current')='current' AND m.scope IN (" + ",".join("?" for _ in allowed) + ") ORDER BY m.updated_at DESC LIMIT 300", allowed).fetchall()
+            rows = c.execute("SELECT m.* FROM emoi_memories m LEFT JOIN emoi_memory_details d ON d.memory_id=m.id WHERE m.deleted=0 AND COALESCE(d.status,'current')='current' AND m.scope IN (" + ",".join("?" for _ in allowed) + ") ORDER BY m.updated_at DESC LIMIT 300", allowed).fetchall()
         except sqlite3.OperationalError:
             return ""
     words = set(re.findall(r"[a-z0-9]+|[\u4e00-\u9fff]{2}", query.lower()))
@@ -108,7 +108,7 @@ def register(app, relay):
 
     def update_run(rid, state, error=""):
         with connect() as c:
-            c.execute("UPDATE lune_runs SET state=?,error=?,updated_at=? WHERE id=?", (state, error, now(), rid))
+            c.execute("UPDATE emoi_runs SET state=?,error=?,updated_at=? WHERE id=?", (state, error, now(), rid))
 
     async def run(rid, room, msg, targets):
         update_run(rid, "running")
@@ -118,15 +118,15 @@ def register(app, relay):
                     # In group chat later agents must see the earlier agent's completed reply.
                     # The loop excludes only this current user row, not newer completed replies.
                     resp = await client.post(relay["LOOP_INGEST_URL"], json={
-                        "id": msg["id"], "text": msg["text"], "session_id": "lune-" + room,
+                        "id": msg["id"], "text": msg["text"], "session_id": "emoi-" + room,
                         "agent_id": agent, "run_id": rid,
                         "attachments": msg["meta"].get("attachments", []),
                     })
                     if resp.status_code != 200 or not resp.json().get("ok"):
                         raise RuntimeError("model_turn_failed")
                     try:
-                        try:from .lune_xinchao import queue_exchange
-                        except ImportError:from lune_xinchao import queue_exchange
+                        try:from .emoi_xinchao import queue_exchange
+                        except ImportError:from emoi_xinchao import queue_exchange
                         queue_exchange(db_path,room,agent,msg,rid)
                     except (OSError,ValueError,sqlite3.Error):
                         print('心潮回流暂未入队；原聊天已保存')
@@ -138,20 +138,20 @@ def register(app, relay):
             update_run(rid, "failed", "模型服务未完成，请检查模型设置和已保存的回复")
         finally:
             tasks.pop(rid, None)
-            await relay["broadcast"](relay["app_subs"], {"type": "lune_run", "room": room, "run_id": rid})
+            await relay["broadcast"](relay["app_subs"], {"type": "emoi_run", "room": room, "run_id": rid})
 
-    @app.get("/lune/rooms")
+    @app.get("/emoi/rooms")
     async def rooms(request: Request):
         relay["check_auth"](request)
         return {"rooms": [{"id": k, "participants": v} for k, v in ROOMS.items()]}
 
-    @app.get("/lune/rooms/{room}/messages")
+    @app.get("/emoi/rooms/{room}/messages")
     async def messages(room: str, request: Request, before: int = 0, after: int = 0, limit: int = 40):
         relay["check_auth"](request)
         room_check(room)
         limit = max(1, min(limit, 100))
         where = ["json_extract(meta,'$.api_session')=?"]
-        params = ["lune-" + room]
+        params = ["emoi-" + room]
         if before:
             where.append("id<?"); params.append(before)
         if after:
@@ -159,12 +159,12 @@ def register(app, relay):
         order = "ASC" if after else "DESC"
         with connect() as c:
             rows = c.execute("SELECT * FROM messages WHERE " + " AND ".join(where) + f" ORDER BY id {order} LIMIT ?", params + [limit]).fetchall()
-            runs = c.execute("SELECT * FROM lune_runs WHERE room=? ORDER BY created_at DESC LIMIT 5", (room,)).fetchall()
+            runs = c.execute("SELECT * FROM emoi_runs WHERE room=? ORDER BY created_at DESC LIMIT 5", (room,)).fetchall()
         rows = rows if after else list(reversed(rows))
         msgs = [relay["app_payload"](m) for m in relay["rows_to_messages"](rows)]
         return {"messages": msgs, "has_more": len(rows) == limit, "runs": [run_view(r) for r in runs]}
 
-    @app.post("/lune/rooms/{room}/send")
+    @app.post("/emoi/rooms/{room}/send")
     async def send(room: str, request: Request):
         relay["check_auth"](request)
         room_check(room)
@@ -203,24 +203,24 @@ def register(app, relay):
         async with locks[room]:
             with connect() as c:
                 c.execute("BEGIN IMMEDIATE")
-                old = c.execute("SELECT * FROM lune_runs WHERE nonce=?", (nonce,)).fetchone()
+                old = c.execute("SELECT * FROM emoi_runs WHERE nonce=?", (nonce,)).fetchone()
                 if old:
                     if old["room"] != room:
                         raise HTTPException(409, "发送编号属于另一个会话")
                     return {"id": old["message_id"], "run": run_view(old), "duplicate": True}
-                active = c.execute("SELECT id FROM lune_runs WHERE room=? AND state IN ('pending','running')", (room,)).fetchone()
+                active = c.execute("SELECT id FROM emoi_runs WHERE room=? AND state IN ('pending','running')", (room,)).fetchone()
                 if active:
                     raise HTTPException(409, "这个会话仍在回复，请稍候或停止")
                 ts, rid = now(), uuid.uuid4().hex
-                meta = {"api_session": "lune-" + room, "nonce": nonce, "attachments": cleaned}
+                meta = {"api_session": "emoi-" + room, "nonce": nonce, "attachments": cleaned}
                 cur = c.execute("INSERT INTO messages(ts,direction,kind,text,meta) VALUES(?,?,?,?,?)", (ts, "in", "user", text, json.dumps(meta, ensure_ascii=False)))
                 mid = cur.lastrowid
-                c.execute("INSERT INTO lune_runs VALUES(?,?,?,?,?,?,?,?,?)", (rid, room, nonce, mid, json.dumps(targets), "pending", "", ts, ts))
-                if c.execute("SELECT 1 FROM sqlite_master WHERE name='lune_wren_settings'").fetchone():
+                c.execute("INSERT INTO emoi_runs VALUES(?,?,?,?,?,?,?,?,?)", (rid, room, nonce, mid, json.dumps(targets), "pending", "", ts, ts))
+                if c.execute("SELECT 1 FROM sqlite_master WHERE name='emoi_wren_settings'").fetchone():
                     try:
-                        from .lune_wren import SCOPES as BODY_SCOPES,config as body_config,sync_anchor,advance_body
+                        from .emoi_wren import SCOPES as BODY_SCOPES,config as body_config,sync_anchor,advance_body
                     except ImportError:
-                        from lune_wren import SCOPES as BODY_SCOPES,config as body_config,sync_anchor,advance_body
+                        from emoi_wren import SCOPES as BODY_SCOPES,config as body_config,sync_anchor,advance_body
                     import time
                     clock=time.time()
                     for scope,pair in BODY_SCOPES.items():
@@ -234,7 +234,7 @@ def register(app, relay):
             await relay["broadcast"](relay["app_subs"], relay["app_payload"](msg))
             return {"id": mid, "run": {"id": rid, "state": "pending", "room": room}}
 
-    @app.post("/lune/runs/{rid}/stop")
+    @app.post("/emoi/runs/{rid}/stop")
     async def stop(rid: str, request: Request):
         relay["check_auth"](request)
         task = tasks.get(rid)
@@ -244,12 +244,12 @@ def register(app, relay):
             with suppress(asyncio.CancelledError):
                 await task
         with connect() as c:
-            row = c.execute("SELECT * FROM lune_runs WHERE id=?", (rid,)).fetchone()
+            row = c.execute("SELECT * FROM emoi_runs WHERE id=?", (rid,)).fetchone()
         if not row:
             raise HTTPException(404, "请求不存在")
         return {"run": run_view(row)}
 
-    @app.get("/lune/memories")
+    @app.get("/emoi/memories")
     async def memories(request: Request):
         relay["check_auth"](request)
         return {"memories": MemoryStore(db_path).list(history=request.query_params.get("history") == "1")}
@@ -271,42 +271,42 @@ def register(app, relay):
                 raise HTTPException(422, "记忆出处须为已有的用户消息")
         return scope, title, content, source
 
-    @app.post("/lune/memories")
+    @app.post("/emoi/memories")
     async def create_memory(request: Request):
         relay["check_auth"](request)
         body = await request.json()
         return {"memory": MemoryStore(db_path).save(memory_body(body), body)}
 
-    @app.patch("/lune/memories/{mid}")
+    @app.patch("/emoi/memories/{mid}")
     async def edit_memory(mid: str, request: Request):
         relay["check_auth"](request)
         body = await request.json()
         values = memory_body(body)
         return {"memory": MemoryStore(db_path).save(values, body, mid)}
 
-    @app.delete("/lune/memories/{mid}")
+    @app.delete("/emoi/memories/{mid}")
     async def delete_memory(mid: str, request: Request, version: int):
         relay["check_auth"](request)
         return MemoryStore(db_path).delete(mid, version)
 
-    @app.get("/lune/memories/{mid}/revisions")
+    @app.get("/emoi/memories/{mid}/revisions")
     async def memory_revisions(mid: str, request: Request):
         relay["check_auth"](request)
         with connect() as c:
-            rows = c.execute("SELECT version,snapshot FROM lune_memory_revisions WHERE memory_id=? ORDER BY version DESC", (mid,)).fetchall()
+            rows = c.execute("SELECT version,snapshot FROM emoi_memory_revisions WHERE memory_id=? ORDER BY version DESC", (mid,)).fetchall()
         return {"revisions": [{"version": r["version"], "snapshot": json.loads(r["snapshot"])} for r in rows]}
 
-    @app.get("/lune/export")
+    @app.get("/emoi/export")
     async def export(request: Request):
         relay["check_auth"](request)
         with connect() as c:
-            msgs = c.execute("SELECT * FROM messages WHERE json_extract(meta,'$.api_session') IN ('lune-gpt','lune-claude','lune-group') ORDER BY id").fetchall()
+            msgs = c.execute("SELECT * FROM messages WHERE json_extract(meta,'$.api_session') IN ('emoi-gpt','emoi-claude','emoi-group') ORDER BY id").fetchall()
             mem = MemoryStore.rows(c)
-            memory_loops = [dict(r) for r in c.execute("SELECT * FROM lune_memory_loops WHERE status='open'")]
-            workspace = c.execute("SELECT * FROM lune_workspace WHERE deleted=0").fetchall()
-        return {"format": "lune-v04", "memory_format": "lune-latent-v1", "memory_loops": memory_loops, "exported_at": now(), "messages": [relay["app_payload"](m) for m in relay["rows_to_messages"](msgs)], "memories": mem, "workspace": [workspace_view(r) for r in workspace], "media_note": "JSON 含记忆状态、变迁链与当前未完事项；附件二进制、审计历史与已删除资料需备份私人数据库"}
+            memory_loops = [dict(r) for r in c.execute("SELECT * FROM emoi_memory_loops WHERE status='open'")]
+            workspace = c.execute("SELECT * FROM emoi_workspace WHERE deleted=0").fetchall()
+        return {"format": "emoi-v04", "memory_format": "emoi-latent-v1", "memory_loops": memory_loops, "exported_at": now(), "messages": [relay["app_payload"](m) for m in relay["rows_to_messages"](msgs)], "memories": mem, "workspace": [workspace_view(r) for r in workspace], "media_note": "JSON 含记忆状态、变迁链与当前未完事项；附件二进制、审计历史与已删除资料需备份私人数据库"}
 
-    @app.post("/lune/import")
+    @app.post("/emoi/import")
     async def restore(request: Request):
         relay["check_auth"](request)
         raw = await request.body()
@@ -316,7 +316,7 @@ def register(app, relay):
             body = json.loads(raw)
         except (ValueError, TypeError):
             raise HTTPException(422, "备份不是有效 JSON")
-        if not isinstance(body, dict) or body.get("format") not in {"lune-v03", "lune-v04", "lune-local-v04"}:
+        if not isinstance(body, dict) or body.get("format") not in {"emoi-v03", "emoi-v04", "emoi-local-v04"}:
             raise HTTPException(422, "无法识别的备份格式")
         source = body.get("data", body)
         if not isinstance(source, dict):
@@ -365,7 +365,7 @@ def register(app, relay):
                 if not isinstance(m, dict) or not isinstance(m.get("meta", {}), dict):
                     raise HTTPException(422, "消息格式不正确")
                 meta = m.get("meta", {}) if isinstance(m, dict) else {}
-                room = str(meta.get("api_session", "")).removeprefix("lune-")
+                room = str(meta.get("api_session", "")).removeprefix("emoi-")
                 if room not in ROOMS or m.get("from") not in {"human", "ai"}:
                     raise HTTPException(422, "消息范围不正确")
                 normalized.append({"old_id": m.get("id"), "room": room, "direction": "in" if m["from"] == "human" else "out", "kind": "act" if m.get("kind") == "act" else ("user" if m["from"] == "human" else "reply"), "text": m.get("text", ""), "ts": m.get("ts"), "meta": {**imported_meta(m), "agent_id": meta.get("agent_id", "")}})
@@ -430,13 +430,13 @@ def register(app, relay):
         digest = hashlib.sha256(json.dumps(body, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         with connect() as c:
             c.execute("BEGIN IMMEDIATE")
-            if c.execute("SELECT 1 FROM lune_imports WHERE digest=?", (digest,)).fetchone():
+            if c.execute("SELECT 1 FROM emoi_imports WHERE digest=?", (digest,)).fetchone():
                 return {"ok": True, "duplicate": True, "messages": 0, "memories": 0}
-            if c.execute("SELECT 1 FROM lune_runs WHERE state IN ('pending','running')").fetchone():
+            if c.execute("SELECT 1 FROM emoi_runs WHERE state IN ('pending','running')").fetchone():
                 raise HTTPException(409, "请等待回复结束后再导入")
             source_ids = {}
             for m in normalized:
-                meta = {**m["meta"], "api_session": "lune-" + m["room"], "imported": True, "date_unknown": not bool(m["ts"])}
+                meta = {**m["meta"], "api_session": "emoi-" + m["room"], "imported": True, "date_unknown": not bool(m["ts"])}
                 cur = c.execute("INSERT INTO messages(ts,direction,kind,text,meta) VALUES(?,?,?,?,?)", (m["ts"] or now(), m["direction"], m["kind"], m["text"], json.dumps(meta, ensure_ascii=False)))
                 if m["old_id"] is not None and m["direction"] == "in":
                     source_ids[str(m["old_id"])] = cur.lastrowid
@@ -445,23 +445,23 @@ def register(app, relay):
                 ts = now()
                 values = (*values[:3], source_ids.get(str(original_source)))
                 mid = memory_ids.get(metadata.get("id"), uuid.uuid4().hex)
-                c.execute("INSERT INTO lune_memories VALUES(?,?,?,?,?,?,?,?,?)", (mid, *values, metadata["created_at"], metadata["updated_at"], 1, 0))
-                c.execute("INSERT INTO lune_memory_details(memory_id,current_state,status,supersedes,superseded_by,reason,author) VALUES(?,?,?,?,?,?,?)", (mid, metadata["current_state"], metadata["status"], memory_ids.get(metadata.get("supersedes")), memory_ids.get(metadata.get("superseded_by")), metadata["reason"], "imported"))
+                c.execute("INSERT INTO emoi_memories VALUES(?,?,?,?,?,?,?,?,?)", (mid, *values, metadata["created_at"], metadata["updated_at"], 1, 0))
+                c.execute("INSERT INTO emoi_memory_details(memory_id,current_state,status,supersedes,superseded_by,reason,author) VALUES(?,?,?,?,?,?,?)", (mid, metadata["current_state"], metadata["status"], memory_ids.get(metadata.get("supersedes")), memory_ids.get(metadata.get("superseded_by")), metadata["reason"], "imported"))
             for item in loop_backup:
                 ts = now()
-                c.execute("INSERT INTO lune_memory_loops VALUES(?,?,?,?,?,?,?,1)", (uuid.uuid4().hex, item["scope"], item["summary"], "open", source_ids.get(str(item.get("source_message_id"))), ts, ts))
+                c.execute("INSERT INTO emoi_memory_loops VALUES(?,?,?,?,?,?,?,1)", (uuid.uuid4().hex, item["scope"], item["summary"], "open", source_ids.get(str(item.get("source_message_id"))), ts, ts))
             workspace_ids = {old_id: uuid.uuid4().hex for old_id, _ in validated_workspace}
             for old_id, item in sorted(validated_workspace, key=lambda x: x[1]["kind"] == "annotation"):
                 ts = now()
                 if item["kind"] == "annotation":
                     original_book = item["data"]["book_id"]
                     book_id = workspace_ids.get(original_book, original_book)
-                    book = c.execute("SELECT scope FROM lune_workspace WHERE id=? AND kind='book' AND deleted=0", (book_id,)).fetchone()
+                    book = c.execute("SELECT scope FROM emoi_workspace WHERE id=? AND kind='book' AND deleted=0", (book_id,)).fetchone()
                     if not book or book["scope"] != item["scope"]:
                         raise HTTPException(422, "批注缺少对应范围的书籍")
                     item["data"]["book_id"] = book_id
-                c.execute("INSERT INTO lune_workspace VALUES(?,?,?,?,?,?,?,?,?,?,0)", (workspace_ids[old_id], item["kind"], item["scope"], item["title"], item["content"], json.dumps(item["data"], ensure_ascii=False), "imported", ts, ts, 1))
-            c.execute("INSERT INTO lune_imports VALUES(?,?)", (digest, now()))
+                c.execute("INSERT INTO emoi_workspace VALUES(?,?,?,?,?,?,?,?,?,?,0)", (workspace_ids[old_id], item["kind"], item["scope"], item["title"], item["content"], json.dumps(item["data"], ensure_ascii=False), "imported", ts, ts, 1))
+            c.execute("INSERT INTO emoi_imports VALUES(?,?)", (digest, now()))
         return {"ok": True, "messages": len(normalized), "memories": len(validated_mem), "workspace": len(validated_workspace)}
 
     return {"tasks": tasks, "init": lambda: init(db_path)}

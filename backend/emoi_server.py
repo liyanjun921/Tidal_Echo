@@ -1,4 +1,4 @@
-"""Same-origin Luné web + authenticated relay; keep api_loop on loopback only."""
+"""Same-origin Émoi web + authenticated relay; keep api_loop on loopback only."""
 from contextlib import asynccontextmanager
 from pathlib import Path
 import os
@@ -19,7 +19,7 @@ async def lifespan(app):
 
 
 app = FastAPI(lifespan=lifespan)
-from backend.lune_ombre import register_proxy
+from backend.emoi_ombre import register_proxy
 register_proxy(app)
 
 
@@ -33,16 +33,16 @@ async def ready():
         async with httpx.AsyncClient(timeout=2, trust_env=False) as client:
             response = await client.get("http://127.0.0.1:3020/healthz")
             ok = response.status_code == 200 and response.json().get("ok") is True
-        if os.environ.get("LUNE_LATENT_AUTO_SETUP") == "1":
-            from backend.lune_memory import LatentEngine
+        if os.environ.get("EMOI_LATENT_AUTO_SETUP") == "1":
+            from backend.emoi_memory import LatentEngine
             ok = ok and LatentEngine(relay.DB_PATH).passive_status()["assets_ready"]
-        if os.environ.get('LUNE_OMBRE_AUTO_SETUP') == '1' or os.environ.get('LUNE_OMBRE_SOURCE'):
+        if os.environ.get('EMOI_OMBRE_AUTO_SETUP') == '1' or os.environ.get('EMOI_OMBRE_SOURCE'):
             from backend import ombre_runtime as ob
             ok = ok and ob.installed()
             async with httpx.AsyncClient(timeout=3, trust_env=False) as client:
                 for scope in ob.SCOPES:
                     ok = ok and (await client.get(ob.endpoint(scope) + '/health')).status_code == 200
-        if os.environ.get('LUNE_XINCHAO_AUTO_SETUP')=='1' or os.environ.get('LUNE_XINCHAO_SOURCE'):
+        if os.environ.get('EMOI_XINCHAO_AUTO_SETUP')=='1' or os.environ.get('EMOI_XINCHAO_SOURCE'):
             from backend import xinchao_runtime as xc
             ok=ok and xc.installed()
             async with httpx.AsyncClient(timeout=3,trust_env=False) as client:

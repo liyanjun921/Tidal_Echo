@@ -1,4 +1,4 @@
-"""Durable, source-agnostic wake inbox for Luné.
+"""Durable, source-agnostic wake inbox for Émoi.
 
 Events are references, not prompts or permissions. The same Room tick handles
 scheduled heartbeats, external events, reminders, manual wakes and commitments.
@@ -20,7 +20,7 @@ MAX_ATTEMPTS = 3
 
 def init(db):
     db.executescript("""
-    CREATE TABLE IF NOT EXISTS lune_wake_inbox(
+    CREATE TABLE IF NOT EXISTS emoi_wake_inbox(
         id TEXT PRIMARY KEY, scope TEXT NOT NULL, source TEXT NOT NULL,
         source_event_id TEXT NOT NULL, event_type TEXT NOT NULL,
         summary TEXT NOT NULL, resource_ref TEXT NOT NULL DEFAULT '',
@@ -31,8 +31,8 @@ def init(db):
         result_summary TEXT NOT NULL DEFAULT '', last_error TEXT NOT NULL DEFAULT '',
         UNIQUE(scope, source, source_event_id)
     );
-    CREATE INDEX IF NOT EXISTS lune_wake_due
-        ON lune_wake_inbox(scope, state, not_before, priority);
+    CREATE INDEX IF NOT EXISTS emoi_wake_due
+        ON emoi_wake_inbox(scope, state, not_before, priority);
     """)
 
 
@@ -40,13 +40,13 @@ def recover(db, now=None):
     """Do not replay a model call whose result became unknown at process restart."""
     clock = float(time.time() if now is None else now)
     db.execute(
-        """UPDATE lune_wake_inbox
+        """UPDATE emoi_wake_inbox
            SET state='interrupted', claim_token=NULL, lease_until=NULL,
                last_error='服务重启；本次模型调用结果未知，不自动重放'
            WHERE state='claimed'"""
     )
     db.execute(
-        """UPDATE lune_wake_inbox SET state='expired', last_error='事件已过期'
+        """UPDATE emoi_wake_inbox SET state='expired', last_error='事件已过期'
            WHERE state='pending' AND expires_at<=?""", (clock,)
     )
 
@@ -87,14 +87,14 @@ def enqueue(db, scope, source, source_event_id, event_type, summary, *,
     expires = due + ttl_seconds
     event_id = hashlib.sha256((scope + "\0" + source + "\0" + source_event_id).encode()).hexdigest()[:32]
     cursor = db.execute(
-        """INSERT OR IGNORE INTO lune_wake_inbox
+        """INSERT OR IGNORE INTO emoi_wake_inbox
            (id,scope,source,source_event_id,event_type,summary,resource_ref,priority,
             created,not_before,expires_at,state,attempts)
            VALUES(?,?,?,?,?,?,?,?,?,?,?,'pending',0)""",
         (event_id, scope, source, source_event_id, event_type, summary, resource_ref,
          priority, clock, due, expires)
     )
-    row = db.execute("SELECT id,state,not_before FROM lune_wake_inbox WHERE id=?", (event_id,)).fetchone()
+    row = db.execute("SELECT id,state,not_before FROM emoi_wake_inbox WHERE id=?", (event_id,)).fetchone()
     return {"id": row["id"], "state": row["state"], "not_before": row["not_before"],
             "duplicate": cursor.rowcount == 0}
 
@@ -102,19 +102,19 @@ def enqueue(db, scope, source, source_event_id, event_type, summary, *,
 def peek_due(db, scope, now=None):
     clock = float(time.time() if now is None else now)
     db.execute(
-        """UPDATE lune_wake_inbox SET state='expired', claim_token=NULL, lease_until=NULL,
+        """UPDATE emoi_wake_inbox SET state='expired', claim_token=NULL, lease_until=NULL,
                   last_error='事件已过期'
            WHERE scope=? AND state IN ('pending','claimed') AND expires_at<=?""",
         (scope, clock)
     )
     db.execute(
-        """UPDATE lune_wake_inbox SET state='pending', claim_token=NULL, lease_until=NULL,
+        """UPDATE emoi_wake_inbox SET state='pending', claim_token=NULL, lease_until=NULL,
                   last_error='处理租约到期，等待下一次机会'
            WHERE scope=? AND state='claimed' AND lease_until<=? AND expires_at>?""",
         (scope, clock, clock)
     )
     row = db.execute(
-        """SELECT * FROM lune_wake_inbox
+        """SELECT * FROM emoi_wake_inbox
            WHERE scope=? AND state='pending' AND not_before<=? AND expires_at>?
            ORDER BY priority DESC, not_before ASC, created ASC LIMIT 1""",
         (scope, clock, clock)
@@ -129,14 +129,14 @@ def claim_due(db, scope, now=None):
         return None
     token = uuid.uuid4().hex
     changed = db.execute(
-        """UPDATE lune_wake_inbox
+        """UPDATE emoi_wake_inbox
            SET state='claimed', attempts=attempts+1, claim_token=?, claimed_at=?, lease_until=?
            WHERE id=? AND state='pending'""",
         (token, clock, clock + LEASE_SECONDS, row["id"])
     ).rowcount
     if changed != 1:
         return None
-    claimed = db.execute("SELECT * FROM lune_wake_inbox WHERE id=?", (row["id"],)).fetchone()
+    claimed = db.execute("SELECT * FROM emoi_wake_inbox WHERE id=?", (row["id"],)).fetchone()
     result = dict(claimed)
     result["claim_token"] = token
     return result
@@ -148,7 +148,7 @@ def finish(db, event_id, claim_token, outcome, result_summary="", now=None):
     summary = _clean_text(result_summary, "result_summary", 300, optional=True)
     clock = float(time.time() if now is None else now)
     changed = db.execute(
-        """UPDATE lune_wake_inbox
+        """UPDATE emoi_wake_inbox
            SET state='consumed', consumed_at=?, outcome=?, result_summary=?,
                claim_token=NULL, lease_until=NULL, last_error=''
            WHERE id=? AND state='claimed' AND claim_token=?""",
@@ -159,7 +159,7 @@ def finish(db, event_id, claim_token, outcome, result_summary="", now=None):
 
 def abort(db, event_id, claim_token, reason="本次醒来未完成", now=None):
     clock = float(time.time() if now is None else now)
-    row = db.execute("SELECT * FROM lune_wake_inbox WHERE id=?", (event_id,)).fetchone()
+    row = db.execute("SELECT * FROM emoi_wake_inbox WHERE id=?", (event_id,)).fetchone()
     if not row or row["state"] != "claimed" or row["claim_token"] != claim_token:
         return False
     retry = row["attempts"] < MAX_ATTEMPTS and row["expires_at"] > clock
@@ -167,7 +167,7 @@ def abort(db, event_id, claim_token, reason="本次醒来未完成", now=None):
     due = max(row["not_before"], clock + 300) if retry else row["not_before"]
     error = _clean_text(str(reason), "error", 300, optional=True)
     db.execute(
-        """UPDATE lune_wake_inbox
+        """UPDATE emoi_wake_inbox
            SET state=?, not_before=?, claim_token=NULL, lease_until=NULL,
                last_error=? WHERE id=? AND claim_token=?""",
         (state, due, error, event_id, claim_token)
@@ -181,14 +181,14 @@ def schedule_commitment(db, scope, source_event_id, minutes, reason, now=None):
     reason = _clean_text(reason, "自主预约理由", 300)
     clock = float(time.time() if now is None else now)
     existing = db.execute(
-        "SELECT id,state,not_before FROM lune_wake_inbox WHERE scope=? AND source='self_commitment' AND source_event_id=?",
+        "SELECT id,state,not_before FROM emoi_wake_inbox WHERE scope=? AND source='self_commitment' AND source_event_id=?",
         (scope, str(source_event_id))
     ).fetchone()
     if existing:
         return {"id": existing["id"], "state": existing["state"],
                 "not_before": existing["not_before"], "duplicate": True}
     db.execute(
-        """UPDATE lune_wake_inbox SET state='cancelled', last_error='被新的自主预约替代'
+        """UPDATE emoi_wake_inbox SET state='cancelled', last_error='被新的自主预约替代'
            WHERE scope=? AND source='self_commitment' AND state='pending'""",
         (scope,)
     )
@@ -204,7 +204,7 @@ def list_events(db, scope, limit=50):
     rows = db.execute(
         """SELECT id,source,source_event_id,event_type,summary,resource_ref,priority,
                   created,not_before,expires_at,state,attempts,consumed_at,outcome,last_error
-           FROM lune_wake_inbox WHERE scope=? ORDER BY created DESC LIMIT ?""",
+           FROM emoi_wake_inbox WHERE scope=? ORDER BY created DESC LIMIT ?""",
         (scope, limit)
     ).fetchall()
     return [dict(row) for row in rows]
