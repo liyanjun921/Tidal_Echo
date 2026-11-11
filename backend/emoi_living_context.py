@@ -14,12 +14,12 @@ from zoneinfo import ZoneInfo,ZoneInfoNotFoundError
 
 from fastapi import HTTPException,Request
 try:
-    from . import ombre_runtime as ob,lune_file_lock as file_lock
-    from .lune_continuity import connection
+    from . import ombre_runtime as ob,emoi_file_lock as file_lock
+    from .emoi_continuity import connection
 except ImportError:
     import ombre_runtime as ob
-    import lune_file_lock as file_lock
-    from lune_continuity import connection
+    import emoi_file_lock as file_lock
+    from emoi_continuity import connection
 
 SOURCE=Path(__file__).resolve().parent/'vendor/still_true'
 REVISION='f58d6f38fa6a0c3c3acb502af2d63ccb17b81484'
@@ -32,18 +32,18 @@ _cache_lock=threading.RLock()
 def init(path):
     with connection(path) as db:
         db.executescript('''
-        CREATE TABLE IF NOT EXISTS lune_living_settings(scope TEXT PRIMARY KEY,body TEXT,version INTEGER);
-        CREATE TABLE IF NOT EXISTS lune_living_events(id TEXT PRIMARY KEY,scope TEXT,run_id TEXT,tool TEXT,key TEXT,source_id INTEGER,created TEXT,result TEXT);
+        CREATE TABLE IF NOT EXISTS emoi_living_settings(scope TEXT PRIMARY KEY,body TEXT,version INTEGER);
+        CREATE TABLE IF NOT EXISTS emoi_living_events(id TEXT PRIMARY KEY,scope TEXT,run_id TEXT,tool TEXT,key TEXT,source_id INTEGER,created TEXT,result TEXT);
         ''')
 
 
-def root(path):return Path(os.environ.get('LUNE_LIVING_CONTEXT_DIR') or Path(path).resolve().parent/'lune-private/living-context')
+def root(path):return Path(os.environ.get('EMOI_LIVING_CONTEXT_DIR') or Path(path).resolve().parent/'emoi-private/living-context')
 
 
 def settings(path,scope):
     ob.scope_check(scope)
     with connection(path) as db:
-        try:row=db.execute('SELECT * FROM lune_living_settings WHERE scope=?',(scope,)).fetchone()
+        try:row=db.execute('SELECT * FROM emoi_living_settings WHERE scope=?',(scope,)).fetchone()
         except sqlite3.OperationalError:return {**DEFAULTS,'version':0}
     return {**DEFAULTS,**json.loads(row['body']),'version':row['version']} if row else {**DEFAULTS,'version':0}
 
@@ -55,7 +55,7 @@ def verify_source():
 
 
 def native_module(name,identity):
-    spec=importlib.util.spec_from_file_location('lune_still_'+identity+'_'+name,SOURCE/(name+'.py'))
+    spec=importlib.util.spec_from_file_location('emoi_still_'+identity+'_'+name,SOURCE/(name+'.py'))
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
 
 
@@ -138,7 +138,7 @@ def view(path,scope):
                 'archive':[public_item(x) for x in reversed(archive[-200:])],
                 'dropped':[public_item(x) for x in dropped[-100:]],'version':revision(native)}
     with connection(path) as db:
-        result['events']=[dict(r) for r in db.execute('SELECT id,run_id,tool,key,source_id,created,result FROM lune_living_events WHERE scope=? ORDER BY rowid DESC LIMIT 30',(scope,))]
+        result['events']=[dict(r) for r in db.execute('SELECT id,run_id,tool,key,source_id,created,result FROM emoi_living_events WHERE scope=? ORDER BY rowid DESC LIMIT 30',(scope,))]
     return result
 
 
@@ -207,13 +207,13 @@ def register(app,relay):
         try:ob.scope_check(scope)
         except ValueError:raise HTTPException(422,'当前背景范围不正确') from None
 
-    @app.get('/lune/living/{scope}')
+    @app.get('/emoi/living/{scope}')
     async def owner_view(scope:str,request:Request):
         relay['check_auth'](request);scope_check(scope)
         try:return view(path,scope)
         except RuntimeError as error:raise HTTPException(503,str(error)) from None
 
-    @app.patch('/lune/living/{scope}/settings')
+    @app.patch('/emoi/living/{scope}/settings')
     async def configure(scope:str,request:Request):
         relay['check_auth'](request);scope_check(scope);value=await body(request);old=settings(path,scope)
         if value.get('version')!=old['version']:raise HTTPException(409,'设置已更新，请刷新')
@@ -222,10 +222,10 @@ def register(app,relay):
         if type(cfg['enabled']) is not bool:raise HTTPException(422,'启用开关应为布尔值')
         try:ZoneInfo(cfg['timezone'])
         except (ZoneInfoNotFoundError,TypeError,ValueError):raise HTTPException(422,'时区不正确') from None
-        with connection(path) as db:db.execute('INSERT OR REPLACE INTO lune_living_settings VALUES(?,?,?)',(scope,json.dumps(cfg),old['version']+1))
+        with connection(path) as db:db.execute('INSERT OR REPLACE INTO emoi_living_settings VALUES(?,?,?)',(scope,json.dumps(cfg),old['version']+1))
         return {'ok':True}
 
-    @app.post('/lune/living/{scope}/write')
+    @app.post('/emoi/living/{scope}/write')
     async def owner_write(scope:str,request:Request):
         relay['check_auth'](request);scope_check(scope);value=await body(request);name=value.get('name');args=value.get('arguments',{})
         if name not in {'today_set','ctx_set','ctx_drop','today_clear'} or not isinstance(args,dict):raise HTTPException(422,'不支持的当前背景操作')
@@ -234,38 +234,38 @@ def register(app,relay):
         eid='owner:'+nonce;cfg=settings(path,scope)
         fingerprint=hashlib.sha256(json.dumps([name,args],sort_keys=True,ensure_ascii=False).encode()).hexdigest()
         with connection(path) as db:
-            old=db.execute('SELECT scope,result FROM lune_living_events WHERE id=?',(eid,)).fetchone()
+            old=db.execute('SELECT scope,result FROM emoi_living_events WHERE id=?',(eid,)).fetchone()
             if old:
                 if old['scope']!=scope or json.loads(old['result']).get('fingerprint')!=fingerprint:raise HTTPException(409,'保存编号已用于其他内容或空间')
                 return {'duplicate':True}
         try:
             with store(path,scope).use(cfg['timezone']) as native:
                 with connection(path) as db:
-                    old=db.execute('SELECT scope,result FROM lune_living_events WHERE id=?',(eid,)).fetchone()
+                    old=db.execute('SELECT scope,result FROM emoi_living_events WHERE id=?',(eid,)).fetchone()
                     if old:
                         if old['scope']!=scope or json.loads(old['result']).get('fingerprint')!=fingerprint:raise HTTPException(409,'保存编号已用于其他内容或空间')
                         return {'duplicate':True}
                 native.lc.get_items();native.ts.get_all()
                 if value.get('version')!=revision(native):raise HTTPException(409,'背景已变化，请刷新后重试')
                 result=apply(native,name,args,said_by='owner')
-                with connection(path) as db:db.execute('INSERT INTO lune_living_events VALUES(?,?,?,?,?,NULL,?,?)',(eid,scope,'',name,str(args.get('key','')),now(cfg['timezone']).isoformat(),json.dumps({'ok':True,'fingerprint':fingerprint})))
+                with connection(path) as db:db.execute('INSERT INTO emoi_living_events VALUES(?,?,?,?,?,NULL,?,?)',(eid,scope,'',name,str(args.get('key','')),now(cfg['timezone']).isoformat(),json.dumps({'ok':True,'fingerprint':fingerprint})))
             return {'ok':True,'result':result}
         except RuntimeError as error:raise HTTPException(503,str(error)) from None
 
-    @app.post('/lune/living/{scope}/undo')
+    @app.post('/emoi/living/{scope}/undo')
     async def undo(scope:str,request:Request):
         relay['check_auth'](request);scope_check(scope);value=await body(request);rid=value.get('run_id');cfg=settings(path,scope)
         with connection(path) as db:
-            if not db.execute("SELECT 1 FROM lune_living_events WHERE scope=? AND run_id=? AND tool='ctx_set'",(scope,rid)).fetchone():raise HTTPException(404,'没有该空间的持续状态写入')
-            if db.execute("SELECT 1 FROM lune_runs WHERE id=? AND state IN ('pending','running')",(rid,)).fetchone():raise HTTPException(409,'请先等待该回合结束')
+            if not db.execute("SELECT 1 FROM emoi_living_events WHERE scope=? AND run_id=? AND tool='ctx_set'",(scope,rid)).fetchone():raise HTTPException(404,'没有该空间的持续状态写入')
+            if db.execute("SELECT 1 FROM emoi_runs WHERE id=? AND state IN ('pending','running')",(rid,)).fetchone():raise HTTPException(409,'请先等待该回合结束')
         try:
             with store(path,scope).use(cfg['timezone']) as native:
                 native.lc.get_items();native.ts.get_all()
                 if value.get('version')!=revision(native):raise HTTPException(409,'背景已变化，请刷新')
-                return native.lc.undo_turn_writes(rid,'lune-'+scope)
+                return native.lc.undo_turn_writes(rid,'emoi-'+scope)
         except RuntimeError as error:raise HTTPException(503,str(error)) from None
 
-    @app.post('/lune/assistant/living')
+    @app.post('/emoi/assistant/living')
     async def assistant(request:Request):
         relay['check_auth'](request);value=await body(request)
         try:scope=ob.scope_for(value.get('room'),value.get('agent_id'))
@@ -274,23 +274,23 @@ def register(app,relay):
         if not cfg['enabled']:raise HTTPException(409,'当前背景已关闭')
         if name not in TOOLS or not isinstance(args,dict):raise HTTPException(422,'不是当前背景工具')
         with connection(path) as db:
-            run=db.execute('SELECT * FROM lune_runs WHERE id=?',(value.get('run_id'),)).fetchone()
-            if not run or run['state']!='running' or 'lune-'+run['room']!=value['room'] or value['agent_id'] not in json.loads(run['targets']):raise HTTPException(409,'此回合已停止')
+            run=db.execute('SELECT * FROM emoi_runs WHERE id=?',(value.get('run_id'),)).fetchone()
+            if not run or run['state']!='running' or 'emoi-'+run['room']!=value['room'] or value['agent_id'] not in json.loads(run['targets']):raise HTTPException(409,'此回合已停止')
             source=db.execute("SELECT text FROM messages WHERE id=? AND direction='in' AND json_extract(meta,'$.api_session')=?",(run['message_id'],value['room'])).fetchone()
             if name not in {'today_get','ctx_get'}:
                 quote=args.get('quote')
                 if not source or not isinstance(quote,str) or not quote.strip() or len(quote)>2000 or quote not in source['text']:raise HTTPException(422,'写入须引用本轮用户实际说过的话')
             eid='model:'+hashlib.sha256(json.dumps([scope,run['id'],name,args],sort_keys=True,ensure_ascii=False).encode()).hexdigest()
-            if name not in {'today_get','ctx_get'} and db.execute('SELECT 1 FROM lune_living_events WHERE id=?',(eid,)).fetchone():return {'duplicate':True}
+            if name not in {'today_get','ctx_get'} and db.execute('SELECT 1 FROM emoi_living_events WHERE id=?',(eid,)).fetchone():return {'duplicate':True}
         try:
             with store(path,scope).use(cfg['timezone']) as native:
                 with connection(path) as db:
-                    active=db.execute('SELECT state FROM lune_runs WHERE id=?',(run['id'],)).fetchone()
+                    active=db.execute('SELECT state FROM emoi_runs WHERE id=?',(run['id'],)).fetchone()
                     if not active or active['state']!='running':raise HTTPException(409,'此回合已停止')
-                    if name not in {'today_get','ctx_get'} and db.execute('SELECT 1 FROM lune_living_events WHERE id=?',(eid,)).fetchone():return {'duplicate':True}
-                result=apply(native,name,args,run_id=run['id'],session='lune-'+scope,said_by='user')
+                    if name not in {'today_get','ctx_get'} and db.execute('SELECT 1 FROM emoi_living_events WHERE id=?',(eid,)).fetchone():return {'duplicate':True}
+                result=apply(native,name,args,run_id=run['id'],session='emoi-'+scope,said_by='user')
                 if name not in {'today_get','ctx_get'}:
-                    with connection(path) as db:db.execute('INSERT INTO lune_living_events VALUES(?,?,?,?,?,?,?,?)',(eid,scope,run['id'],name,str(args.get('key','')),run['message_id'],now(cfg['timezone']).isoformat(),json.dumps({'ok':True})))
+                    with connection(path) as db:db.execute('INSERT INTO emoi_living_events VALUES(?,?,?,?,?,?,?,?)',(eid,scope,run['id'],name,str(args.get('key','')),run['message_id'],now(cfg['timezone']).isoformat(),json.dumps({'ok':True})))
         except RuntimeError as error:raise HTTPException(503,str(error)) from None
         return result
 

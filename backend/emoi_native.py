@@ -14,11 +14,11 @@ from fastapi import HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 
 try:
-    from .lune_memory import LatentEngine, MemoryStore, room_view, view_scopes
-    from .lune_continuity import idle
+    from .emoi_memory import LatentEngine, MemoryStore, room_view, view_scopes
+    from .emoi_continuity import idle
 except ImportError:
-    from lune_memory import LatentEngine, MemoryStore, room_view, view_scopes
-    from lune_continuity import idle
+    from emoi_memory import LatentEngine, MemoryStore, room_view, view_scopes
+    from emoi_continuity import idle
 
 PRODUCT_FEATURES = [
     ("tools", "八个原生记忆工具", "原版 MCP 处理器；房间范围与来源写保护"),
@@ -40,14 +40,14 @@ NATIVE_TOOLS = READ_TOOLS | {"latent_append", "latent_supersede", "latent_correc
 
 
 def full_root(path):
-    return Path(os.environ.get("LUNE_LATENT_FULL_DIR") or Path(path).resolve().parent / "lune-private" / "latent-full")
+    return Path(os.environ.get("EMOI_LATENT_FULL_DIR") or Path(path).resolve().parent / "emoi-private" / "latent-full")
 
 
 def init(path):
     with sqlite3.connect(path) as c:
-        c.execute("""CREATE TABLE IF NOT EXISTS lune_native_jobs
+        c.execute("""CREATE TABLE IF NOT EXISTS emoi_native_jobs
             (id TEXT PRIMARY KEY,view TEXT,kind TEXT,state TEXT,created_at TEXT,result TEXT)""")
-        c.execute("UPDATE lune_native_jobs SET state='interrupted' WHERE state IN ('queued','running')")
+        c.execute("UPDATE emoi_native_jobs SET state='interrupted' WHERE state IN ('queued','running')")
 
 
 class NativeEngine:
@@ -74,7 +74,7 @@ class NativeEngine:
         tail = {}
         if opening and before_id:
             with self.store.db() as c:
-                rows = c.execute("SELECT ts,direction,text,meta FROM messages WHERE id<? AND json_extract(meta,'$.api_session')=? AND kind IN ('user','reply','text') ORDER BY id DESC LIMIT 6", (before_id, "lune-" + view)).fetchall()
+                rows = c.execute("SELECT ts,direction,text,meta FROM messages WHERE id<? AND json_extract(meta,'$.api_session')=? AND kind IN ('user','reply','text') ORDER BY id DESC LIMIT 6", (before_id, "emoi-" + view)).fetchall()
             rows = [r for r in reversed(rows) if r["text"] and not json.loads(r["meta"]).get("date_unknown")]
             if rows:
                 tail = {"tail": [("用户" if r["direction"] == "in" else "AI", r["text"]) for r in rows],
@@ -105,7 +105,7 @@ class NativeEngine:
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         path = directory / "conversation.jsonl"
         with self.store.db() as c:
-            rows = c.execute("SELECT * FROM messages WHERE json_extract(meta,'$.api_session')=? ORDER BY id", ("lune-" + view,)).fetchall()
+            rows = c.execute("SELECT * FROM messages WHERE json_extract(meta,'$.api_session')=? ORDER BY id", ("emoi-" + view,)).fetchall()
         lines = []
         for row in rows:
             meta = json.loads(row["meta"])
@@ -144,7 +144,7 @@ def register(app, relay):
 
     def jobs():
         with native.store.db() as c:
-            return [dict(r) for r in c.execute("SELECT * FROM lune_native_jobs ORDER BY created_at DESC LIMIT 40")]
+            return [dict(r) for r in c.execute("SELECT * FROM emoi_native_jobs ORDER BY created_at DESC LIMIT 40")]
 
     async def execute(jid, view, kind, data):
         automatic = data.get('_automatic') is True
@@ -152,7 +152,7 @@ def register(app, relay):
         if automatic:
             if not idle(path, view, 30):
                 with native.store.db() as c:
-                    c.execute("UPDATE lune_native_jobs SET state='deferred',result=? WHERE id=?", ('{"reason":"聊天尚未空闲，后台让位"}', jid))
+                    c.execute("UPDATE emoi_native_jobs SET state='deferred',result=? WHERE id=?", ('{"reason":"聊天尚未空闲，后台让位"}', jid))
                 tasks.pop(jid, None)
                 return
             parent = asyncio.current_task()
@@ -164,12 +164,12 @@ def register(app, relay):
                         return
             guard = asyncio.create_task(preempt())
         with native.store.db() as c:
-            c.execute("UPDATE lune_native_jobs SET state='running' WHERE id=?", (jid,))
+            c.execute("UPDATE emoi_native_jobs SET state='running' WHERE id=?", (jid,))
         env = {k: v for k, v in os.environ.items() if k in {"PATH", "LANG", "LC_ALL", "TMPDIR"}}
         # Only the explicitly invoked local job bridge receives the owner's relay key.
         env["RELAY_SECRET"] = relay["SECRET"]
-        env["LUNE_JOB_RELAY"] = "http://127.0.0.1:" + os.environ.get("PORT", "8080") + "/relay"
-        env["LUNE_JOB_LOOP"] = "http://127.0.0.1:3020"
+        env["EMOI_JOB_RELAY"] = "http://127.0.0.1:" + os.environ.get("PORT", "8080") + "/relay"
+        env["EMOI_JOB_LOOP"] = "http://127.0.0.1:3020"
         cfg = native.store.config()
         payload = {"kind": kind, "view": view, "root": str(native.root), "data": data,
             "agent": view if view in {"gpt", "claude"} else cfg["archive_agent"], "facts": cfg["archive_facts"]}
@@ -204,7 +204,7 @@ def register(app, relay):
                 await proc.communicate()
             if "state" in locals():
                 with native.store.db() as c:
-                    c.execute("UPDATE lune_native_jobs SET state=?,result=? WHERE id=?", (state, json.dumps(result, ensure_ascii=False), jid))
+                    c.execute("UPDATE emoi_native_jobs SET state=?,result=? WHERE id=?", (state, json.dumps(result, ensure_ascii=False), jid))
             tasks.pop(jid, None)
 
     async def start_job(view, kind, data):
@@ -215,18 +215,18 @@ def register(app, relay):
             raise HTTPException(409, "这个房间已有任务正在进行")
         jid = uuid.uuid4().hex
         with native.store.db() as c:
-            c.execute("INSERT INTO lune_native_jobs VALUES(?,?,?,?,?,?)", (jid, view, kind, "queued", datetime.now(timezone.utc).isoformat(), "{}"))
+            c.execute("INSERT INTO emoi_native_jobs VALUES(?,?,?,?,?,?)", (jid, view, kind, "queued", datetime.now(timezone.utc).isoformat(), "{}"))
         tasks[jid] = asyncio.create_task(execute(jid, view, kind, data))
         return {"id": jid, "state": "queued"}
 
-    @app.get("/lune/native/status")
+    @app.get("/emoi/native/status")
     async def status(request: Request):
         relay["check_auth"](request)
         return {"installed": native.engine.installation(), "settings": native.store.config(), "jobs": jobs(),
             "features": [{"id": i, "name": n, "detail": d, "wired": True} for i, n, d in PRODUCT_FEATURES],
             "message": "原版功能已接线；后台模型任务需所选模型连接可用，Claude Code forge 需本地连接端"}
 
-    @app.post("/lune/native/{view}/mcp")
+    @app.post("/emoi/native/{view}/mcp")
     async def mcp(view: str, request: Request):
         relay["check_auth"](request)
         if not native.store.config()["enabled"] or not native.store.config()["native_full"]:
@@ -234,7 +234,7 @@ def register(app, relay):
         result = await native.rpc(view, await body(request))
         return Response(status_code=202) if result is None else JSONResponse(result)
 
-    @app.post("/lune/assistant/native")
+    @app.post("/emoi/assistant/native")
     async def assistant(request: Request):
         relay["check_auth"](request)
         data = await body(request)
@@ -247,7 +247,7 @@ def register(app, relay):
             raise HTTPException(409, "完整记忆引擎已关闭")
         return await native.rpc(view, data.get("message"), model=True)
 
-    @app.api_route("/lune/native/{view}/admin/{resource:path}", methods=["GET", "POST"])
+    @app.api_route("/emoi/native/{view}/admin/{resource:path}", methods=["GET", "POST"])
     async def admin(view: str, resource: str, request: Request):
         relay["check_auth"](request)
         result = await native.call(view, "admin", path="/" + resource, method=request.method,
@@ -255,14 +255,14 @@ def register(app, relay):
             data=await body(request) if request.method == "POST" else {})
         return JSONResponse(result["body"], status_code=result["status"])
 
-    @app.post("/lune/native/{view}/jobs/{kind}")
+    @app.post("/emoi/native/{view}/jobs/{kind}")
     async def start(view: str, kind: str, request: Request):
         relay["check_auth"](request)
         if view in {'gpt', 'claude', 'group'} and kind != 'backup' and not idle(path, view, 0):
             raise HTTPException(409, '请等当前聊天回复结束，再运行后台任务')
         return await start_job(view, kind, await body(request))
 
-    @app.post("/lune/native/{view}/prepare-continuation")
+    @app.post("/emoi/native/{view}/prepare-continuation")
     async def prepare_continuation(view: str, request: Request):
         relay["check_auth"](request)
         options = await body(request)
@@ -281,12 +281,12 @@ def register(app, relay):
             raise HTTPException(409, "后台落档尚未成功，保留原始上下文，不执行续接")
         checkpoint = (await native.call(view, "checkpoint",
             current_state="（续接检查点，自动生成）原始聊天完整保留，较早对话已按后台游标处理；本窗口继续。",
-            topics=["Luné 请求上下文续接"]))["rpc"]
+            topics=["Émoi 请求上下文续接"]))["rpc"]
         if checkpoint.get("error") or checkpoint.get("result", {}).get("isError"):
             raise HTTPException(409, "续接检查点未成功，不裁剪")
         return {"ok": True, "cursor_epoch": result["cursor_epoch"], "cursor_keys": result["cursor_keys"], "job": job["id"]}
 
-    @app.post("/lune/native/jobs/{jid}/stop")
+    @app.post("/emoi/native/jobs/{jid}/stop")
     async def stop(jid: str, request: Request):
         relay["check_auth"](request)
         task = tasks.get(jid)
@@ -295,14 +295,14 @@ def register(app, relay):
             await asyncio.gather(task, return_exceptions=True)
         return {"ok": True}
 
-    @app.get("/lune/native/{view}/backup")
+    @app.get("/emoi/native/{view}/backup")
     async def backup(view: str, request: Request):
         relay["check_auth"](request)
         view_scopes(view)
         archive = native.root / (view + "-backup.zip")
         if not archive.is_file():
             raise HTTPException(404, "请先运行完整备份任务")
-        return FileResponse(archive, filename="lune-latent-" + view + ".zip")
+        return FileResponse(archive, filename="emoi-latent-" + view + ".zip")
 
     async def watch():
         while True:

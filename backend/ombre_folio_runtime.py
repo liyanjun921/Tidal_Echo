@@ -14,12 +14,12 @@ REVISION = 'bf6887575fa8e6fa519279be9dc7e5886a29d2ea'
 
 
 def source():
-    return Path(os.environ.get('LUNE_FOLIO_SOURCE') or ob.root() / 'folio-source')
+    return Path(os.environ.get('EMOI_FOLIO_SOURCE') or ob.root() / 'folio-source')
 
 
 def installed():
     try:
-        marker = json.loads((source().parent / (source().name + '.lune-verified.json')).read_text())
+        marker = json.loads((source().parent / (source().name + '.emoi-verified.json')).read_text())
         return marker['revision'] == REVISION and all(
             hashlib.sha256((source() / name).read_bytes()).hexdigest() == digest
             for name, digest in marker['files'].items())
