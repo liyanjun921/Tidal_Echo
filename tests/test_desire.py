@@ -8,7 +8,7 @@ import time
 import unittest
 from unittest.mock import AsyncMock,patch
 
-from backend import desire_kernel as k,lune_desire as d,lune_wren as w
+from backend import desire_kernel as k,emoi_desire as d,emoi_wren as w
 import tests.test_wren as _wren_tests
 
 
@@ -158,9 +158,9 @@ class DesireHostTests(unittest.TestCase):
 
     def test_reads_do_not_write_base_and_clock_off_identity(self):
         self.enable(circadian={'enabled':True})
-        with w.connection(self.path) as db:before=db.execute('SELECT value FROM lune_wren_drives WHERE scope=\'gpt\'').fetchone()[0]
+        with w.connection(self.path) as db:before=db.execute('SELECT value FROM emoi_wren_drives WHERE scope=\'gpt\'').fetchone()[0]
         one=self.status();two=self.status()
-        with w.connection(self.path) as db:after=db.execute('SELECT value FROM lune_wren_drives WHERE scope=\'gpt\'').fetchone()[0]
+        with w.connection(self.path) as db:after=db.execute('SELECT value FROM emoi_wren_drives WHERE scope=\'gpt\'').fetchone()[0]
         self.assertEqual(before,after)
         self.assertNotEqual(one['body']['drive_display'],one['body']['drive'])
         self.enable(circadian={'enabled':False})
@@ -174,7 +174,7 @@ class DesireHostTests(unittest.TestCase):
         thoughts=self.status()['thoughts']
         self.assertEqual(len(thoughts),1)
         self.assertEqual(thoughts[0]['state'],'fixation')
-        with w.connection(self.path) as db:self.assertEqual(db.execute('SELECT count(*) FROM lune_wren_thought_sources').fetchone()[0],3)
+        with w.connection(self.path) as db:self.assertEqual(db.execute('SELECT count(*) FROM emoi_wren_thought_sources').fetchone()[0],3)
 
     def test_experience_provenance_snapshot_private_and_bounded_consumption(self):
         tid=self.thought()
@@ -186,19 +186,19 @@ class DesireHostTests(unittest.TestCase):
         self.assertNotIn('PRIVATE_E_HIDDEN',json.dumps(self.status(),ensure_ascii=False))
         with w.connection(self.path) as db:
             cfg=w.config(db,'gpt');d.step(db,'gpt',cfg,time.time(),force=True)
-            self.assertEqual(db.execute('SELECT count(*) FROM lune_desire_experiences WHERE consumed=1').fetchone()[0],5)
-            self.assertEqual(len(json.loads(db.execute('SELECT body FROM lune_desire_experiences LIMIT 1').fetchone()[0])['drive_snapshot']),15)
-        self.assertNotIn(value['content'],w.context(self.path,'lune-gpt','gpt'))
+            self.assertEqual(db.execute('SELECT count(*) FROM emoi_desire_experiences WHERE consumed=1').fetchone()[0],5)
+            self.assertEqual(len(json.loads(db.execute('SELECT body FROM emoi_desire_experiences LIMIT 1').fetchone()[0])['drive_snapshot']),15)
+        self.assertNotIn(value['content'],w.context(self.path,'emoi-gpt','gpt'))
 
     def test_satisfaction_host_success_only_and_duplicate_proof(self):
         self.enable(enabled=True,habits=True,self_drive=True)
         tid=self.thought()
         self.assertEqual(self.tool(action='satisfy',id=tid).status_code,409)
-        d.record_tool(self.path,'lune-gpt','gpt','run','latent_search',{},'ERROR: failed')
+        d.record_tool(self.path,'emoi-gpt','gpt','run','latent_search',{},'ERROR: failed')
         self.assertEqual(self.tool(action='satisfy',id=tid).status_code,409)
         result=json.dumps({'matches':[{'content':'真实检索材料'*30}]},ensure_ascii=False)
-        d.record_tool(self.path,'lune-gpt','gpt','run','latent_search',{},result)
-        d.record_tool(self.path,'lune-gpt','gpt','run','latent_search',{},result)
+        d.record_tool(self.path,'emoi-gpt','gpt','run','latent_search',{},result)
+        d.record_tool(self.path,'emoi-gpt','gpt','run','latent_search',{},result)
         self.assertEqual(len(self.status()['body']['actions']),1)
         self.assertEqual(self.tool(action='satisfy',id=tid).status_code,200)
         self.assertEqual(self.status()['body']['self_drive']['actions'],1)
@@ -214,8 +214,8 @@ class DesireHostTests(unittest.TestCase):
         self.enable(message_pulses=True,semantic_pulses=True)
         with w.connection(self.path) as db:w.advance_body(db,'gpt',w.config(db,'gpt'),time.time())
         vectors=[[1,0,0,0],[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]
-        with patch('backend.lune_memory.LatentEngine.worker',new=AsyncMock(return_value={'vectors':vectors})) as embed:
-            for _ in range(2):asyncio.run(d.classify_message(self.path,'lune-gpt','gpt','想继续做海边那本小书。',self.mid))
+        with patch('backend.emoi_memory.LatentEngine.worker',new=AsyncMock(return_value={'vectors':vectors})) as embed:
+            for _ in range(2):asyncio.run(d.classify_message(self.path,'emoi-gpt','gpt','想继续做海边那本小书。',self.mid))
             self.assertEqual(embed.await_count,1)
             self.assertEqual(self.status()['body']['local_classifier'][0]['status'],'matched')
         with patch.dict('os.environ',{'DESIRE_COUPLING':'1'}):self.assertTrue(d.boot_defaults()['coupling'])
