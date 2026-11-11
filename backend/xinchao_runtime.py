@@ -1,4 +1,4 @@
-"""Pinned MIT Xinchao 4.1.1 runtime, isolated per existing Luné/Ombre scope."""
+"""Pinned MIT Xinchao 4.1.1 runtime, isolated per existing Émoi/Ombre scope."""
 import hashlib
 import hmac
 import json
@@ -30,15 +30,15 @@ DEFAULTS={'enabled':True,'context':True,'memory_read':True,'memory_write':True,
 
 
 def root():
-    return Path(os.environ.get('LUNE_XINCHAO_DIR') or Path(os.environ.get('RELAY_DB','relay.db')).resolve().parent/'lune-private'/'xinchao')
+    return Path(os.environ.get('EMOI_XINCHAO_DIR') or Path(os.environ.get('RELAY_DB','relay.db')).resolve().parent/'emoi-private'/'xinchao')
 
 
-def source():return Path(os.environ.get('LUNE_XINCHAO_SOURCE') or root()/'source')
+def source():return Path(os.environ.get('EMOI_XINCHAO_SOURCE') or root()/'source')
 
 
 def installed():
     try:
-        marker=json.loads((source().parent/(source().name+'.lune-verified.json')).read_text())
+        marker=json.loads((source().parent/(source().name+'.emoi-verified.json')).read_text())
         return marker['revision']==REVISION and 'xinchao/src/server.js' in marker['files'] and all(
             hashlib.sha256((source()/name).read_bytes()).hexdigest()==digest for name,digest in marker['files'].items())
     except (OSError,ValueError,KeyError):return False
@@ -53,7 +53,7 @@ def credential(scope,purpose):
 
 def endpoint(scope):
     ob.scope_check(scope)
-    port=int(os.environ.get('LUNE_XINCHAO_PORT_BASE','18210'))+SCOPES.index(scope)
+    port=int(os.environ.get('EMOI_XINCHAO_PORT_BASE','18210'))+SCOPES.index(scope)
     if not 1024<=port<=65535:raise ValueError('Xinchao port range')
     return 'http://127.0.0.1:'+str(port)
 
@@ -88,7 +88,7 @@ def validate(value):
 
 def config(scope):
     ob.scope_check(scope)
-    file=root()/scope/'lune-config.json'
+    file=root()/scope/'emoi-config.json'
     if not file.is_file():return {**DEFAULTS,'version':0}
     value=json.loads(file.read_text())
     return {**validate({k:v for k,v in value.items() if k!='version'}),'version':value['version']}
@@ -105,7 +105,7 @@ def save_config(scope,value,version):
         except (OSError,subprocess.SubprocessError):raise ValueError('互动规则含无效正则，未更改设置') from None
     directory=root()/scope
     directory.mkdir(parents=True,exist_ok=True,mode=0o700)
-    target=directory/'lune-config.json'
+    target=directory/'emoi-config.json'
     temporary=target.with_suffix('.tmp')
     fd=os.open(temporary,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)
     with os.fdopen(fd,'w') as file:json.dump(cfg,file,ensure_ascii=False)
@@ -114,7 +114,7 @@ def save_config(scope,value,version):
 
 
 def node():
-    return os.environ.get('LUNE_XINCHAO_NODE') or shutil.which('node') or ''
+    return os.environ.get('EMOI_XINCHAO_NODE') or shutil.which('node') or ''
 
 
 def prepare(scope):
@@ -142,14 +142,14 @@ def prepare(scope):
         'BRIDGE_ENABLED':str(cfg['enabled']).lower(),'BRIDGE_MACHINE_TOKEN':credential(scope,'bridge'),
         'BRIDGE_SELF_SIGNALS':str(cfg['enabled'] and cfg['self_signals']).lower(),
         'MODEL_ENABLED':str(cfg['enabled'] and cfg['model_enabled']).lower(),
-        'MODEL_BASE_URL':base+'/v1','MODEL_API_KEY':credential(scope,'provider'),'MODEL_NAME':'lune-selected-model',
+        'MODEL_BASE_URL':base+'/v1','MODEL_API_KEY':credential(scope,'provider'),'MODEL_NAME':'emoi-selected-model',
         'MODEL_TIMEOUT_MS':120000,'DREAM_ENABLED':str(cfg['enabled'] and cfg['dreams']).lower(),
         'DAYTIME_EMERGENCE_ENABLED':str(cfg['enabled'] and cfg['daytime']).lower(),
         'DAYTIME_BARK_ENABLED':'false','BARK_ENABLED':'false','ATTENTION_ENABLED':'false','JEV_SHADOW_ENABLED':'false',
         'OMBRE_MCP_URL':ob.endpoint(scope)+'/mcp','OMBRE_MCP_TOKEN':ob.credential(scope,'mcp'),
         'OMBRE_READ_ENABLED':str(cfg['enabled'] and cfg['memory_read']).lower(),'OMBRE_WRITE_ENABLED':str(cfg['enabled'] and cfg['memory_write']).lower(),
         'CONTEXT_OMBRE_ENABLED':str(cfg['enabled'] and cfg['memory_read']).lower(),'OMBRE_HEARTBEAT_FILE':directory/'heartbeat.json',
-        'LUNE_XINCHAO_SOURCE':source(),'LUNE_XINCHAO_SCOPE':scope,'LUNE_XINCHAO_PROVIDER':base}
+        'EMOI_XINCHAO_SOURCE':source(),'EMOI_XINCHAO_SCOPE':scope,'EMOI_XINCHAO_PROVIDER':base}
     env.update({key:str(value) for key,value in values.items()})
     return env
 
@@ -157,13 +157,13 @@ def prepare(scope):
 async def request(scope,path,method='GET',body=None,*,kind='service',timeout=120):
     async with httpx.AsyncClient(timeout=timeout,trust_env=False) as client:
         response=await client.request(method,endpoint(scope)+path,headers={
-            'Authorization':'Bearer '+credential(scope,kind),'Mcp-Session-Id':'lune-xinchao-'+scope},json=body)
+            'Authorization':'Bearer '+credential(scope,kind),'Mcp-Session-Id':'emoi-xinchao-'+scope},json=body)
         response.raise_for_status()
         return response.json() if response.content else {}
 
 
 async def rpc(scope,method,params=None):
-    value=await request(scope,'/mcp','POST',{'jsonrpc':'2.0','id':'lune','method':method,'params':params or {}})
+    value=await request(scope,'/mcp','POST',{'jsonrpc':'2.0','id':'emoi','method':method,'params':params or {}})
     if value.get('error'):raise RuntimeError('心潮原版协议未完成')
     return value.get('result',{})
 

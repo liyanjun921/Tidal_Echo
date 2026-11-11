@@ -11,7 +11,7 @@ from fastapi import HTTPException, Request
 
 
 def defaults():
-    return {"provider": os.environ.get("LUNE_TTS_PROVIDER", "minimax"), "providers": {
+    return {"provider": os.environ.get("EMOI_TTS_PROVIDER", "minimax"), "providers": {
         "minimax": {"key": os.environ.get("MINIMAX_API_KEY", ""), "voice_id": os.environ.get("MINIMAX_VOICE_ZH", ""), "model": os.environ.get("MINIMAX_MODEL", "speech-02-hd"), "base_url": os.environ.get("MINIMAX_API_BASE", "https://api.minimaxi.com"), "group_id": os.environ.get("MINIMAX_GROUP_ID", "")},
         "elevenlabs": {"key": os.environ.get("ELEVENLABS_API_KEY", ""), "voice_id": os.environ.get("ELEVENLABS_VOICE_ID", ""), "model": os.environ.get("ELEVENLABS_MODEL", "eleven_multilingual_v2"), "base_url": os.environ.get("ELEVENLABS_API_BASE", "https://api.elevenlabs.io")},
     }}
@@ -60,10 +60,10 @@ def register(app, relay):
 
     def init():
         with sqlite3.connect(path) as c:
-            c.execute("CREATE TABLE IF NOT EXISTS lune_speech (id INTEGER PRIMARY KEY CHECK(id=1),config TEXT NOT NULL,version INTEGER NOT NULL)")
+            c.execute("CREATE TABLE IF NOT EXISTS emoi_speech (id INTEGER PRIMARY KEY CHECK(id=1),config TEXT NOT NULL,version INTEGER NOT NULL)")
 
     def load(c):
-        row = c.execute("SELECT config,version FROM lune_speech WHERE id=1").fetchone()
+        row = c.execute("SELECT config,version FROM emoi_speech WHERE id=1").fetchone()
         config = defaults()
         if row:
             saved = json.loads(row[0])
@@ -72,14 +72,14 @@ def register(app, relay):
                 config["providers"][name].update(saved["providers"].get(name, {}))
         return config, row[1] if row else 0
 
-    @app.get("/lune/speech")
+    @app.get("/emoi/speech")
     async def settings(request: Request):
         relay["check_auth"](request)
         with sqlite3.connect(path) as c:
             config, version = load(c)
         return public(config, version)
 
-    @app.patch("/lune/speech")
+    @app.patch("/emoi/speech")
     async def update(request: Request):
         relay["check_auth"](request)
         body = await request.json()
@@ -106,7 +106,7 @@ def register(app, relay):
                     if (key == "model" or key == "voice_id" and name == "elevenlabs") and value and not re.fullmatch(r"[A-Za-z0-9_.-]+", value):
                         raise HTTPException(422, "音色和模型应填写 ID，不是名称或网址")
                     dest[key] = value
-            c.execute("INSERT INTO lune_speech VALUES(1,?,?) ON CONFLICT(id) DO UPDATE SET config=excluded.config,version=excluded.version", (json.dumps(config, ensure_ascii=False), version + 1))
+            c.execute("INSERT INTO emoi_speech VALUES(1,?,?) ON CONFLICT(id) DO UPDATE SET config=excluded.config,version=excluded.version", (json.dumps(config, ensure_ascii=False), version + 1))
         return public(config, version + 1)
 
     def synthesize(body):
