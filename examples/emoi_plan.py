@@ -5,7 +5,7 @@ import json
 import httpx
 from fastapi import HTTPException, Request
 
-from lune_auth import PlanError, PlanStore, RESOURCE, start_login
+from emoi_auth import PlanError, PlanStore, RESOURCE, start_login
 
 
 def failure(status, code=""):
@@ -41,7 +41,7 @@ def response_body(model, messages, tools):
                 inputs.append({"role": role, "content": parts})
             for call in message.get("tool_calls", []):
                 fn = call["function"]
-                inputs.append({"type": "function_call", "call_id": call["id"], "name": fn["name"], "namespace": "lune", "arguments": fn["arguments"]})
+                inputs.append({"type": "function_call", "call_id": call["id"], "name": fn["name"], "namespace": "emoi", "arguments": fn["arguments"]})
     body = {"model": model, "input": inputs, "instructions": "\n\n".join(instructions), "store": False, "stream": True, "include": ["reasoning.encrypted_content"]}
     if tools:
         functions = []
@@ -50,7 +50,7 @@ def response_body(model, messages, tools):
                 raise PlanError(422, "订阅模式只支持本机执行的函数工具")
             fn = tool["function"]
             functions.append({"type": "function", "name": fn["name"], "description": fn.get("description", ""), "parameters": fn.get("parameters", {"type": "object", "properties": {}}), "strict": False})
-        body["tools"] = [{"type": "namespace", "name": "lune", "description": "User-authorized tools of the current Luné room; executed by this private server.", "tools": functions}]
+        body["tools"] = [{"type": "namespace", "name": "emoi", "description": "User-authorized tools of the current Émoi room; executed by this private server.", "tools": functions}]
     return body
 
 
@@ -125,9 +125,9 @@ async def chat(route, messages, tools, sink=None, store=None, gate=None):
         for item in output:
             if item.get("type") == "function_call":
                 name = item.get("name", "")
-                if name.startswith("lune."):
+                if name.startswith("emoi."):
                     name = name[5:]
-                if name not in allowed or item.get("namespace", "lune") != "lune":
+                if name not in allowed or item.get("namespace", "emoi") != "emoi":
                     raise PlanError(422, "模型请求了本轮未授权的工具")
                 calls.append({"id": item["call_id"], "name": name, "arguments": item.get("arguments", "{}")})
         text = "".join(parts)
@@ -159,14 +159,14 @@ def register(app):
 
     @app.get("/loop/subscriptions")
     async def status():
-        from lune_claude import enabled, command, pool
+        from emoi_claude import enabled, command, pool
         import shutil
         installed = bool(shutil.which(command()[0]))
         return {"chatgpt": await asyncio.to_thread(PlanStore().status), "claude": {
             "ready": False, "state": "needs_account_test" if enabled() and installed else "runtime_required",
             "transport": "claude_code_stream_json", "runtime_enabled": enabled(), "installed": installed,
             "running": any(s.proc and s.proc.returncode is None for s in pool.sessions.values()),
-            "message": "官方 Claude Code 常驻桥接已接线。请在运行电脑安装并登录 CLI、启用运行端后测试；Luné 不导入 Claude 令牌，也不自动改用 API。",
+            "message": "官方 Claude Code 常驻桥接已接线。请在运行电脑安装并登录 CLI、启用运行端后测试；Émoi 不导入 Claude 令牌，也不自动改用 API。",
             "docs_url": "https://code.claude.com/docs/en/cli-reference"}}
 
     @app.post("/loop/subscriptions/chatgpt/start")

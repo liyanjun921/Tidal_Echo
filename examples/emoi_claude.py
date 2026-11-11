@@ -18,7 +18,7 @@ class ClaudeError(Exception):
 
 def command():
     # Server-only JSON argv, never executable text received from the browser.
-    custom = os.environ.get('LUNE_CLAUDE_COMMAND')
+    custom = os.environ.get('EMOI_CLAUDE_COMMAND')
     value = json.loads(custom) if custom else [shutil.which('claude') or 'claude']
     if not isinstance(value, list) or not value or any(not isinstance(p, str) for p in value):
         raise ClaudeError('Claude 启动配置无效')
@@ -26,7 +26,7 @@ def command():
 
 
 def enabled():
-    return os.environ.get('LUNE_CLAUDE_ENABLED') == '1'
+    return os.environ.get('EMOI_CLAUDE_ENABLED') == '1'
 
 
 async def require_login():
@@ -44,7 +44,7 @@ async def require_login():
 
 
 def root():
-    return Path(os.environ.get('LUNE_CLAUDE_DIR') or Path(os.environ['RELAY_DB']).resolve().parent / 'lune-private/claude-code')
+    return Path(os.environ.get('EMOI_CLAUDE_DIR') or Path(os.environ['RELAY_DB']).resolve().parent / 'emoi-private/claude-code')
 
 
 def cli_env():
@@ -59,13 +59,13 @@ def cli_env():
 
 
 def token(scope):
-    return hmac.new(os.environ['RELAY_SECRET'].encode(), ('lune-cli:' + scope).encode(), hashlib.sha256).hexdigest()
+    return hmac.new(os.environ['RELAY_SECRET'].encode(), ('emoi-cli:' + scope).encode(), hashlib.sha256).hexdigest()
 
 
 def scope_for(room):
-    if room not in {'lune-claude', 'lune-group'}:
+    if room not in {'emoi-claude', 'emoi-group'}:
         raise ClaudeError('Claude 会话范围无效')
-    return 'claude' if room == 'lune-claude' else 'group_claude'
+    return 'claude' if room == 'emoi-claude' else 'group_claude'
 
 
 class Session:
@@ -102,7 +102,7 @@ class Session:
         prompt.write_text(persona, encoding='utf-8')
         os.chmod(prompt, 0o600)
         mcp = self.directory / 'mcp.json'
-        value = {'mcpServers': {'lune': {'type': 'http', 'url': 'http://127.0.0.1:3020/loop/claude/mcp/' + self.scope,
+        value = {'mcpServers': {'emoi': {'type': 'http', 'url': 'http://127.0.0.1:3020/loop/claude/mcp/' + self.scope,
                  'headers': {'Authorization': 'Bearer ' + token(self.scope)}}}} if tools else {'mcpServers': {}}
         mcp.write_text(json.dumps(value))
         os.chmod(mcp, 0o600)
@@ -111,7 +111,7 @@ class Session:
             '--mcp-config', str(mcp), '--permission-mode', 'dontAsk', '--system-prompt-file', str(prompt),
             '--settings', '{"disableAllHooks":true}', '--setting-sources', '']
         if tools:
-            args += ['--allowedTools', ','.join('mcp__lune__' + t['function']['name'] for t in tools)]
+            args += ['--allowedTools', ','.join('mcp__emoi__' + t['function']['name'] for t in tools)]
         if model:
             args += ['--model', model]
         if resume:
@@ -147,7 +147,7 @@ class Session:
                     payload = [m for m in messages[1:current_index] if m['role'] == 'system'] + messages[current_index:]
                 hints=None
                 if any(m.get('role')=='system' and isinstance(m.get('content'),str) and m['content'].startswith('当前背景由 still-true 管理') for m in payload):
-                    from lune_living_context import SessionHints
+                    from emoi_living_context import SessionHints
                     if not self.state.get('hint_epoch'):
                         self.state['hint_epoch']=uuid.uuid4().hex;self.save()
                     hints=SessionHints(os.environ['RELAY_DB'],self.scope,self.state['hint_epoch'])
@@ -232,7 +232,7 @@ class Pool:
         import tempfile
         await require_login()
         root().mkdir(parents=True, exist_ok=True, mode=0o700)
-        with tempfile.TemporaryDirectory(prefix='lune-generation-', dir=root()) as tmp:
+        with tempfile.TemporaryDirectory(prefix='emoi-generation-', dir=root()) as tmp:
             prompt = Path(tmp) / 'prompt.md'
             prompt.write_text(str(messages[0]['content']), encoding='utf-8')
             args = command() + ['-p', '--output-format', 'json', '--tools', '', '--strict-mcp-config',
@@ -255,17 +255,17 @@ class Pool:
 
     async def maintain(self, path, prepare):
         try:
-            from lune_continuity import activity, idle, guarded_generation
-            from lune_memory import LatentEngine
+            from emoi_continuity import activity, idle, guarded_generation
+            from emoi_memory import LatentEngine
         except ModuleNotFoundError:
-            from backend.lune_continuity import activity, idle, guarded_generation
-            from backend.lune_memory import LatentEngine
+            from backend.emoi_continuity import activity, idle, guarded_generation
+            from backend.emoi_memory import LatentEngine
         for scope, session in list(self.sessions.items()):
             room = 'claude' if scope == 'claude' else 'group'
             usage = session.state.get('usage') or {}
             size = sum(int(usage.get(k) or 0) for k in ('input_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens'))
-            threshold = int(os.environ.get('LUNE_CLAUDE_FORGE_THRESHOLD', '150000'))
-            retain = int(os.environ.get('LUNE_CLAUDE_FORGE_RETAIN', '50000'))
+            threshold = int(os.environ.get('EMOI_CLAUDE_FORGE_THRESHOLD', '150000'))
+            retain = int(os.environ.get('EMOI_CLAUDE_FORGE_RETAIN', '50000'))
             if not 1000 <= retain < threshold or size <= threshold or not idle(path, room, 30) or session.lock.locked():
                 continue
             async with session.lock:
@@ -282,7 +282,7 @@ class Pool:
                     files = list(home.rglob(str(sid) + '.jsonl')) if sid else []
                     if len(files) != 1:
                         raise ClaudeError('未找到唯一的官方会话文件，未重铸')
-                    env = {**os.environ, 'LATENT_MCP_URL': os.environ['RELAY_URL'] + '/lune/native/' + room + '/mcp',
+                    env = {**os.environ, 'LATENT_MCP_URL': os.environ['RELAY_URL'] + '/emoi/native/' + room + '/mcp',
                            'LATENT_MCP_TOKEN': os.environ['RELAY_SECRET']}
                     proc = await asyncio.create_subprocess_exec(sys.executable, str(engine.source() / 'src/forge_session.py'),
                         'forge', str(files[0]), '--threshold', str(threshold), '--retain', str(retain),
@@ -347,7 +347,7 @@ def register(app, runtime):
         binding = session.binding if session else None
         method, rid = msg.get('method'), msg.get('id')
         if method == 'initialize':
-            result = {'protocolVersion': '2024-11-05', 'capabilities': {'tools': {'listChanged': False}}, 'serverInfo': {'name': 'lune-scoped-host', 'version': '0.11'}}
+            result = {'protocolVersion': '2024-11-05', 'capabilities': {'tools': {'listChanged': False}}, 'serverInfo': {'name': 'emoi-scoped-host', 'version': '0.11'}}
         elif method.startswith('notifications/'):
             from fastapi.responses import Response
             return Response(status_code=202)

@@ -41,7 +41,7 @@ class PlanError(Exception):
 
 def path_default():
     config = Path(os.environ.get("LOOP_CONFIG", str(Path(__file__).parent / "api_loop.config.json")))
-    return Path(os.environ.get("CHATGPT_PLAN_FILE", str(config.parent / "lune-private" / "chatgpt-plan.json")))
+    return Path(os.environ.get("CHATGPT_PLAN_FILE", str(config.parent / "emoi-private" / "chatgpt-plan.json")))
 
 
 def verify_identity(token, client_id, nonce=None):
@@ -104,7 +104,7 @@ class PlanStore:
 
     def read(self):
         if not self.path.exists():
-            return {"format": "lune-chatgpt-plan-v1", "host_id": "", "active": "", "accounts": {}}
+            return {"format": "emoi-chatgpt-plan-v1", "host_id": "", "active": "", "accounts": {}}
         try:
             return json.loads(self.path.read_text())
         except Exception:
@@ -160,7 +160,7 @@ class PlanStore:
             if old.get("email"):
                 query["login_hint"] = old["email"]
         else:
-            query["agent_name_hint"] = "Luné / OURSPACE"
+            query["agent_name_hint"] = "Émoi / OURSPACE"
         return {"url": AUTHORIZE + "?" + urlencode(query), "state": state, "nonce": nonce, "verifier": verifier, "redirect_uri": redirect_uri, "client_id": client_id, "account_id": account_id, "subject": old.get("subject") if old else None, "created": time.time(), "used": False}
 
     def finish(self, pending, params):
@@ -196,7 +196,7 @@ class PlanStore:
         return self.status()
 
     def import_session(self, body):
-        if not isinstance(body, dict) or body.get("format") != "lune-chatgpt-session-v1":
+        if not isinstance(body, dict) or body.get("format") != "emoi-chatgpt-session-v1":
             raise PlanError(422, "请选择连接助手生成的订阅连接文件")
         row = body.get("session", {})
         if not isinstance(row, dict) or not isinstance(row.get("client_id"), str) or row["client_id"] == "dynamic_agent_client":
@@ -285,7 +285,7 @@ def start_login(store, account_id=None, port=0):
             params = {key: value[0] for key, value in values.items() if len(value) == 1}
             try:
                 store.finish(pending, params)
-                attempt.update(state="completed", message="订阅登录已完成，请返回 Luné 刷新状态")
+                attempt.update(state="completed", message="订阅登录已完成，请返回 Émoi 刷新状态")
                 status = 200
             except PlanError as e:
                 status = e.status
@@ -296,7 +296,7 @@ def start_login(store, account_id=None, port=0):
             self.send_header("Cache-Control", "no-store")
             self.send_header("Referrer-Policy", "no-referrer")
             self.end_headers()
-            self.wfile.write(("<!doctype html><meta charset=utf-8><title>Luné</title><p>" + ("登录已完成，可以关闭此页并返回 Luné。" if status == 200 else "登录未完成，请返回 Luné 重新尝试。") + "</p>").encode())
+            self.wfile.write(("<!doctype html><meta charset=utf-8><title>Émoi</title><p>" + ("登录已完成，可以关闭此页并返回 Émoi。" if status == 200 else "登录未完成，请返回 Émoi 重新尝试。") + "</p>").encode())
 
     previous = _attempts.get(str(store.path), {})
     if previous.get("state") == "pending":
