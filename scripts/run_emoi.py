@@ -11,12 +11,16 @@ root = Path(__file__).resolve().parents[1]
 os.chdir(root)
 if not os.environ.get("RELAY_SECRET"):
     raise SystemExit("Set RELAY_SECRET to a long, unique password before starting Émoi")
+# Never silently start a fresh database beside an unmigrated legacy one.
+storage = Path(os.environ.get("RELAY_DB", "emoi.db")).resolve()
+if storage.name == "emoi.db" and (storage.parent / "relay.db").is_file() and not storage.is_file():
+    raise SystemExit("Legacy database detected. Stop old services, back up the volume, then run python scripts/emoi_migrate_storage.py --data-dir " + str(storage.parent) + " --apply")
 for key in ("RELAY_DB", "LOOP_CONFIG"):
     if os.environ.get(key):
         Path(os.environ[key]).parent.mkdir(parents=True, exist_ok=True)
 if os.environ.get("EMOI_LATENT_AUTO_SETUP") == "1":
     from setup_latent import install
-    source = Path(os.environ.get("EMOI_LATENT_SOURCE") or Path(os.environ.get("RELAY_DB", "relay.db")).resolve().parent / "emoi-private" / "latent-source")
+    source = Path(os.environ.get("EMOI_LATENT_SOURCE") or Path(os.environ.get("RELAY_DB", "emoi.db")).resolve().parent / "emoi-private" / "latent-source")
     install(source)
     os.environ["EMOI_LATENT_SOURCE"] = str(source)
     cache = Path(os.environ.get("EMOI_PASSIVE_MODEL_CACHE") or source.parent / "latent-models")
@@ -56,7 +60,7 @@ try:
         major = int(subprocess.check_output([cinema_node, '--version'], text=True).strip().lstrip('v').split('.')[0])
         if major >= 24:
             cinema_env = {**os.environ, 'OPEN_BROWSER': '0', 'PORT': os.environ.get('EMOI_CINEMA_PORT', '4182'),
-                          'LOCAL_DATA_ROOT': os.environ.get('EMOI_CINEMA_DATA') or str(Path(os.environ.get('RELAY_DB', 'relay.db')).resolve().parent / 'cinema')}
+                          'LOCAL_DATA_ROOT': os.environ.get('EMOI_CINEMA_DATA') or str(Path(os.environ.get('RELAY_DB', 'emoi.db')).resolve().parent / 'cinema')}
             children.append(subprocess.Popen([cinema_node, str(cinema_source)], env=cinema_env, cwd=cinema_source.parent))
         else:
             print('Cinema unavailable: Node.js 24+ is required', flush=True)
