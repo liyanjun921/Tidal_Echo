@@ -114,11 +114,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install browser test dependencies
-        run: |
-          python -m pip install selenium fastapi==0.137.1 httpx==0.28.1
-          # The runner mirror sometimes fails during apt update. Font installation
-          # is only cosmetic for screenshots, not a prerequisite for DOM tests.
-          (sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk && fc-cache -f >/dev/null) || echo "Chinese font mirror unavailable; running layout tests with browser fallback fonts"
+        run: python -m pip install selenium fastapi==0.137.1 httpx==0.28.1
       - name: Test authenticated dynamic multi-AI scopes
         run: python -m unittest discover -s tests -p test_emoi_contacts_v2.py -v
       - name: Check Crystal shaders and frontend JS syntax
