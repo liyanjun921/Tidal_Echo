@@ -1,4 +1,4 @@
-# Luné V0.20 · 界面收尾与上线准备
+# Émoi V0.20 · 界面收尾与上线准备
 
 2026-10-26（Asia/Singapore）。本轮保持原开发分支和草稿 PR；没有合并、创建云资源或正式部署。
 
@@ -11,7 +11,7 @@
 - 新书架、清单、影院、自主空间卡片跟随深色主题；阅读器的纸张色仍按个人选择独立保存。
 - 操作提示放入当前打开的弹窗，避免被原生 dialog 顶层遮住；提示结束后清空并隐藏，避免读屏继续读出旧反馈。
 - 侧栏开启时隔离主聊天区的键盘焦点，Tab 留在导航内，关闭后回到菜单按钮。为原生弹窗关联标题；降低动态效果设置覆盖新增页面。
-- Service Worker 缓存升级为 `lune-v020-ui-readiness-1`，新样式加入离线预缓存。
+- Service Worker 缓存升级为 `emoi-v020-ui-readiness-1`，新样式加入离线预缓存。
 
 ## 已验证
 
@@ -31,7 +31,7 @@ HTTP 联调使用测试模型和测试口令，不消耗用户真实模型额度
 
 ![390px 共读页验收截图（合成书籍，仅用于布局检查）](ui-v020-mobile.jpg)
 
-复现全量回归时，为 `LUNE_LATENT_SOURCE`、`LUNE_OMBRE_SOURCE`、`LUNE_FOLIO_SOURCE`、`LUNE_XINCHAO_SOURCE` 指定已校验的固定源码目录，为 `LUNE_PASSIVE_MODEL_CACHE` 指定已准备的本地向量模型，再运行：
+复现全量回归时，为 `EMOI_LATENT_SOURCE`、`EMOI_OMBRE_SOURCE`、`EMOI_FOLIO_SOURCE`、`EMOI_XINCHAO_SOURCE` 指定已校验的固定源码目录，为 `EMOI_PASSIVE_MODEL_CACHE` 指定已准备的本地向量模型，再运行：
 
 ```sh
 python -m unittest discover -s tests -p 'test_*.py'
@@ -42,7 +42,7 @@ python tests/run_e2e.py --http-only
 
 ## 正式部署顺序
 
-1. 确定常驻运行端。现有 Windows 双击入口见 [电脑与 iPhone](LUNE_WINDOWS.md)；Linux 持久服务器见 [部署说明](LUNE_DEPLOY.md)。完整后端不能仅以静态 ZIP 托管运行。
+1. 确定常驻运行端。现有 Windows 双击入口见 [电脑与 iPhone](EMOI_WINDOWS.md)；Linux 持久服务器见 [部署说明](EMOI_DEPLOY.md)。完整后端不能仅以静态 ZIP 托管运行。
 2. 在目标机器验证 Docker 构建与启动，或安装 Python 3.12、Node 24+、FFmpeg 和项目依赖。当前环境没有 Docker 引擎，未声称镜像构建通过。
 3. 初始化私人连接密钥和持久数据目录，配置 HTTPS。Windows 路线使用已有私人 Serve 流程；不要向公网开放内部模型/记忆/影院端口。反向代理允许 SSE、Range 和至少 4 MB 单次上传，访问日志不记录带 token 的查询字符串。
 4. `/readyz` 通过后，逐一检查四份记忆档案、心潮及影院状态，再在原设置页连接真实 GPT/Claude。订阅模式需要运行端自己的官方授权，Docker 不会继承 Windows CLI 登录。
@@ -57,7 +57,7 @@ Docker 镜像、Windows 启动器、真实 HTTPS/Serve、真实订阅/API 账号
 
 ## 2026-11-01 · V0.21 统一唤醒增量验收
 
-- GitHub Actions Linux runner 已成功构建 `Dockerfile.lune`，并以全新 Docker 持久卷启动真实容器。
+- GitHub Actions Linux runner 已成功构建 `Dockerfile.emoi`，并以全新 Docker 持久卷启动真实容器。
 - 容器内 `/readyz`、静态入口、Bearer 鉴权和 `/relay` 路由通过；Room 的 30 分钟高陪伴预设可保存，GPT/Claude 私聊设置保持隔离，统一唤醒事件可持久入队并按来源事件 ID 去重。
 - `node --check web/wren-room.js` 通过；wake inbox 6 项、Room 集成 18 项、完整 Python 回归 158 项均通过，其中完整回归有 24 项因 CI 未挂载可选本地资源而跳过。
 - 以上为 CI 合成环境验收；尚未连接用户真实模型账号，也未在用户的 Windows 主机、真实 HTTPS 或 iPhone Safari/PWA 上启动 30 分钟后台服务。正式上线仍需按上方步骤完成备份、部署和真机验收。

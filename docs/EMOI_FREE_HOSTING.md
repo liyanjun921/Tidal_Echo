@@ -1,10 +1,10 @@
-# Luné 免费、不绑卡部署评估
+# Émoi 免费、不绑卡部署评估
 
 核对日期：2026-10-24。用户优先免费、尽量不绑银行卡，同时考虑 Render 与 Netlify，并要求保留原版 Latent 的完整能力。此评估没有创建资源、升级方案、接通真实模型或改变现有记忆实现。
 
 ## 当前结论
 
-Netlify Free 适合承载手机网页、PWA 与经过适配的短请求接口。Render Free 可以运行 Python 服务，但当前完整 Luné + 本地 Latent **不能原样作为可靠的免费云端部署交付**：本地内存采样超出 512MB，且现有数据库、原生语料和状态仍要求持久文件系统。把两家组合起来不会自动解决这些问题。
+Netlify Free 适合承载手机网页、PWA 与经过适配的短请求接口。Render Free 可以运行 Python 服务，但当前完整 Émoi + 本地 Latent **不能原样作为可靠的免费云端部署交付**：本地内存采样超出 512MB，且现有数据库、原生语料和状态仍要求持久文件系统。把两家组合起来不会自动解决这些问题。
 
 这是当前代码与当前免费产品限制的结论，不代表经过改造的方案永远不可行。不能把“平台有免费套餐”“界面上线”或“接了云数据库”当作完整 Latent 已部署的证据。完整功能要求保持，未通过的能力不得在页面显示为已启用。
 
@@ -24,16 +24,16 @@ Netlify Free 适合承载手机网页、PWA 与经过适配的短请求接口。
 
 ## 内存证据
 
-原始摘要见 [free-hosting-memory-profile.json](free-hosting-memory-profile.json)。采样对象是完整 HTTP E2E 的 **Luné supervisor 和它的子进程**，包括两套 Python 应用、原版本地 BGE 向量工作进程及归档任务，不包含模型供应商 / MCP 合成服务和测试客户端。
+原始摘要见 [free-hosting-memory-profile.json](free-hosting-memory-profile.json)。采样对象是完整 HTTP E2E 的 **Émoi supervisor 和它的子进程**，包括两套 Python 应用、原版本地 BGE 向量工作进程及归档任务，不包含模型供应商 / MCP 合成服务和测试客户端。
 
 采样区分 RSS 与按共享页分摊的 PSS；不能仅靠相加 RSS 判定实际占用。报告的 PSS 峰值也已超过 Render Free 的 512MB。发现 relay 和 api_loop 两个应用各保留一个原生工作进程，重复加载本地模型，是可研究的优化点。
 
 这次是本地 Linux x86_64、小型合成语料、已缓存模型的测量，**不是** Render 容器 / cgroup 的 512MB 验收；页面缓存、容器开销、未来语料与未捕获瞬时峰值不能据此排除。没有推断 2GB 一定够用或保证某个付费规格。
 
-复现时使用已安装项目依赖的 Python，设置独立安装的 `LUNE_LATENT_SOURCE` 和 `LUNE_PASSIVE_MODEL_CACHE` 后运行：
+复现时使用已安装项目依赖的 Python，设置独立安装的 `EMOI_LATENT_SOURCE` 和 `EMOI_PASSIVE_MODEL_CACHE` 后运行：
 
 ```sh
-python scripts/profile_lune_memory.py --output /tmp/lune-memory-profile
+python scripts/profile_emoi_memory.py --output /tmp/emoi-memory-profile
 ```
 
 脚本运行完整 HTTP E2E，使用合成模型 / 语音凭据，不需要真实模型费用；只输出进程类别和内存统计，不输出私人环境变量。报告不替代真实账户、iPhone 和正式平台测试。
@@ -50,7 +50,7 @@ python scripts/profile_lune_memory.py --output /tmp/lune-memory-profile
 
 ### A. Netlify 网页 + 用户已有电脑运行完整后端
 
-用户现已确认有可一直开机的 Windows 电脑，优先选择本路线。保留目前原版 Latent、本地 BGE、SQLite 与文件目录，可免新增云服务器账单。电脑需要在使用时开机并提供经过鉴权的 HTTPS 入口；主动消息与后台任务仅在电脑运行期间执行。手机继续打开网页，私人连接需要手机 Tailscale 客户端。已提供 [Windows 启动入口与私人 HTTPS 接入](LUNE_WINDOWS.md)，首次 Windows 安装、镜像构建、HTTPS 与 iPhone 访问稳定性尚未验收；不把准备完成当作已部署。
+用户现已确认有可一直开机的 Windows 电脑，优先选择本路线。保留目前原版 Latent、本地 BGE、SQLite 与文件目录，可免新增云服务器账单。电脑需要在使用时开机并提供经过鉴权的 HTTPS 入口；主动消息与后台任务仅在电脑运行期间执行。手机继续打开网页，私人连接需要手机 Tailscale 客户端。已提供 [Windows 启动入口与私人 HTTPS 接入](EMOI_WINDOWS.md)，首次 Windows 安装、镜像构建、HTTPS 与 iPhone 访问稳定性尚未验收；不把准备完成当作已部署。
 
 ### B. Netlify 网页 / 持久存储 + Render Free 按需计算
 
