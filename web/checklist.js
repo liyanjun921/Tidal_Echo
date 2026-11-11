@@ -53,13 +53,13 @@ function open(ctx,item=null){wire();current=ctx;editing=item;const f=$('#checkli
  f.elements.schedule.value='clock';f.elements.minutes.value='30';syncForm();$('#checklistEditor').showModal();f.elements.title.focus()}
 function priority(x){const d=x.data||{};if(d.done)return 4;if(d.cycle==='timed')return d.trigger_at<=Date.now()?0:1;if(d.cycle==='daily')return 2;return 3}
 function itemRow(ctx,item){const d=item.data||{},late=!d.done&&(d.cycle==='timed'&&d.trigger_at<=Date.now()||d.due&&d.due<localDay()),row=el('div','checklist-row'+(d.done?' done':'')+(late?' late':''));
- const tick=button(d.done?'✓':'',async()=>{try{await ctx.putRecord({...item,data:{...d,done:!d.done}});ctx.renderPage()}catch(e){ctx.toast(e.message);window.dispatchEvent(new Event('lune-workspace'))}},'checklist-tick');tick.setAttribute('aria-label',(d.done?'取消完成：':'完成：')+item.title);
+ const tick=button(d.done?'✓':'',async()=>{try{await ctx.putRecord({...item,data:{...d,done:!d.done}});ctx.renderPage()}catch(e){ctx.toast(e.message);window.dispatchEvent(new Event('emoi-workspace'))}},'checklist-tick');tick.setAttribute('aria-label',(d.done?'取消完成：':'完成：')+item.title);
  const main=button('',()=>open(ctx,item),'checklist-main'),title=el('strong','',item.title),meta=el('span','checklist-meta');let detail=cycleName(d);
  if(d.cycle==='timed'){detail+=' · '+localTime(d.trigger_at);if(late)detail+=' · 已过时间'}else if(d.due)detail+=' · '+d.due+(d.time?' '+d.time:'');
  detail+=' · '+(ctx.scopes[item.scope]||item.scope);meta.textContent=detail;main.append(title,meta);
  if(d.cycle==='timed'){const state=el('span','checklist-alarm-state',ctx.relay.enabled?'等待同步':'本机记录 · 未启用提醒');state.dataset.alarmState=item.id;main.append(state)}
  row.append(tick,main);return row}
-function loadStates(ctx){if(!ctx.relay.enabled)return;ctx.relay.request('/lune/checklist/alarms').then(result=>{const states=new Map(result.items.map(x=>[x.todo_id,x]));for(const label of document.querySelectorAll('[data-alarm-state]')){const a=states.get(label.dataset.alarmState);label.textContent=!a?'等待同步':({pending:'等待时间',running:'正在联系',delivered:'已发消息',failed:'未能送达',cancelled:'已取消'}[a.state]||a.state)}}).catch(()=>{})}
+function loadStates(ctx){if(!ctx.relay.enabled)return;ctx.relay.request('/emoi/checklist/alarms').then(result=>{const states=new Map(result.items.map(x=>[x.todo_id,x]));for(const label of document.querySelectorAll('[data-alarm-state]')){const a=states.get(label.dataset.alarmState);label.textContent=!a?'等待同步':({pending:'等待时间',running:'正在联系',delivered:'已发消息',failed:'未能送达',cancelled:'已取消'}[a.state]||a.state)}}).catch(()=>{})}
 function render(ctx){wire();current=ctx;rollover(ctx);const {host,toolbar,records}=ctx;$('#pageTitle').textContent='今日清单';$('#pageAdd').onclick=()=>open(ctx);
  for(const [id,label]of [['all','全部'],['user','我的'],['gpt','GPT 的'],['claude','Claude 的']])toolbar.append(button(label,()=>{ctx.setFilter(id);ctx.renderPage()},'filter'+(ctx.filter===id?' active':'')));
  const rows=records.filter(x=>x.kind==='todo'),visible=rows.filter(x=>ctx.filter==='all'||(x.data?.owner||'user')===ctx.filter).sort((a,b)=>priority(a)-priority(b)||(a.data?.trigger_at||0)-(b.data?.trigger_at||0)||(a.created_at||'').localeCompare(b.created_at||''));
@@ -67,5 +67,5 @@ function render(ctx){wire();current=ctx;rollover(ctx);const {host,toolbar,record
  const columns=el('div','checklist-columns');const groups=ctx.filter==='all'?[['user','我的清单'],['ai','一起留下的']]:[[ctx.filter,names[ctx.filter]+' 的清单']];
  for(const [id,label]of groups){const column=el('section','checklist-column'),items=visible.filter(x=>id==='ai'?(x.data?.owner||'user')!=='user':(x.data?.owner||'user')===id);column.append(el('h4','',label+' · '+items.filter(x=>!x.data?.done).length));for(const item of items)column.append(itemRow(ctx,item));if(!items.length)column.append(el('p','checklist-empty','这一栏还没有清单项。'));columns.append(column)}host.append(columns);
  $('#pageFoot').textContent=(ctx.relay.enabled?'服务器每 15 秒检查到点项；模型成功生成后保存消息并推送':'本机清单可用；到点消息需连接自己的服务器与模型')+' · 旧待办保持原样';loadStates(ctx)}
-window.LuneChecklist={render,open};
+window.EmoiChecklist={render,open};
 })();

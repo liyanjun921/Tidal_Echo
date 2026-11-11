@@ -1,8 +1,8 @@
 /* WrenWen-inspired Room. All facts come from the authenticated relay. */
 (()=>{'use strict';
-const $=s=>document.querySelector(s),R=()=>window.LuneRelay;
+const $=s=>document.querySelector(s),R=()=>window.EmoiRelay;
 const uuid=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');
-const connected=()=>window.LUNE_PREVIEW!==true&&R()?.enabled;
+const connected=()=>window.EMOI_PREVIEW!==true&&R()?.enabled;
 const opener=document.createElement('button');opener.type='button';opener.className='nav-row';opener.id='openWrenRoom';opener.innerHTML='<span aria-hidden="true">◌</span><span>自主空间</span><small>Room</small>';
 $('#workspaceNav').prepend(opener);
 const panel=document.createElement('dialog');panel.id='wrenRoom';panel.className='sheet settings-sheet';
@@ -28,7 +28,7 @@ for(const [key,label] of Object.entries(labels)){const row=document.createElemen
 for(const [key,label,min,max,step] of [['hour','峰值小时',0,23.99,.5],['width','宽度（小时）',.1,6,.5],['pulse','基础脉冲',0,.2,.01],['min_hours','过夜下限（小时）',1,12,.5],['max_hours','过夜上限（小时）',2,48,.5],['gain','最大余温增益',0,1,.05]]){const row=document.createElement('label');row.textContent=label;const input=document.createElement('input');Object.assign(input,{name:'morning_'+key,type:'number',min:String(min),max:String(max),step:String(step),required:true});row.append(input);$('#wrenMorning').append(row)}
 let current=null,dirty=false,bodyDirty=false,epoch=0,timerNonce=uuid();
 const scope=()=>$('#wrenScope').value;
-const path=()=>'/lune/wren/'+scope();
+const path=()=>'/emoi/wren/'+scope();
 const note=text=>$('#wrenStatus').textContent=text;
 const date=stamp=>new Date(stamp*1000).toLocaleString();
 const p=(text,cls='')=>{const el=document.createElement('p');el.textContent=text;el.className=cls;return el};
@@ -53,7 +53,7 @@ const exp=empty('#wrenExperiences','还没有公开的体验。');if(body.experi
 if(!bodyDirty){const f=$('#wrenBodyForm');for(const key of Object.keys(flagLabels))f.elements['flag_'+key].checked=cfg[key];f.elements.clock_enabled.checked=cfg.circadian.enabled;f.elements.clock_cap.value=cfg.circadian.cap;for(const key of Object.keys(labels))for(const part of ['peak','amp'])f.elements['phase_'+key+'_'+part].value=cfg.circadian.phases[key][part];f.elements.morning_enabled.checked=cfg.morning.enabled;for(const key of ['hour','width','pulse','min_hours','max_hours','gain'])f.elements['morning_'+key].value=cfg.morning[key]}}
 $('#wrenBodyForm').oninput=()=>bodyDirty=true;
 $('#wrenBodyForm').onsubmit=e=>{e.preventDefault();safe(async()=>{if(!current)throw new Error('请先刷新房间');const f=e.target,cfg={...current.settings.desire,circadian:{...current.settings.desire.circadian,phases:{}},morning:{...current.settings.desire.morning}};for(const key of Object.keys(flagLabels))cfg[key]=f.elements['flag_'+key].checked;cfg.circadian.enabled=f.elements.clock_enabled.checked;cfg.circadian.cap=Number(f.elements.clock_cap.value);for(const key of Object.keys(labels)){cfg.circadian.phases[key]={};for(const part of ['peak','amp'])cfg.circadian.phases[key][part]=Number(f.elements['phase_'+key+'_'+part].value)}cfg.morning.enabled=f.elements.morning_enabled.checked;for(const key of ['hour','width','pulse','min_hours','max_hours','gain'])cfg.morning[key]=Number(f.elements['morning_'+key].value);await R().json(path(),'PATCH',{version:current.settings.version,desire:cfg});bodyDirty=false;await refresh();note('欲望与生物钟设置已保存，下一拍按新配置运行。')})};
-async function refresh(){const seq=++epoch,requested=scope();if(!connected()){current=null;for(const el of panel.querySelectorAll('[data-wren-write]'))el.disabled=true;note('尚未连接真实后台；这里不显示示例状态。');return}const value=await R().request('/lune/wren/'+requested);if(seq!==epoch||scope()!==requested)return;for(const el of panel.querySelectorAll('[data-wren-write]'))el.disabled=false;paint(value)}
+async function refresh(){const seq=++epoch,requested=scope();if(!connected()){current=null;for(const el of panel.querySelectorAll('[data-wren-write]'))el.disabled=true;note('尚未连接真实后台；这里不显示示例状态。');return}const value=await R().request('/emoi/wren/'+requested);if(seq!==epoch||scope()!==requested)return;for(const el of panel.querySelectorAll('[data-wren-write]'))el.disabled=false;paint(value)}
 opener.onclick=()=>{panel.showModal();safe(refresh);if(!connected())refresh()};$('#wrenClose').onclick=()=>panel.close();
 for(const button of panel.querySelectorAll('[data-wren-tab]'))button.onclick=()=>{for(const b of panel.querySelectorAll('[data-wren-tab]'))b.setAttribute('aria-pressed',String(b===button));for(const page of panel.querySelectorAll('[data-wren-page]'))page.hidden=page.dataset.wrenPage!==button.dataset.wrenTab};
 $('#wrenScope').onchange=()=>{dirty=false;bodyDirty=false;current=null;timerNonce=uuid();$('#wrenClockSummary').hidden=true;for(const id of ['#wrenDrives','#wrenThoughts','#wrenTimers','#wrenEvents','#wrenWakeInbox','#wrenContext','#wrenEngine','#wrenExperiences','#wrenChanges'])$(id).replaceChildren();$('#wrenBodyForm').reset();$('#wrenBodyStatus').textContent='正在读取本房间状态。';for(const el of panel.querySelectorAll('[data-wren-write]'))el.disabled=true;safe(refresh)};
