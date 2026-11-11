@@ -2,7 +2,7 @@
 const {chromium}=require(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES+'/playwright');
 const assert=require('node:assert/strict');
 (async()=>{
- const browser=await chromium.launch({headless:true,...(process.env.LUNE_TEST_CHROMIUM?{executablePath:process.env.LUNE_TEST_CHROMIUM,args:['--no-sandbox','--disable-dev-shm-usage','--disable-gpu','--no-zygote','--single-process']}: {})});
+ const browser=await chromium.launch({headless:true,...(process.env.EMOI_TEST_CHROMIUM?{executablePath:process.env.EMOI_TEST_CHROMIUM,args:['--no-sandbox','--disable-dev-shm-usage','--disable-gpu','--no-zygote','--single-process']}: {})});
  const errors=[];const context=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
  const page=await context.newPage();page.on('pageerror',e=>{errors.push(e.message);console.error('UI ERROR',e.message)});page.on('response',async r=>{if(r.status()>=400)console.error('HTTP',r.status(),new URL(r.url()).pathname,(await r.text()).slice(0,400))});
  const url='http://127.0.0.1:8089/';await page.goto(url);
@@ -41,7 +41,7 @@ const assert=require('node:assert/strict');
  for(const width of [320,390,1440]){
   await page.setViewportSize({width,height:844});await page.waitForTimeout(150);
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'horizontal overflow at '+width);
-  await page.screenshot({path:process.env.LUNE_TEST_OUTPUT+'/lune-'+width+'.png',fullPage:true});
+  await page.screenshot({path:process.env.EMOI_TEST_OUTPUT+'/emoi-'+width+'.png',fullPage:true});
  }
  await page.setViewportSize({width:390,height:844});await page.locator('#moreButton').click();await page.getByRole('button',{name:'连接与模型设置',exact:true}).click();
  assert.ok(await page.evaluate(()=>document.querySelector('#connectionDialog').scrollWidth<=document.querySelector('#connectionDialog').clientWidth+1),'settings overflow');
