@@ -1,4 +1,4 @@
-/* still-true: today's facts and expiring current background, in the same Luné. */
+/* still-true: today's facts and expiring current background, in the same Émoi. */
 (()=>{'use strict';
 const $=s=>document.querySelector(s),R=()=>window.LuneRelay;
 const uuid=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');
