@@ -2,12 +2,14 @@ name: Émoi unified wake tests
 
 on:
   push:
-    branches: [codex/emoi-v04-integration]
+    branches: [main, codex/emoi-internal-migration]
   pull_request:
     paths:
       - "backend/emoi_wake.py"
       - "scripts/emoi_ingest_event.py"
       - "tests/test_emoi_event_adapter.py"
+      - "tests/test_emoi_migration.py"
+      - "scripts/emoi_migrate_storage.py"
       - "backend/emoi_wren.py"
       - "backend/emoi_desire.py"
       - "tests/test_wake_orchestrator.py"
@@ -35,6 +37,11 @@ jobs:
         run: node --check web/wren-room.js
       - name: Test Émoi external event adapter
         run: python -m unittest discover -s tests -p "test_emoi_event_adapter.py" -v
+      - name: Test offline Émoi storage migration
+        run: python -m unittest discover -s tests -p "test_emoi_migration.py" -v
+      - name: Validate all Émoi client JavaScript
+        run: |
+          for path in web/*.js; do node --check "$path"; done
       - name: Test durable wake inbox
         run: python -m unittest discover -s tests -p "test_wake_orchestrator.py" -v
       - name: Test Room scheduler and desire integration
