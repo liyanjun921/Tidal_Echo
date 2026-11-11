@@ -1,4 +1,4 @@
-/* Luné's daily checklist, using the existing workspace records and relay. */
+/* Émoi's daily checklist, using the existing workspace records and relay. */
 (()=>{'use strict';
 const $=(s,r=document)=>r.querySelector(s);
 const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n};
