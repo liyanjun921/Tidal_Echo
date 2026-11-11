@@ -1,4 +1,4 @@
-/* Luné's cinema page; the pinned Open Watch Cinema service owns media and rooms. */
+/* Émoi's cinema page; the pinned Open Watch Cinema service owns media and rooms. */
 (()=>{'use strict';
 const $=(q,r=document)=>r.querySelector(q),el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n};
 const btn=(label,fn,cls='soft-button')=>{const n=el('button',cls,label);n.type='button';n.onclick=fn;return n};
@@ -13,8 +13,8 @@ const action=(promise)=>Promise.resolve().then(promise).catch(e=>ctx.toast(e.mes
 function leave(){epoch++;clearInterval(poll);poll=null;if(video){video.pause();video.removeAttribute('src');video.load();video=null}if(subtitleUrl){URL.revokeObjectURL(subtitleUrl);subtitleUrl=null}root=null}
 
 function render({host,toolbar,relay,toast}){leave();ctx={relay,toast};$('#pageAdd').hidden=true;toolbar.replaceChildren();root=el('div','cinema-page');host.append(root);$('#pageFoot').textContent='本机私人片库 · 观影资料按播放头解锁 · 已结束房间只读';
- if(!relay.enabled){root.append(el('p','cinema-hint','先在设置中连接自己的 Luné 服务器，才能打开私人片库与观影房间。'));return}
- const current=epoch;root.append(el('p','cinema-hint','正在连接本机影院…'));action(async()=>{const status=await api('/status');if(current!==epoch)return;if(!status.connected){root.replaceChildren(el('p','cinema-hint','影院侧服务尚未启动。请使用包含 Node 24 与 FFmpeg 的 Luné 运行端；影片保存在该运行端的私人持久目录。'));return}await refresh();poll=setInterval(()=>{if(!document.hidden&&root)refreshRoom().catch(()=>{})},3500)});
+ if(!relay.enabled){root.append(el('p','cinema-hint','先在设置中连接自己的 Émoi 服务器，才能打开私人片库与观影房间。'));return}
+ const current=epoch;root.append(el('p','cinema-hint','正在连接本机影院…'));action(async()=>{const status=await api('/status');if(current!==epoch)return;if(!status.connected){root.replaceChildren(el('p','cinema-hint','影院侧服务尚未启动。请使用包含 Node 24 与 FFmpeg 的 Émoi 运行端；影片保存在该运行端的私人持久目录。'));return}await refresh();poll=setInterval(()=>{if(!document.hidden&&root)refreshRoom().catch(()=>{})},3500)});
  $('#workspaceDialog').addEventListener('close',leave,{once:true});
 }
 
