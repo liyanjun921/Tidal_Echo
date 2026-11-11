@@ -30,7 +30,7 @@ else
   BACKUP="$CADDYFILE.before-emoi-$(date +%Y%m%d-%H%M%S).bak"
   sudo cp -p "$CADDYFILE" "$BACKUP" || fail "备份 Caddyfile 失败。"
   printf '\n# Émoi private chat frontend\n%s {\n    reverse_proxy emoi-chat:8080\n}\n' "$HOST" |
-    sudo tee -a "$CADDYFILE" >/dev/null || fail "Caddyfile 写入失败。"
+    sudo tee -a "$CADDYFILE" >/dev/null || { sudo cp -p "$BACKUP" "$CADDYFILE"; fail "Caddyfile 写入失败，已恢复原文件。"; }
   echo "CADDY_BACKUP=$BACKUP"
   if ! sudo docker exec "$GATEWAY" caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null; then
     sudo cp -p "$BACKUP" "$CADDYFILE"
