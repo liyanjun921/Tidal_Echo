@@ -20,6 +20,7 @@ jobs:
           bash -n scripts/deploy_emoi_tencent_light.sh
           printf 'RELAY_SECRET=ci-lightweight-example-only\nEMOI_PORT=18088\n' > .env
           docker compose -p emoi -f compose.emoi.yaml -f compose.emoi.light.yaml config --quiet
+          docker compose -p emoi -f compose.emoi.yaml -f compose.emoi.light.yaml -f compose.emoi.xlc.yaml config --quiet
           rm .env
       - name: Build the release image
         run: docker build -f Dockerfile.emoi -t emoi:preflight .
