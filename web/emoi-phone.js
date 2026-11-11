@@ -133,6 +133,7 @@ function setScreen(next){
  if(app.inert)app.setAttribute('aria-hidden','true');else app.removeAttribute('aria-hidden');
  if(mode!=='phone')return;
  if(next==='home')window.EmoiWallpapers?.activate('page:home');
+ else if(['contacts','messages'].includes(next))window.EmoiWallpapers?.activate('page:'+next);
  updateClock();
 }
 function header(title,onBack){
