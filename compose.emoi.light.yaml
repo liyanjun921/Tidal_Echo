@@ -8,3 +8,9 @@ services:
       EMOI_OMBRE_AUTO_SETUP: "0"
       EMOI_FOLIO_AUTO_SETUP: "0"
       EMOI_XINCHAO_AUTO_SETUP: "0"
+      # Base Compose sets these source paths even in light mode.
+      # /readyz treats a nonempty source as an enabled health dependency.
+      # Blank them here so existing external OB/Xinchao installations are not
+      # mistaken for local instances that must already be healthy.
+      EMOI_OMBRE_SOURCE: ""
+      EMOI_XINCHAO_SOURCE: ""
