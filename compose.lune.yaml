@@ -20,6 +20,7 @@ services:
       LOOP_CACHE_DIR: /data/loop_cache
       RELAY_BRAIN_FILE: /data/brain_target
       RELAY_DEFAULT_BRAIN: loop
+      RELAY_AI_NAME: "Émoi"
       RELAY_APP_PATH: /
       LUNE_LATENT_AUTO_SETUP: "1"
       LUNE_LATENT_SOURCE: /data/lune-private/latent-source
