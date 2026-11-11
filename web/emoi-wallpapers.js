@@ -27,7 +27,7 @@
     gpt:'GPT 私聊', claude:'Claude 私聊', group:'三人聊天室'
   };
   const DEFAULTS = {
-    'page:home':'aura', 'page:contacts':'aura', 'page:messages':'aura', 'page:memory':'archive', 'page:reading':'archive', 'page:journal':'archive',
+    'page:home':'lily', 'page:contacts':'lily', 'page:messages':'lily', 'page:memory':'archive', 'page:reading':'archive', 'page:journal':'archive',
     'page:cinema':'nocturne', 'page:report':'archive',
     'page:whisper':'archive', 'page:health':'lily',
     'page:calendar':'water', 'page:todo':'water'
@@ -60,7 +60,7 @@
     // Respect the older appearance setting when it was changed deliberately.
     const oldTheme = safeRead('emoi-v05-preferences', {}).theme;
     if (oldTheme && oldTheme !== 'water') return 'inherit';
-    return DEFAULTS[key] || (key.startsWith('chat:contact:') || key.startsWith('chat:group:') ? 'aura' : key.startsWith('chat:') ? 'archive' : 'inherit');
+    return DEFAULTS[key] || (key.startsWith('chat:contact:') || key.startsWith('chat:group:') ? 'lily' : key.startsWith('chat:') ? 'archive' : 'inherit');
   }
   function saveSettings() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); return true; }
