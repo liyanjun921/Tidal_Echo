@@ -38,7 +38,7 @@ class ContactIsolationTests(unittest.TestCase):
         self.assertEqual(self.client.post("/emoi/v2/contacts",json={"name":"X"}).status_code,401)
 
     def test_two_contacts_never_share_identity_or_direct_messages(self):
-        p=self.create("甲"),q=self.create("乙")
+        p=self.create("甲"); q=self.create("乙")
         a,b=p["contact"],q["contact"]
         self.assertNotEqual(a["id"],b["id"])
         self.assertNotEqual(a["memory_namespace"],b["memory_namespace"])
