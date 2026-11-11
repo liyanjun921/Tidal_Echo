@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="1700" viewBox="0 0 1100 1700">
+<defs>
+<linearGradient id="night" x1=".15" y1="0" x2=".8" y2="1"><stop stop-color="#162131"/><stop offset=".48" stop-color="#283a55"/><stop offset="1" stop-color="#627d97"/></linearGradient>
+<radialGradient id="halo"><stop stop-color="#d4e0ee" stop-opacity=".56"/><stop offset=".18" stop-color="#d4e0ee" stop-opacity=".17"/><stop offset="1" stop-color="#d4e0ee" stop-opacity="0"/></radialGradient>
+<pattern id="stars" width="109" height="151" patternUnits="userSpaceOnUse"><circle cx="12" cy="44" r="1.3" fill="#fff" opacity=".4"/><circle cx="62" cy="92" r=".7" fill="#fff" opacity=".45"/><circle cx="102" cy="18" r=".8" fill="#fff" opacity=".3"/></pattern>
+<filter id="grain"><feTurbulence type="fractalNoise" baseFrequency=".45" numOctaves="2" seed="9" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="linear" slope=".12"/></feComponentTransfer></filter>
+</defs>
+<rect width="1100" height="1700" fill="url(#night)"/>
+<rect width="1100" height="1700" fill="url(#stars)"/>
+<circle cx="670" cy="580" r="520" fill="url(#halo)"/>
+<g fill="none" stroke="#d2e1ec" opacity=".24" stroke-width="1.35">
+<circle cx="670" cy="580" r="245"/><circle cx="670" cy="580" r="300"/><circle cx="670" cy="580" r="408"/>
+<ellipse cx="670" cy="580" rx="495" ry="135" transform="rotate(-26 670 580)"/>
+<ellipse cx="670" cy="580" rx="430" ry="300" transform="rotate(38 670 580)"/>
+<path d="M670 70v1020M110 580h930M90 1460Q550 1160 1040 1360" stroke-dasharray="4 12"/>
+<path d="M175 1180L310 1080 470 1210 687 1110 868 1180 990 1070"/>
+</g>
+<g stroke="#d4e7f5" opacity=".6" stroke-width="1"><circle cx="670" cy="580" r="63" fill="#e8f0f7" fill-opacity=".55"/><circle cx="322" cy="230" r="3" fill="#fff"/><circle cx="190" cy="880" r="4" fill="#fff"/><circle cx="1014" cy="780" r="2" fill="#fff"/><circle cx="820" cy="1207" r="3" fill="#fff"/></g>
+<g fill="#d4e6f0" opacity=".5" font-family="Georgia,serif" letter-spacing="6">
+<text x="90" y="156" font-size="24">ÉMOI / NOCTURNE</text>
+<text x="92" y="186" font-size="11">CELESTIAL OBSERVATIONS · 04</text>
+<text x="135" y="1490" font-size="11">A MEMORY OF DISTANT LIGHT</text>
+</g>
+<g fill="none" stroke="#bf7379" stroke-width="2.4" opacity=".7"><path d="M28 1297C210 1215 312 1308 436 1254s216-74 335-24 225 57 320-29"/></g>
+<rect width="1100" height="1700" filter="url(#grain)" opacity=".7"/>
+</svg>

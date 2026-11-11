@@ -2,7 +2,7 @@ name: Émoi unified wake tests
 
 on:
   push:
-    branches: [main, codex/emoi-internal-migration]
+    branches: [main, codex/emoi-internal-migration, codex/emoi-archive-glass-ui]
   pull_request:
     paths:
       - "backend/emoi_wake.py"
@@ -10,6 +10,12 @@ on:
       - "tests/test_emoi_event_adapter.py"
       - "tests/test_emoi_migration.py"
       - "scripts/emoi_migrate_storage.py"
+      - "tests/test_emoi_archive_glass.py"
+      - "web/emoi-wallpapers.js"
+      - "web/emoi-archive-glass.css"
+      - "web/index.html"
+      - "web/app.js"
+      - "web/sw.js"
       - "backend/emoi_wren.py"
       - "backend/emoi_desire.py"
       - "tests/test_wake_orchestrator.py"
@@ -42,6 +48,8 @@ jobs:
       - name: Validate all Émoi client JavaScript
         run: |
           for path in web/*.js; do node --check "$path"; done
+      - name: Check wallpaper and PWA wiring
+        run: python -m unittest discover -s tests -p "test_emoi_archive_glass.py" -v
       - name: Test durable wake inbox
         run: python -m unittest discover -s tests -p "test_wake_orchestrator.py" -v
       - name: Test Room scheduler and desire integration
