@@ -1,0 +1,120 @@
+/* Émoi responsive application canvas — NOT a phone mockup.
+   One fluid browser interface: real mobile viewport and full desktop workspace.
+   Keeps the approved clear-glass visual system and all existing app logic.
+*/
+html,body{min-width:0}
+body[data-ui-mode=phone]{
+  margin:0;width:100%;height:100dvh;overflow:hidden;
+}
+body[data-ui-mode=phone] .emoi-phone-host,
+body[data-ui-mode=phone][data-phone-screen=legacy] #app{
+  position:fixed;inset:0;margin:0;padding:0;
+  width:100vw;max-width:none;min-width:0;
+  height:100dvh;height:var(--viewport,100dvh);max-height:none;
+  border:0;border-radius:0;box-shadow:none;
+  overflow:hidden;
+}
+body[data-ui-mode=phone] .ep-view{width:100%;min-width:0;min-height:0}
+body[data-ui-mode=phone] .ep-home-top{
+  width:100%;max-width:1200px;margin:0 auto;
+  padding-top:max(20px,env(safe-area-inset-top,0px));
+}
+body[data-ui-mode=phone] .ep-home-scroll{
+  width:100%;max-width:1200px;min-width:0;
+  margin:0 auto;overscroll-behavior-y:contain;
+}
+body[data-ui-mode=phone] .ep-dock{
+  align-self:center;width:min(460px,calc(100% - 34px));
+  margin:0 auto max(13px,env(safe-area-inset-bottom,0px));
+}
+/* Unrestricted wallpaper beyond the content column makes this a normal site,
+   rather than a tiny device object suspended in a large browser window. */
+body[data-ui-mode=phone] .ep-list-scroll,
+body[data-ui-mode=phone] .ep-detail-body{
+  width:100%;max-width:850px;margin-inline:auto;
+}
+body[data-ui-mode=phone] .ep-page-header{
+  padding-top:max(12px,env(safe-area-inset-top,0px));
+}
+body[data-ui-mode=phone] .ep-im-screen{
+  width:100%;align-items:center;
+}
+body[data-ui-mode=phone] .ep-im-header,
+body[data-ui-mode=phone] .ep-im-timeline,
+body[data-ui-mode=phone] .ep-im-notice,
+body[data-ui-mode=phone] .ep-im-footer{
+  width:100%;max-width:980px;margin-left:auto;margin-right:auto;
+}
+body[data-ui-mode=phone] .ep-im-timeline{
+  padding-left:clamp(15px,3vw,40px);
+  padding-right:clamp(15px,3vw,40px);
+}
+body[data-ui-mode=phone] .ep-im-row{max-width:min(79%,610px)}
+body[data-ui-mode=phone] .ep-im-footer{
+  padding-bottom:max(14px,env(safe-area-inset-bottom,0px));
+}
+/* A comfortable two-panel app launcher on desktop/tablet, not a faux iPhone. */
+@media(min-width:980px){
+ body[data-ui-mode=phone] .ep-home-top{
+   padding:clamp(25px,4vh,50px) clamp(30px,5vw,65px) 7px;
+ }
+ body[data-ui-mode=phone] .ep-home-brand h1{font-size:clamp(44px,5vw,69px)}
+ body[data-ui-mode=phone] .ep-home-scroll{
+   display:grid;align-content:start;
+   grid-template-columns:minmax(300px,.95fr) minmax(380px,1.05fr);
+   grid-template-rows:auto auto auto 1fr;
+   column-gap:clamp(35px,5vw,78px);
+   padding:clamp(25px,5vh,65px) clamp(30px,5vw,65px) 20px;
+ }
+ body[data-ui-mode=phone] .ep-hero-widget{
+   grid-column:1;grid-row:1 / span 3;
+   min-height:325px;margin:0;align-self:start;
+ }
+ body[data-ui-mode=phone] .ep-widget-clock{font-size:clamp(60px,6vw,92px)}
+ body[data-ui-mode=phone] .ep-widget-footer{margin-top:35px}
+ body[data-ui-mode=phone] .ep-app-group-title{
+   grid-column:2;grid-row:1;align-self:end;margin:0 0 18px;
+ }
+ body[data-ui-mode=phone] .ep-app-grid{
+   grid-column:2;grid-row:2;row-gap:25px;justify-items:center;
+ }
+ body[data-ui-mode=phone] .ep-home-search{
+   grid-column:2;grid-row:3;margin:30px auto 0;
+ }
+ body[data-ui-mode=phone] .ep-dock{
+   width:min(480px,calc(100% - 50px));margin-bottom:clamp(22px,4vh,40px);
+ }
+ body[data-ui-mode=phone] .ep-im-header{min-height:88px}
+ body[data-ui-mode=phone] .ep-im-bubble{font-size:15px}
+ body[data-ui-mode=phone] .ep-app-icon{width:72px;height:72px;border-radius:22px}
+ body[data-ui-mode=phone] .ep-app-label{font-size:12px}
+ body[data-ui-mode=phone] .ep-list-scroll{
+   padding-top:35px;padding-bottom:40px;
+ }
+}
+@media(min-width:600px) and (max-width:979px){
+ body[data-ui-mode=phone] .ep-home-top{padding-inline:clamp(24px,5vw,50px)}
+ body[data-ui-mode=phone] .ep-home-scroll{max-width:720px;padding-inline:35px}
+ body[data-ui-mode=phone] .ep-hero-widget{min-height:195px}
+ body[data-ui-mode=phone] .ep-app-grid{column-gap:18px;row-gap:20px}
+}
+/* Genuine mobile viewport: no pretend notch, status bar, bezel or home indicator. */
+@media(max-width:599px){
+ body[data-ui-mode=phone] .emoi-phone-host,
+ body[data-ui-mode=phone][data-phone-screen=legacy] #app{
+   width:100%;max-width:none;height:100dvh;height:var(--viewport,100dvh);
+   border:0;border-radius:0;box-shadow:none;
+ }
+ body[data-ui-mode=phone] .ep-home-top{
+   padding: max(17px,env(safe-area-inset-top,0px)) 19px 8px;
+ }
+ body[data-ui-mode=phone] .ep-home-scroll{padding-inline:17px}
+ body[data-ui-mode=phone] .ep-im-row{max-width:84%}
+ body[data-ui-mode=phone] .ep-im-footer{
+   padding-bottom:max(12px,env(safe-area-inset-bottom,0px))
+ }
+}
+/* Prevent decorative device-frame CSS from reappearing via stale themes. */
+body[data-ui-mode=phone] .ep-statusbar,
+body[data-ui-mode=phone] .ep-status-island,
+body[data-ui-mode=phone] .ep-home-indicator{display:none!important}
