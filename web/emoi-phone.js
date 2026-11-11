@@ -392,7 +392,6 @@ function installDialogs(){
  };
 }
 function init(){
- if(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent))document.documentElement.classList.add('ep-native-device');
  const artButton=$('#emoiSwitchToPhone');
  if(artButton)artButton.addEventListener('click',()=>setMode('phone'));
  const back=document.createElement('button');back.id='epLegacyHome';back.type='button';back.setAttribute('aria-label','返回小手机桌面');
