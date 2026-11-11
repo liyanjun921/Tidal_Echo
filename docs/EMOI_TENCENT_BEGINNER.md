@@ -4,6 +4,30 @@
 >
 > 原来的 CyberBoss、Garden Bridge、Desire 和 Ombre Brain 应当保持原样，先验收 Émoi 自己能启动。不要重装系统、不要删除其他容器、不要抢占既有 80/443、**不要执行 `docker compose down -v`**。
 
+## 最短路径：已有腾讯云 + XLC Gateway 的用户从这里开始
+
+**适合已确认 Docker 正常、8088 空闲、服务器还有约 2 GB 可用 RAM 的现有机器。** 以下只建 Émoi 项目，不动 CyberBoss、电话、已有 OB、Desire、80/443 网关；轻量覆盖层关闭重复下载/安装四个本地记忆／心潮引擎。后续若要共用现有 OB，需要单独开发或配置有凭证的远程共享，不可宣称自动相通。
+
+一次粘贴（Ubuntu SSH 终端）：
+
+```bash
+cd ~
+if [ ! -d emoi-web ]; then git clone --depth 1 --branch main https://github.com/liyanjun921/Tidal_Echo.git emoi-web || exit 1; fi
+cd emoi-web && git pull --ff-only && bash scripts/deploy_emoi_tencent_light.sh
+```
+
+脚本会检查 Docker/端口/磁盘/数据卷，随机生成只存在于机器上的 `.env` 密钥，配置固定的 `emoi` Compose 项目，启动轻量独立容器，自动轮询 `/readyz`，只读报告现有 XLC 网关配置挂载位置。它**不开放公网、不更改网关、不迁移原 OB**；显示 `EMOI_READY=YES` 只代表本地基础网页/API 健康，不代表已能从手机访问或模型登录成功。
+
+如果下一步要手机正式使用，需要在**既有** XLC Gateway 上新增一条 HTTPS 路由，把专用域名反代到 Émoi。此操作必须查看现有 Caddy 路由后才能安全进行，不能盲目新增占用 80/443 的网关。等路由完毕后，在手机 Safari 打开 HTTPS 网址、连接私人密钥并添加到主屏幕。
+
+**注意：已进入轻量模式时，后续更新也要保持两个 Compose 文件：**
+
+```bash
+sudo docker compose -p emoi -f compose.emoi.yaml -f compose.emoi.light.yaml up -d --build
+```
+
+下面是更详细的人工分步教程，供检查/排错使用；新用户不需要重复运行两种部署方法。
+
 ## 0 · 登录腾讯云并只读检查（这一步不会改服务器）
 
 腾讯云控制台 → 轻量应用服务器 → 找到已有实例 → 登录 / WebShell。假设是 Ubuntu/Debian Linux；如果是 Windows Server 或其他操作系统，不能照搬。
