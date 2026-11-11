@@ -75,7 +75,7 @@ function setMode(next){
  if(next!=='phone'&&next!=='art')return;
  mode=next;document.body.dataset.uiMode=next;
  try{localStorage.setItem(MODE_KEY,next)}catch{}
- if(next==='phone'){openHome()}else{phone.hidden=true;document.getElementById('app').inert=false;document.getElementById('app').removeAttribute('aria-hidden');}
+ if(next==='phone'){const menu=$('#moreMenu');if(menu)menu.hidden=true;const drawer=$('#drawerWrap');if(drawer)drawer.hidden=true;const workspace=$('#workspaceDialog');if(workspace?.open)workspace.close();openHome()}else{phone.hidden=true;document.getElementById('app').inert=false;document.getElementById('app').removeAttribute('aria-hidden');}
 }
 function setScreen(next){
  screen=next;
@@ -305,6 +305,7 @@ function installDialogs(){
  };
 }
 function init(){
+ if(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent))document.documentElement.classList.add('ep-native-device');
  const artButton=$('#emoiSwitchToPhone');
  if(artButton)artButton.addEventListener('click',()=>setMode('phone'));
  const back=document.createElement('button');back.id='epLegacyHome';back.type='button';back.setAttribute('aria-label','返回小手机桌面');
