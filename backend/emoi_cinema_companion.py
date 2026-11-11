@@ -12,17 +12,17 @@ import httpx
 from fastapi import HTTPException, Request
 
 try:
-    from .lune_cinema import BASE
-    from .lune_continuity import connection
+    from .emoi_cinema import BASE
+    from .emoi_continuity import connection
 except ImportError:
-    from lune_cinema import BASE
-    from lune_continuity import connection
+    from emoi_cinema import BASE
+    from emoi_continuity import connection
 
 
 def init(path):
     with connection(path) as db:
         db.executescript('''
-        CREATE TABLE IF NOT EXISTS lune_cinema_guests(
+        CREATE TABLE IF NOT EXISTS emoi_cinema_guests(
           room_id TEXT NOT NULL, agent TEXT NOT NULL, enabled INTEGER NOT NULL,
           cursors TEXT NOT NULL, last_at REAL NOT NULL DEFAULT 0,
           pending_text TEXT, pending_nonce TEXT, pending_time INTEGER,
@@ -42,14 +42,14 @@ def register(app, relay):
         response.raise_for_status()
         return response.json()
 
-    @app.get('/lune/cinema/guests')
+    @app.get('/emoi/cinema/guests')
     async def guests(request: Request):
         relay['check_auth'](request)
         with connection(path) as db:
-            rows = db.execute('SELECT room_id,agent,enabled FROM lune_cinema_guests WHERE enabled=1').fetchall()
+            rows = db.execute('SELECT room_id,agent,enabled FROM emoi_cinema_guests WHERE enabled=1').fetchall()
         return {'guests': [dict(r) for r in rows]}
 
-    @app.post('/lune/cinema/guests')
+    @app.post('/emoi/cinema/guests')
     async def set_guests(request: Request):
         relay['check_auth'](request)
         body = await request.json()
@@ -69,15 +69,15 @@ def register(app, relay):
         cursor = {'mediaMs': max(0, room['lastPositionMs']), 'messageId': max((m['id'] for m in messages), default=0), 'observationSequence': 0}
         with connection(path) as db:
             db.execute('BEGIN IMMEDIATE')
-            already = {r['agent'] for r in db.execute('SELECT agent FROM lune_cinema_guests WHERE room_id=? AND enabled=1', (room['id'],))}
+            already = {r['agent'] for r in db.execute('SELECT agent FROM emoi_cinema_guests WHERE room_id=? AND enabled=1', (room['id'],))}
             for agent in {'gpt', 'claude'} - set(agents):
-                db.execute('''UPDATE lune_cinema_guests SET enabled=0,pending_text=NULL,pending_nonce=NULL,
+                db.execute('''UPDATE emoi_cinema_guests SET enabled=0,pending_text=NULL,pending_nonce=NULL,
                     pending_cursors=NULL WHERE room_id=? AND agent=?''', (room['id'],agent))
             for agent in agents:
                 if agent in already:
                     continue  # Preserve its cursor and an undelivered reply on an unchanged invitation.
                 else:
-                    db.execute('''INSERT INTO lune_cinema_guests(room_id,agent,enabled,cursors)
+                    db.execute('''INSERT INTO emoi_cinema_guests(room_id,agent,enabled,cursors)
                        VALUES(?,?,1,?) ON CONFLICT(room_id,agent) DO UPDATE SET enabled=1,cursors=excluded.cursors,
                        last_at=0,retry_after=0,pending_text=NULL,pending_nonce=NULL,pending_cursors=NULL''',
                        (room['id'],agent,json.dumps(cursor)))
@@ -87,7 +87,7 @@ def register(app, relay):
         agent, rid = row['agent'], room['id']
         async with locks[agent]:
             with connection(path) as db:
-                state = db.execute('SELECT * FROM lune_cinema_guests WHERE room_id=? AND agent=? AND enabled=1', (rid,agent)).fetchone()
+                state = db.execute('SELECT * FROM emoi_cinema_guests WHERE room_id=? AND agent=? AND enabled=1', (rid,agent)).fetchone()
             if not state or state['retry_after'] > time.time():
                 return
             async def deliver(text, nonce, media_time, cursors):
@@ -97,7 +97,7 @@ def register(app, relay):
                 await call('POST', f'/api/rooms/{rid}/messages', {'senderName': 'GPT' if agent=='gpt' else 'Claude',
                     'senderKind':'ai','content':text,'mediaTimeMs':media_time,'nonce':nonce})
                 with connection(path) as db:
-                    db.execute('''UPDATE lune_cinema_guests SET cursors=?,last_at=?,pending_text=NULL,
+                    db.execute('''UPDATE emoi_cinema_guests SET cursors=?,last_at=?,pending_text=NULL,
                         pending_nonce=NULL,pending_cursors=NULL,retry_after=0 WHERE room_id=? AND agent=? AND pending_nonce=? AND enabled=1''',
                         (json.dumps(cursors),time.time(),rid,agent,nonce))
             try:
@@ -113,7 +113,7 @@ def register(app, relay):
                 react = bool(human) or film and time.time()-state['last_at'] >= 100
                 if not react:
                     with connection(path) as db:
-                        db.execute('UPDATE lune_cinema_guests SET cursors=?,retry_after=0 WHERE room_id=? AND agent=? AND enabled=1', (json.dumps(upcoming),rid,agent))
+                        db.execute('UPDATE emoi_cinema_guests SET cursors=?,retry_after=0 WHERE room_id=? AND agent=? AND enabled=1', (json.dumps(upcoming),rid,agent))
                     return
                 payload = {'film':tick['room']['mediaTitle'],'playheadMs':tick['playback']['playheadMs'],
                            'state':tick['playback']['state'],'dialogue':tick['dialogueDelta'][-20:],
@@ -130,7 +130,7 @@ def register(app, relay):
                             frames = [base64.b64encode(frame.content).decode('ascii')]
                     except (httpx.HTTPError, KeyError):
                         pass
-                prompt = ('【LUNE_CINEMA_TICK】这是影院已经播放过的增量片段。请像一起看片的朋友一样自然、简短地接话；'
+                prompt = ('【EMOI_CINEMA_TICK】这是影院已经播放过的增量片段。请像一起看片的朋友一样自然、简短地接话；'
                     '用户刚发言时优先回应，不要每段字幕都说话，也不要剧透。只根据下列资料判断；有画面时以实际图片为准，'
                     '没有画面时不要推断视觉细节。\n'+json.dumps(payload,ensure_ascii=False)[:15000])
                 if generate_fn:
@@ -148,22 +148,22 @@ def register(app, relay):
                     raise ValueError('cinema model returned invalid action')
                 if value['action']=='silent':
                     with connection(path) as db:
-                        db.execute('UPDATE lune_cinema_guests SET cursors=?,last_at=?,retry_after=0 WHERE room_id=? AND agent=? AND enabled=1', (json.dumps(upcoming),time.time(),rid,agent))
+                        db.execute('UPDATE emoi_cinema_guests SET cursors=?,last_at=?,retry_after=0 WHERE room_id=? AND agent=? AND enabled=1', (json.dumps(upcoming),time.time(),rid,agent))
                     return
                 text = value.get('text','')
                 if not isinstance(text,str) or not 1 <= len(text.strip()) <= 800:
                     raise ValueError('cinema model returned invalid text')
                 nonce = str(uuid.uuid4())
                 with connection(path) as db:
-                    db.execute('''UPDATE lune_cinema_guests SET pending_text=?,pending_nonce=?,pending_time=?,pending_cursors=?
+                    db.execute('''UPDATE emoi_cinema_guests SET pending_text=?,pending_nonce=?,pending_time=?,pending_cursors=?
                         WHERE room_id=? AND agent=? AND enabled=1''', (text.strip(),nonce,tick['playback']['playheadMs'],json.dumps(upcoming),rid,agent))
                 with connection(path) as db:
-                    allowed = db.execute('SELECT enabled FROM lune_cinema_guests WHERE room_id=? AND agent=?', (rid,agent)).fetchone()
+                    allowed = db.execute('SELECT enabled FROM emoi_cinema_guests WHERE room_id=? AND agent=?', (rid,agent)).fetchone()
                 if allowed and allowed['enabled']:
                     await deliver(text.strip(),nonce,tick['playback']['playheadMs'],upcoming)
             except (httpx.HTTPError, KeyError, ValueError, json.JSONDecodeError, asyncio.TimeoutError):
                 with connection(path) as db:
-                    db.execute('UPDATE lune_cinema_guests SET retry_after=? WHERE room_id=? AND agent=?', (time.time()+45,rid,agent))
+                    db.execute('UPDATE emoi_cinema_guests SET retry_after=? WHERE room_id=? AND agent=?', (time.time()+45,rid,agent))
 
     async def tick(generate_fn=None):
         try:
@@ -173,7 +173,7 @@ def register(app, relay):
         if not room:
             return
         with connection(path) as db:
-            rows = db.execute('SELECT * FROM lune_cinema_guests WHERE room_id=? AND enabled=1', (room['id'],)).fetchall()
+            rows = db.execute('SELECT * FROM emoi_cinema_guests WHERE room_id=? AND enabled=1', (room['id'],)).fetchall()
         if rows:
             await asyncio.gather(*(run_guest(room,row,generate_fn=generate_fn) for row in rows))
 

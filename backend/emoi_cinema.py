@@ -1,4 +1,4 @@
-"""Authenticated Luné bridge to the pinned loopback Open Watch Cinema runtime."""
+"""Authenticated Émoi bridge to the pinned loopback Open Watch Cinema runtime."""
 import asyncio
 import json
 import os
@@ -12,9 +12,9 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from starlette.background import BackgroundTask
 
 
-PORT = int(os.environ.get('LUNE_CINEMA_PORT', '4182'))
+PORT = int(os.environ.get('EMOI_CINEMA_PORT', '4182'))
 BASE = f'http://127.0.0.1:{PORT}'
-DATA = Path(os.environ.get('LUNE_CINEMA_DATA') or Path(os.environ.get('RELAY_DB', 'relay.db')).resolve().parent / 'cinema').resolve()
+DATA = Path(os.environ.get('EMOI_CINEMA_DATA') or Path(os.environ.get('RELAY_DB', 'relay.db')).resolve().parent / 'cinema').resolve()
 VIDEO = {'.mp4', '.m4v', '.webm', '.mov', '.mkv'}
 MAX_UPLOAD = 12 * 1024 ** 3
 CHUNK = 8 * 1024 ** 2
@@ -32,7 +32,7 @@ def register(app, relay):
         except httpx.HTTPError as exc:
             raise HTTPException(503, '私人影院尚未启动，请检查本机服务与 Node 24') from exc
 
-    @app.get('/lune/cinema/status')
+    @app.get('/emoi/cinema/status')
     async def status(request: Request):
         relay['check_auth'](request)
         try:
@@ -42,7 +42,7 @@ def register(app, relay):
         except (HTTPException, httpx.HTTPError, ValueError):
             return {'connected': False, 'cinema': None}
 
-    @app.api_route('/lune/cinema/api/{path:path}', methods=['GET', 'HEAD', 'POST', 'DELETE'])
+    @app.api_route('/emoi/cinema/api/{path:path}', methods=['GET', 'HEAD', 'POST', 'DELETE'])
     async def proxy(path: str, request: Request):
         relay['check_auth'](request)
         if not path or not SAFE_PATH.fullmatch(path) or '..' in path or not path.startswith(('media', 'rooms', 'jobs', 'observer/', 'health')):
@@ -82,7 +82,7 @@ def register(app, relay):
         except httpx.HTTPError as exc:
             raise HTTPException(503, '私人影院尚未启动') from exc
 
-    @app.put('/lune/cinema/uploads/{upload_id}')
+    @app.put('/emoi/cinema/uploads/{upload_id}')
     async def upload_chunk(upload_id: uuid.UUID, request: Request):
         relay['check_auth'](request)
         name = request.headers.get('x-cinema-name', '')
@@ -122,7 +122,7 @@ def register(app, relay):
                 file.write(content)
             return {'received': part.stat().st_size, 'size': size}
 
-    @app.post('/lune/cinema/uploads/{upload_id}/finish')
+    @app.post('/emoi/cinema/uploads/{upload_id}/finish')
     async def finish_upload(upload_id: uuid.UUID, request: Request):
         relay['check_auth'](request)
         async with lock:
