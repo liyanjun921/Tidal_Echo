@@ -1,15 +1,8 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content"/><meta name="theme-color" content="#e6eff3"/><meta name="apple-mobile-web-app-capable" content="yes"/><meta name="apple-mobile-web-app-title" content="Émoi"/><meta name="apple-mobile-web-app-status-bar-style" content="default"/><title>Émoi · OURSPACE</title><link rel="icon" href="assets/favicon.svg" type="image/svg+xml"/><link rel="apple-touch-icon" href="apple-touch-icon.png"/><link rel="manifest" href="manifest.webmanifest"/><link rel="stylesheet" href="styles.css"/><link rel="stylesheet" href="connection.css"/><link rel="stylesheet" href="wren-room.css"/><link rel="stylesheet" href="xinchao-room.css"/><link rel="stylesheet" href="living-context.css"/><link rel="stylesheet" href="reading.css"/><link rel="stylesheet" href="checklist.css"/><link rel="stylesheet" href="cinema.css"/><link rel="stylesheet" href="polish.css"/><link rel="stylesheet" href="emoi-archive-glass.css"/><link rel="stylesheet" href="emoi-phone.css"/><link rel="stylesheet" href="emoi-liquid.css"/><link rel="stylesheet" href="emoi-imessage.css"/><link rel="stylesheet" href="emoi-crystal.css"/></head>
 <body data-theme="water"><div class="wall" aria-hidden="true"></div>
-<div class="emoi-phone-host" id="emoiPhone" hidden aria-label="Émoi 小手机界面">
- <div class="ep-statusbar" aria-hidden="true"><span data-ep-clock>09:41</span><span class="ep-status-island"></span>
-  <span class="ep-status-right">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 20h3v-4H2zm5 0h3V12H7zm5 0h3V8h-3zm5 0h3V4h-3z"/></svg>
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M3 9a14 14 0 0 1 18 0M6 13a9 9 0 0 1 12 0m-9 4a5 5 0 0 1 6 0"/><circle cx="12" cy="20" r="1" fill="currentColor" stroke="none"/></svg>
-    <svg class="ep-battery" viewBox="0 0 27 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1" y="2" width="22" height="12" rx="3"/><path d="M25 6v4"/><rect x="4" y="5" width="15" height="6" rx="1.5" fill="currentColor" stroke="none"/></svg>
-  </span>
- </div>
- <div id="emoiPhoneView" class="ep-view"></div><div class="ep-home-indicator" aria-hidden="true"></div>
+<div class="emoi-phone-host" id="emoiPhone" hidden aria-label="Émoi 应用桌面">
+ <div id="emoiPhoneView" class="ep-view"></div>
 </div>
 <main class="app" id="app"><header class="topbar"><button class="icon-button glass" id="menuButton" aria-label="打开侧边栏" aria-expanded="false"><span data-icon="menu"></span></button><button class="peer-pill" id="roomButton" aria-label="切换聊天房间"><strong id="headerName">GPT</strong><span id="headerDetail">独立会话 · 独立记忆</span></button><div class="topbar-actions"><button type="button" class="icon-button glass" id="chatWallpaperButton" aria-label="更换这个聊天房间的壁纸" title="换壁纸"><span data-icon="image"></span></button><button class="icon-button glass" id="moreButton" aria-label="更多聊天选项" aria-expanded="false"><span data-icon="more"></span></button></div></header>
 <section class="chat-area" id="chatArea" aria-label="聊天记录"><div class="day-separator" id="dayLabel">今天 · 从一句话开始</div><button id="olderMessages" class="quiet-button" hidden>加载更早的消息</button><div class="chat-stream" id="chatStream" role="log" aria-live="polite" aria-relevant="additions text"></div><div id="chatBottom"></div></section>
