@@ -72,6 +72,27 @@ def main():
             assert "尚未绑定 AI 服务" in driver.find_element(By.ID,"emoiPhoneView").text
             driver.save_screenshot(str(OUT/"phone-contact-detail-390.png"))
 
+            # A user-created group is a transparent local draft, not a phantom
+            # connected chat or shared memory store.
+            driver.execute_script("window.EmoiUiMode.openApp('chat')")
+            driver.find_element(By.CSS_SELECTOR,'.ep-quiet-link').click()
+            group=driver.find_element(By.ID,"epGroupDialog")
+            group.find_element(By.CSS_SELECTOR,'input[name="name"]').send_keys("自定义小群")
+            group.find_element(By.CSS_SELECTOR,'.ep-member input[type="checkbox"]').click()
+            group.find_element(By.CSS_SELECTOR,'button[type="submit"]').click()
+            wait(driver,lambda d:"自定义小群" in d.find_element(By.ID,"emoiPhoneView").text)
+            assert "群聊草稿" in driver.find_element(By.ID,"emoiPhoneView").text
+            assert len(driver.execute_script("return JSON.parse(localStorage.getItem('emoi-ui-groups-v1'))"))==1
+            driver.save_screenshot(str(OUT/"phone-group-draft-390.png"))
+
+            # Existing apps open their real implementations in the phone frame.
+            driver.execute_script("window.EmoiUiMode.openHome()")
+            driver.find_element(By.CSS_SELECTOR,'[data-ep-app="memory"]').click()
+            wait(driver,lambda d:d.execute_script("return document.querySelector('#workspaceDialog').open"))
+            assert driver.execute_script("return document.querySelector('#workspaceDialog').dataset.page")=="memory"
+            driver.save_screenshot(str(OUT/"phone-memory-app-390.png"))
+            driver.execute_script("document.querySelector('#workspaceDialog').close()")
+
             # Mode switching must never clear contact data or alter relay auth.
             driver.execute_script("window.EmoiUiMode.setMode('art')")
             assert driver.execute_script("return document.body.dataset.uiMode")=="art"
