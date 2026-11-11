@@ -2,6 +2,10 @@
 
 > 正式品牌 **Émoi**，代码标识统一为 `emoi_*`，API 使用 `/emoi/`，云部署使用 `compose.emoi.yaml`、`Dockerfile.emoi`、`emoi.db`。历史 Luné 存储不直接删除：旧数据和本机壁纸有保留源文件的迁移路径。**迁移前务必停写、完整备份并检查冲突。** 腾讯云接入与真实联通边界见 [Émoi 云端部署与集成验收](docs/EMOI_TENCENT_CLOUD.md)。
 
+## 开始使用：腾讯云部署与手机 PWA
+
+已有腾讯云 Linux 轻量服务器？优先阅读 [Émoi 腾讯云部署｜新手照做版](docs/EMOI_TENCENT_BEGINNER.md)。先只读核对 Docker、内存、端口及现有 XLC/CyberBoss/OB 服务，再使用 `compose.emoi.yaml` 启动独立容器；手机通过 HTTPS 打开后添加到主屏幕。完整接口、Ombre / Garden / CyberBoss 限制见 [云端集成验收](docs/EMOI_TENCENT_CLOUD.md)。本项目尚未替用户在其腾讯云实例上完成实机部署。
+
 ## 历史开发说明：Émoi V0.16
 
 已把用户 fork 的 **still-true** 接入现有 Émoi：**自主空间 → 当前背景** 与记忆页均可打开同一面板，维护今日状态、跨天持续的事、待复核和归档。原版五个工具进入已有聊天，按 GPT/Claude 私聊和群聊成员分四份保存；写入须引用本轮用户原话。API 每轮装配当前快照，Claude 常驻会话按内容变化或压缩后补挂。到期归档不推断事情已经结束，也不会自动写入长期记忆。原版源码、验证与恢复说明见 [V0.16 当前背景](docs/EMOI_V16_STILL_TRUE.md)。
