@@ -1,4 +1,4 @@
-"""Real native Ombre HTTP/MCP + Luné model loop; synthetic providers only."""
+"""Real native Ombre HTTP/MCP + Émoi model loop; synthetic providers only."""
 import asyncio
 import io
 import json
@@ -31,10 +31,10 @@ with httpx.Client(base_url=BASE, timeout=90, trust_env=False,
         r.raise_for_status()
         return r.json()
 
-    status = client.get('/relay/lune/ombre/status').json()
+    status = client.get('/relay/emoi/ombre/status').json()
     assert status['installed'] and all(r['running'] and len(r['tools']) == 16 for r in status['scopes']), status
     assert client.get('/ombre/gpt/').status_code == 401
-    opened = client.post('/relay/lune/ombre/gpt/open', json={})
+    opened = client.post('/relay/emoi/ombre/gpt/open', json={})
     opened.raise_for_status()
     page = client.get(opened.json()['url'])
     assert page.status_code == 200 and 'Ombre' in page.text and 'const prefix="/ombre/gpt"' in page.text
@@ -42,9 +42,9 @@ with httpx.Client(base_url=BASE, timeout=90, trust_env=False,
     for path in ['/api/buckets', '/api/config', '/api/network', '/api/status', '/api/settings/you', '/api/settings/them', '/api/import/status', '/api/embedding/info']:
         get(path)
 
-    sent = client.post('/relay/lune/rooms/gpt/send', json={'text': 'OMBRE_WRITE_TRIGGER 请记住我们周日去海边看蓝色风筝。', 'nonce': uuid.uuid4().hex}).json()
+    sent = client.post('/relay/emoi/rooms/gpt/send', json={'text': 'OMBRE_WRITE_TRIGGER 请记住我们周日去海边看蓝色风筝。', 'nonce': uuid.uuid4().hex}).json()
     for _ in range(300):
-        room = client.get('/relay/lune/rooms/gpt/messages').json()
+        room = client.get('/relay/emoi/rooms/gpt/messages').json()
         run = next(r for r in room['runs'] if r['id'] == sent['run']['id'])
         if run['state'] not in {'pending', 'running'}:
             assert run['state'] == 'completed', run
@@ -58,7 +58,7 @@ with httpx.Client(base_url=BASE, timeout=90, trust_env=False,
         # stored body and vault, rather than mistaking that echo for a leak.
         result = native('breath_search', {'query': 'OMBRE_PRIVATE_MARKER'}, scope=scope)
         assert '用户说我们周日去海边看蓝色风筝。' not in result, (scope, result)
-        client.post('/relay/lune/ombre/' + scope + '/open', json={}).raise_for_status()
+        client.post('/relay/emoi/ombre/' + scope + '/open', json={}).raise_for_status()
         other = client.get('/ombre/' + scope + '/api/buckets')
         other.raise_for_status()
         assert other.json() == [], (scope, other.text)
@@ -147,10 +147,10 @@ with httpx.Client(base_url=BASE, timeout=90, trust_env=False,
     # dream has intentionally digested this memory. Re-enable its surfacing
     # through the original trace tool before testing automatic injection.
     native('trace', {'bucket_id': marker['id'], 'digested': False, 'dont_surface': False})
-    recalled = client.post('/relay/lune/rooms/gpt/send', json={
+    recalled = client.post('/relay/emoi/rooms/gpt/send', json={
         'text': '周日去海边看蓝色风筝这件事你想起了吗？', 'nonce': uuid.uuid4().hex}).json()
     for _ in range(300):
-        room = client.get('/relay/lune/rooms/gpt/messages').json()
+        room = client.get('/relay/emoi/rooms/gpt/messages').json()
         run = next(r for r in room['runs'] if r['id'] == recalled['run']['id'])
         if run['state'] not in {'pending', 'running'}:
             assert run['state'] == 'completed', run
@@ -158,7 +158,7 @@ with httpx.Client(base_url=BASE, timeout=90, trust_env=False,
         time.sleep(.1)
     else:
         raise AssertionError('automatic recall turn did not finish')
-    records = [json.loads(line) for line in Path(os.environ['LUNE_TEST_REQUESTS']).read_text().splitlines()]
+    records = [json.loads(line) for line in Path(os.environ['EMOI_TEST_REQUESTS']).read_text().splitlines()]
     assert any(any(t['function']['name'] == 'ombre_hold' for t in r.get('tools', [])) for r in records)
     assert any(any(c.get('function', {}).get('name') == 'ombre_hold' for m in r.get('messages', [])
         for c in m.get('tool_calls', [])) and any(m.get('role') == 'tool' and
