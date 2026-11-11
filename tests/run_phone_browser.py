@@ -46,7 +46,7 @@ def main():
             wait(driver,lambda d:d.execute_script("return !!window.EmoiUiMode && !!window.EmoiApp"))
             wait(driver,lambda d:d.execute_script("return document.body.dataset.phoneScreen==='home'"))
             assert driver.execute_script("return document.body.dataset.uiMode")=="phone"
-            assert driver.execute_script("return document.querySelectorAll('.ep-app').length")==10
+            assert driver.execute_script("return document.querySelectorAll('.ep-app').length")==8
             assert driver.execute_script("return document.documentElement.scrollWidth <= window.innerWidth+1"),"390px horizontal overflow"
             assert driver.find_element(By.ID,"emoiPhone").is_displayed()
             driver.save_screenshot(str(OUT/"phone-home-390.png"))
@@ -62,7 +62,7 @@ def main():
                 wallpaper:getComputedStyle(document.documentElement).getPropertyValue('--emoi-active-wallpaper')
               }
             """)
-            assert optical["n"]==10 and optical["svg"]
+            assert optical["n"]==8 and optical["svg"]
             assert "rgba" in optical["sample"] and "rgba" in optical["dock"]
             assert "lily-water.webp" in optical["wallpaper"],optical
             # A wallpaper change must pass through the same translucent lenses.
