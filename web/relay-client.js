@@ -21,7 +21,7 @@ async function request(path,opts={}){
  }finally{clearTimeout(timer);opts.signal?.removeEventListener('abort',abort)}
 }
 const json=(path,method,body)=>request(path,{method,body:JSON.stringify(body)});
-function db(){return new Promise((resolve,reject)=>{const r=indexedDB.open('emoi-cloud-cache',1);r.onupgradeneeded=()=>r.result.createObjectStore('rooms');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
+function db(){return Promise.resolve(window.EmoiLegacyStorageReady).then(()=>new Promise((resolve,reject)=>{const r=indexedDB.open('emoi-cloud-cache',1);r.onupgradeneeded=()=>r.result.createObjectStore('rooms');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)}))}
 async function cache(room,rows,limit=100){try{const d=await db(),tx=d.transaction('rooms','readwrite');tx.objectStore('rooms').put(rows.slice(-limit),owner+':'+room);tx.oncomplete=()=>d.close()}catch{}}
 async function cached(room){try{const d=await db();return await new Promise(resolve=>{const r=d.transaction('rooms').objectStore('rooms').get(owner+':'+room);r.onsuccess=()=>{resolve(r.result||[]);d.close()};r.onerror=()=>{resolve([]);d.close()}})}catch{return []}}
 function message(m){return {id:String(m.id),role:m.from==='human'?'user':(m.meta?.agent_id||'gpt'),text:m.text||'',ts:m.ts,kind:m.kind,meta:m.meta||{},time:m.meta?.date_unknown?'导入记录 · 日期未知':new Date(m.ts).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})}}
