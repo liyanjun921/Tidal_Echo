@@ -177,32 +177,32 @@ body[data-emoi-view=home] .wall{background-color:#172235}
 .emoi-studio .emoi-peer-copy{display:flex;flex-direction:column;align-items:flex-start;min-width:0;gap:4px}
 .emoi-studio .emoi-peer-copy strong{line-height:1.1;white-space:nowrap}
 .emoi-studio .emoi-peer-copy #headerDetail{font-size:9px;color:#7a8894;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
-.emoi-studio .sheet.page-sheet[data-page=memory] .sheet-body,
-.emoi-studio .sheet.page-sheet[data-page=reading] .sheet-body,
-.emoi-studio .sheet.page-sheet[data-page=journal] .sheet-body{
+.sheet.page-sheet[data-page=memory] .sheet-body,
+.sheet.page-sheet[data-page=reading] .sheet-body,
+.sheet.page-sheet[data-page=journal] .sheet-body{
  background:linear-gradient(160deg,#f5f6f03d,#cfd8e533);
 }
-.emoi-studio .page-sheet[data-page=memory]::before,
-.emoi-studio .page-sheet[data-page=reading]::before,
-.emoi-studio .page-sheet[data-page=journal]::before{
+.page-sheet[data-page=memory]::before,
+.page-sheet[data-page=reading]::before,
+.page-sheet[data-page=journal]::before{
  background-image:linear-gradient(155deg,#f3f5f4a0,#d5dde8aa),url('assets/emoi-archive-botanical.svg');
  background-position:center;background-size:cover;
 }
-.emoi-studio .page-sheet[data-page=cinema]::before,
-.emoi-studio .page-sheet[data-page=whisper]::before{
+.page-sheet[data-page=cinema]::before,
+.page-sheet[data-page=whisper]::before{
  background-image:linear-gradient(140deg,#14263cab,#263c5ec4),url('assets/emoi-archive-nocturne.svg');
 }
-.emoi-studio .page-sheet .entry-card,
-.emoi-studio .page-sheet .memory-card,
-.emoi-studio .page-sheet .reading-book{
+.page-sheet .entry-card,
+.page-sheet .memory-card,
+.page-sheet .reading-book{
  border:1px solid #ffffffae;
  background:linear-gradient(138deg,#ffffffe3,#e2e9f2d5);
  box-shadow:inset 0 1px 0 #fff,0 8px 24px #1b314117;
  -webkit-backdrop-filter:blur(22px);backdrop-filter:blur(22px);
 }
-.emoi-studio .page-sheet .entry-card h3{font:500 18px/1.55 Georgia,'Songti SC',serif}
-.emoi-studio .page-sheet .section-title,.emoi-studio .page-sheet .eyebrow{letter-spacing:.18em}
-.emoi-studio .page-sheet .section-title::before{content:"/  ";color:var(--studio-red)}
+.page-sheet .entry-card h3{font:500 18px/1.55 Georgia,'Songti SC',serif}
+.page-sheet .section-title,.page-sheet .eyebrow{letter-spacing:.18em}
+.page-sheet .section-title::before{content:"/  ";color:var(--studio-red)}
 @media (max-width:1023px){
  .emoi-studio .peer-pill{padding-inline:0}
  .emoi-studio .emoi-peer-avatar{width:34px;height:34px}
