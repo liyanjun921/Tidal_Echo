@@ -1,7 +1,7 @@
 """Sample the real HTTP E2E backend on Linux; all model/voice calls use fixtures.
 
-Run with the project's Python environment and its existing LUNE_LATENT_SOURCE /
-LUNE_PASSIVE_MODEL_CACHE. This measures processes, not a container memory limit.
+Run with the project's Python environment and its existing EMOI_LATENT_SOURCE /
+EMOI_PASSIVE_MODEL_CACHE. This measures processes, not a container memory limit.
 """
 import argparse
 import json
@@ -32,7 +32,7 @@ def sample(parent_host):
     runners = {pid for pid, (parent, command, _) in table.items()
                if parent == parent_host and "tests/run_e2e.py" in command}
     selected = {pid for pid, (parent, command, _) in table.items()
-                if parent in runners and "scripts/run_lune.py" in command}
+                if parent in runners and "scripts/run_emoi.py" in command}
     while True:
         grown = selected | {pid for pid, (parent, _, _) in table.items() if parent in selected}
         if grown == selected:
@@ -48,7 +48,7 @@ def sample(parent_host):
                 if ":" in line and len(parts) >= 2 and parts[1].isdigit():
                     memory[parts[0].rstrip(":")] = int(parts[1])
             label = next((name for name in ("latent_worker.py", "latent_jobs.py", "api_loop:app",
-                         "backend.lune_server:app", "scripts/run_lune.py") if name in command),
+                         "backend.emoi_server:app", "scripts/run_emoi.py") if name in command),
                          "other backend child")
             rows.append({"process": label, "rss_kib": memory["Rss"], "pss_kib": memory["Pss"],
                          "swap_kib": memory.get("Swap", 0)})
@@ -63,7 +63,7 @@ def main():
     args = parser.parse_args()
     if sys.platform != "linux":
         parser.error("Linux /proc with readable smaps_rollup is required")
-    if not os.environ.get("LUNE_LATENT_SOURCE") or not os.environ.get("LUNE_PASSIVE_MODEL_CACHE"):
+    if not os.environ.get("EMOI_LATENT_SOURCE") or not os.environ.get("EMOI_PASSIVE_MODEL_CACHE"):
         parser.error("Set both native source and local model cache paths to profile full Latent")
     root = Path(__file__).resolve().parents[1]
     args.output.mkdir(parents=True, exist_ok=True)
