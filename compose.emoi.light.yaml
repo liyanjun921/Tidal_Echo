@@ -1,0 +1,10 @@
+# Émoi cloud starter for an existing resource-constrained Tencent Lighthouse host.
+# This is an explicit opt-in overlay: no duplicate Ombre vault/model downloads.
+services:
+  emoi:
+    mem_limit: 1536m
+    environment:
+      EMOI_LATENT_AUTO_SETUP: "0"
+      EMOI_OMBRE_AUTO_SETUP: "0"
+      EMOI_FOLIO_AUTO_SETUP: "0"
+      EMOI_XINCHAO_AUTO_SETUP: "0"
