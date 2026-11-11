@@ -1,4 +1,4 @@
-/* The native Ombre Dashboard stays functional inside Luné; records aren't demos. */
+/* The native Ombre Dashboard stays functional inside Émoi; records aren't demos. */
 (()=>{'use strict';
 const $=s=>document.querySelector(s),R=()=>window.LuneRelay;
 const button=document.createElement('button');button.id='openOmbreMemory';button.type='button';button.className='soft-button';button.textContent='Ombre-Brain · 情绪与经历记忆';
