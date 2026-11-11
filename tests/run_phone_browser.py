@@ -50,6 +50,30 @@ def main():
             assert driver.execute_script("return document.documentElement.scrollWidth <= window.innerWidth+1"),"390px horizontal overflow"
             assert driver.find_element(By.ID,"emoiPhone").is_displayed()
             driver.save_screenshot(str(OUT/"phone-home-390.png"))
+            # Crystal glass: all icons are SVG with low-opacity backdrop surfaces,
+            # not solid coloured boxes or emoji glyphs.
+            optical=driver.execute_script("""
+              const a=[...document.querySelectorAll('.ep-app-icon')];
+              return {
+                n:a.length, svg:a.every(x=>!!x.querySelector('svg')),
+                sample:getComputedStyle(a[0]).backgroundImage,
+                dock:getComputedStyle(document.querySelector('.ep-dock')).backgroundImage,
+                hero:getComputedStyle(document.querySelector('.ep-hero-widget')).backgroundImage,
+                wallpaper:getComputedStyle(document.documentElement).getPropertyValue('--emoi-active-wallpaper')
+              }
+            """)
+            assert optical["n"]==10 and optical["svg"]
+            assert "rgba" in optical["sample"] and "rgba" in optical["dock"]
+            assert "lily-water.webp" in optical["wallpaper"],optical
+            # A wallpaper change must pass through the same translucent lenses.
+            driver.execute_script("""document.documentElement.style.setProperty(
+              '--emoi-active-wallpaper','url("assets/water-light.webp")')""")
+            driver.save_screenshot(str(OUT/"phone-home-water-wallpaper-390.png"))
+            driver.execute_script("window.EmoiWallpapers.activate('page:home')")
+            # A real search button opens Contacts, not an empty decorative label.
+            driver.find_element(By.CSS_SELECTOR,'.ep-home-search').click()
+            assert driver.execute_script("return document.body.dataset.phoneScreen")=="contacts"
+            driver.execute_script("window.EmoiUiMode.openHome()")
 
             # The phone UI starts with NO pre-made AI identities, regardless of the
             # legacy GPT/Claude room identifiers preserved inside the back end.
