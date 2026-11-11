@@ -49,7 +49,11 @@ def main():
             assert driver.execute_script("return document.querySelectorAll('.ep-app').length")==8
             assert driver.execute_script("return document.documentElement.scrollWidth <= window.innerWidth+1"),"390px horizontal overflow"
             assert driver.find_element(By.ID,"emoiPhone").is_displayed()
-            driver.save_screenshot(str(OUT/"phone-home-390.png"))
+            assert not driver.find_elements(By.CSS_SELECTOR,'.ep-statusbar,.ep-home-indicator'),"Fake phone furniture must not exist"
+            mobile_bounds=driver.execute_script("return document.querySelector('#emoiPhone').getBoundingClientRect().toJSON()")
+            assert abs(mobile_bounds["left"]) <= 1 and abs(mobile_bounds["right"]-390)<=2,mobile_bounds
+            assert driver.execute_script("return getComputedStyle(document.querySelector('#emoiPhone')).borderTopWidth")=="0px"
+            driver.save_screenshot(str(OUT/"responsive-home-390.png"))
             # Crystal glass: all icons are SVG with low-opacity backdrop surfaces,
             # not solid coloured boxes or emoji glyphs.
             optical=driver.execute_script("""
@@ -159,11 +163,14 @@ def main():
             driver.set_window_size(1440,900);driver.refresh()
             wait(driver,lambda d:d.execute_script("return !!window.EmoiUiMode && document.body.dataset.phoneScreen==='home'"))
             width=driver.execute_script("return Math.round(document.querySelector('#emoiPhone').getBoundingClientRect().width)")
-            assert 395<=width<=415,f"Expected centered phone on desktop, got {width}"
+            assert abs(width-1440)<=2,f"Desktop MUST be a real full-width website, not a 407px phone: {width}"
             frame=driver.execute_script("return document.querySelector('#emoiPhone').getBoundingClientRect().toJSON()")
-            assert abs((frame['left']+frame['right'])/2 - 720)<3
+            assert abs(frame['left'])<=1 and abs(frame['right']-1440)<=2,frame
+            assert driver.execute_script("return getComputedStyle(document.querySelector('#emoiPhone')).borderTopWidth")=="0px"
+            columns=driver.execute_script("return getComputedStyle(document.querySelector('.ep-home-scroll')).gridTemplateColumns")
+            assert len(columns.split())==2,f"Expected fluid desktop app launcher columns, got {columns}"
             assert driver.execute_script("return document.documentElement.scrollWidth <= window.innerWidth+1")
-            driver.save_screenshot(str(OUT/"phone-desktop-1440.png"))
+            driver.save_screenshot(str(OUT/"responsive-desktop-1440.png"))
 
             # Settings allow both independent visual modes.
             driver.find_element(By.CSS_SELECTOR,'.ep-home-top-actions button[aria-label="界面设置"]').click()
