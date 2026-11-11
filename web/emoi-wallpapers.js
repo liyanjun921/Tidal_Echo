@@ -26,7 +26,7 @@
     gpt:'GPT 私聊', claude:'Claude 私聊', group:'三人聊天室'
   };
   const DEFAULTS = {
-    'page:memory':'archive', 'page:reading':'archive', 'page:journal':'archive',
+    'page:home':'nocturne', 'page:memory':'archive', 'page:reading':'archive', 'page:journal':'archive',
     'page:cinema':'nocturne', 'page:report':'archive',
     'page:whisper':'archive', 'page:health':'lily',
     'page:calendar':'water', 'page:todo':'water'
