@@ -8,7 +8,7 @@ const reduced=matchMedia('(prefers-reduced-motion: reduce)');
 const forced=matchMedia('(forced-colors: active)');
 const instances=new Map();let bg=null,bgImage=null,bgUrl='',sourceTurn=0,enabled=false,raf=0;
 const VS='#version 300 es\nin vec2 position;\nout vec2 uv;\nvoid main(){uv=(position+1.0)*0.5;gl_Position=vec4(position,0.0,1.0);}';
-const FS='#version 300 es\nprecision highp float;\nin vec2 uv;\nout vec4 outColor;\nuniform sampler2D source;\nuniform vec2 res;\nuniform float radius;\nuniform float phase;\nfloat rounded(vec2 p,vec2 size,float r){vec2 q=abs(p)-size+r;return length(max(q,0.0))+min(max(q.x,q.y),0.0)-r;}\nvoid main(){vec2 p=uv*res;float d=rounded(p-res*0.5,res*0.5,min(radius,min(res.x,res.y)*0.5));float mask=1.0-smoothstep(-0.9,0.9,d);float edge=1.0-smoothstep(-min(res.x,res.y)*0.43,0.0,d);vec2 q=(p-res*0.5)/res;float w=sin(uv.y*8.0+phase*0.48)*cos(uv.x*6.0-phase*0.29);vec2 refraction=q*0.008*(0.18+edge*0.82)+vec2(w,-w)*0.0006*edge;vec3 back=texture(source,clamp(uv+refraction,vec2(0.0),vec2(1.0))).rgb;float line=exp(-pow((d+0.85)/1.6,2.0));float topLeft=pow(max(0.0,(1.0-uv.x)*(1.0-uv.y)),1.8);float bottomRight=pow(max(0.0,uv.x*uv.y),1.6);float glint=line*(topLeft*0.74+bottomRight*0.32);vec3 color=mix(back,vec3(0.97,0.99,1.0),0.065);color=mix(color,vec3(1.0),clamp(glint*0.61,0.0,0.64));float a=mask*(0.42+glint*0.15);outColor=vec4(color,a);}';
+const FS='#version 300 es\\nprecision highp float;\\nin vec2 uv;\\nout vec4 outColor;\\nuniform sampler2D source;\\nuniform vec2 res;\\nuniform float radius;\\nuniform float phase;\\nfloat rounded(vec2 p,vec2 size,float r){vec2 q=abs(p)-size+r;return length(max(q,0.0))+min(max(q.x,q.y),0.0)-r;}\\nvoid main(){vec2 p=uv*res;float d=rounded(p-res*0.5,res*0.5,min(radius,min(res.x,res.y)*0.5));float aa=1.0-smoothstep(-1.3,1.0,d);float rim=1.0-smoothstep(-4.5,-0.25,d);float inner=smoothstep(-9.0,-1.8,d)*(1.0-smoothstep(-1.8,0.0,d));vec2 radial=(uv-0.5);float twirl=sin(uv.y*12.0+phase*.22)*cos(uv.x*7.0-phase*.19);vec2 bend=radial*(rim*rim*.015)+vec2(twirl,-twirl)*rim*.0016;vec3 scene=texture(source,clamp(uv+bend,vec2(0.0),vec2(1.0))).rgb;float top=pow(max(0.0,(1.0-uv.x)*(1.0-uv.y)),2.1);float bottom=pow(max(0.0,uv.x*uv.y),2.2);float spec=inner*(top*.72+bottom*.32);vec3 color=mix(scene,vec3(1.0),clamp(spec*.42,0.0,.35));float alpha=aa*(.16+spec*.34);outColor=vec4(color,alpha);}';
 function shader(gl,type,src){
  const sh=gl.createShader(type);gl.shaderSource(sh,src);gl.compileShader(sh);
  if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS)){gl.deleteShader(sh);return null}return sh;
@@ -31,14 +31,14 @@ function drawBackground(){
  bg.width=Math.round(rect.width);bg.height=Math.round(rect.height);
  const ctx=bg.getContext('2d',{alpha:false});if(!ctx)return;
  const grad=ctx.createLinearGradient(0,0,bg.width,bg.height);
- grad.addColorStop(0,'#f0f7fb');grad.addColorStop(0.48,'#c7dbea');grad.addColorStop(1,'#a1bed7');
+ grad.addColorStop(0,'#274d54');grad.addColorStop(0.5,'#507b79');grad.addColorStop(1,'#152f3a');
  ctx.fillStyle=grad;ctx.fillRect(0,0,bg.width,bg.height);
  if(bgImage&&bgImage.complete&&bgImage.naturalWidth>0){
   const scale=Math.max(bg.width/bgImage.naturalWidth,bg.height/bgImage.naturalHeight);
   const width=bgImage.naturalWidth*scale,height=bgImage.naturalHeight*scale;
   ctx.drawImage(bgImage,(bg.width-width)/2,(bg.height-height)/2,width,height);
  }
- ctx.fillStyle='rgba(238,245,252,.11)';ctx.fillRect(0,0,bg.width,bg.height);
+ ctx.fillStyle='rgba(12,34,38,.07)';ctx.fillRect(0,0,bg.width,bg.height);
 }
 function loadBackground(){
  const url=currentUrl();if(url===bgUrl&&bg)return;
@@ -112,7 +112,13 @@ function refresh(){
  enabled=supported&&!reduced.matches&&!forced.matches&&document.body.dataset.uiMode==='phone'&&document.body.dataset.phoneScreen==='home';
  if(!enabled){for(const item of [...instances.values()])dispose(item);return}
  loadBackground();
- const targets=[...phone.querySelectorAll('[data-ep-optics]')].slice(0,7);
+ // Allocate GPU contexts to the central widget and dock first. The icons use
+ // the identical transparent CSS lens; only two icons get extra GPU caustics.
+ const targets=[
+  phone.querySelector('.ep-hero-widget[data-ep-optics]'),
+  phone.querySelector('.ep-dock[data-ep-optics]'),
+  ...phone.querySelectorAll('.ep-app-icon[data-ep-optics]'),
+ ].filter(Boolean).slice(0,4);
  for(const item of [...instances.values()])if(!targets.includes(item.target))dispose(item);
  for(const target of targets)attach(target);
  schedule();
