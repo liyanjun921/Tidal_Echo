@@ -130,7 +130,7 @@ def main():
             driver.save_screenshot(str(OUT/"artistic-existing-390.png"))
             driver.execute_script("window.EmoiUiMode.setMode('phone')")
             assert driver.execute_script("return document.body.dataset.phoneScreen")=="home"
-            assert driver.execute_script("return JSON.parse(localStorage.getItem('emoi-ui-contacts-v1')).length")==1
+            assert driver.execute_script("return JSON.parse(localStorage.getItem('emoi-ui-contacts-v1')).length")==2
 
             driver.set_window_size(1440,900);driver.refresh()
             wait(driver,lambda d:d.execute_script("return !!window.EmoiUiMode && document.body.dataset.phoneScreen==='home'"))
