@@ -659,6 +659,7 @@ def check_auth(request: Request) -> None:
 async def lifespan(app: FastAPI):
     init_db()
     emoi_runtime["init"]()
+    contacts_runtime["init"]()
     workspace_runtime["init"]()
     checklist_runtime["init"]()
     cinema_runtime["init"]()
@@ -1143,6 +1144,11 @@ except ImportError:
     from emoi import register as register_emoi
 
 emoi_runtime = register_emoi(app, globals())
+try:
+    from .emoi_contacts import register as register_contacts
+except ImportError:
+    from emoi_contacts import register as register_contacts
+contacts_runtime = register_contacts(app, globals())
 try:
     from .emoi_memory import register as register_memory
 except ImportError:
