@@ -1,6 +1,6 @@
 """Probe ORIGINAL Latent Passive Recall in isolation, with real local vectors.
 
-This does not enable the feature in Luné. All facts are invented fixtures.
+This does not enable the feature in Émoi. All facts are invented fixtures.
 Requires a separately installed, unmodified Latent checkout and optional local
 test packages: jieba, fastembed, tiktoken. Never calls a chat or paid API.
 """
@@ -89,7 +89,7 @@ def main():
               "fact_floor": pr.FACT_FLOOR, "fact_floor_note": "native default; documented calibration is for voyage-3.5, not this model",
               "dataset": "invented fixtures, expectations fixed in script, not a representative benchmark",
               "packages": {p: version(p) for p in ("jieba", "fastembed", "onnxruntime", "numpy", "tiktoken")},
-              "facts": facts, "chat_model_called": False, "lune_feature_enabled": False}
+              "facts": facts, "chat_model_called": False, "emoi_feature_enabled": False}
     checks = {}
     with tempfile.TemporaryDirectory(prefix="native-passive-probe-") as temp:
         root = Path(temp)
