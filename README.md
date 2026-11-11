@@ -1,6 +1,6 @@
 # Émoi / OURSPACE · 私人聊天空间
 
-> 原名 Émoi。改名仅影响产品展示、PWA 标题和通知默认名称；`emoi_*` 数据键、服务路径、脚本、Docker 卷与历史文档保留原样，确保旧聊天和 Ombre 档案无需迁移。腾讯云部署与 Garden / CyberBoss / Ombre 连接边界见 [Émoi 云端部署与集成验收](docs/EMOI_TENCENT_CLOUD.md)。
+> 正式品牌 **Émoi**，代码标识统一为 `emoi_*`，API 使用 `/emoi/`，云部署使用 `compose.emoi.yaml`、`Dockerfile.emoi`、`emoi.db`。历史 Luné 存储不直接删除：旧数据和本机壁纸有保留源文件的迁移路径。**迁移前务必停写、完整备份并检查冲突。** 腾讯云接入与真实联通边界见 [Émoi 云端部署与集成验收](docs/EMOI_TENCENT_CLOUD.md)。
 
 ## 历史开发说明：Émoi V0.16
 
