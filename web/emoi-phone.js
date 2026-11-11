@@ -69,9 +69,10 @@ async function remoteSaveContact(person,isNew){
  }catch(e){console.warn('Émoi 联系人同步未完成：',e.message)}
 }
 async function remoteSaveGroup(group,isNew){
- if(!isNew||!window.EmoiRelay?.enabled)return;
+ if(!window.EmoiRelay?.enabled)return;
  try{
-   await window.EmoiRelay.json('/emoi/v2/conversations','POST',{id:group.id,title:group.name,kind:'group',members:group.members});
+   const path=isNew?'/emoi/v2/conversations':'/emoi/v2/conversations/'+encodeURIComponent(group.id);
+   await window.EmoiRelay.json(path,isNew?'POST':'PATCH',{id:group.id,title:group.name,kind:'group',members:group.members});
    group.remote=true;save(GROUPS_KEY,groups)
  }catch(e){console.warn('Émoi 群聊草稿同步未完成：',e.message)}
 }
@@ -233,7 +234,7 @@ function openContacts(){
  if(!contacts.length)list.append(create('p','ep-inline-empty','尚未添加联系人。姓名、头像与个人档案都由你决定。'));
  for(const p of contacts)list.append(listItem(p.id,p.name,'个人资料 · 本机草稿','contacts',()=>openContactDetail(p.id)));
  content.append(list);
- content.append(create('p','ep-help','联系人档案目前只保存在当前设备。独立模型、记忆库与欲望系统连接需要后续单独验收，不会伪装成已互通。'));
+ content.append(create('p','ep-help','联系人首先保存在本设备；连接私人服务器后同步身份和独立命名空间。模型、OB 与欲望系统运行权限仍要分别接通和验收。'));
  root.append(content);
 }
 function openContactConversation(id){
@@ -258,7 +259,7 @@ function openContactDetail(id){
  status.innerHTML='<span class="ep-status-dot"></span><div><strong>尚未绑定 AI 服务</strong><p>这是可编辑的联系人档案。聊天、记忆和唤醒不会误接到其他联系人。</p></div>';
  body.append(status);
  const edit=create('button','ep-action-primary','编辑联系人');edit.type='button';edit.onclick=()=>openContactEditor(person.id);body.append(edit);
- const del=create('button','ep-danger-action','删除联系人草稿');del.type='button';del.onclick=()=>{if(!confirm('确认删除这张本机联系人草稿？已有云端数据不会修改。'))return;contacts=contacts.filter(x=>x.id!==id);save(CONTACTS_KEY,contacts);openContacts()};body.append(del);
+ const del=create('button','ep-danger-action','删除联系人草稿');del.type='button';del.onclick=()=>{if(!confirm('确认删除这张本机联系人草稿？已有云端数据不会修改。'))return;contacts=contacts.filter(x=>x.id!==id);save(CONTACTS_KEY,contacts);if(window.EmoiRelay?.enabled)void window.EmoiRelay.request('/emoi/v2/contacts/'+encodeURIComponent(id),{method:'DELETE'}).catch(e=>console.warn(e.message));openContacts()};body.append(del);
  root.append(body);
 }
 function openGroupDetail(id){
@@ -269,7 +270,7 @@ function openGroupDetail(id){
  body.append(create('p','ep-subtitle',names.length?'成员：'+names.join('、'):'尚未添加成员'));
  const status=create('p','ep-help','这是本机群聊草稿，并未创建真实的群聊会话或授权共享记忆。');body.append(status);
  const edit=create('button','ep-action-primary','编辑群聊');edit.onclick=()=>openGroupEditor(g.id);body.append(edit);
- const del=create('button','ep-danger-action','删除群聊草稿');del.onclick=()=>{if(!confirm('确认删除这份本机群聊草稿？'))return;groups=groups.filter(x=>x.id!==id);save(GROUPS_KEY,groups);openMessages()};body.append(del);root.append(body);
+ const del=create('button','ep-danger-action','删除群聊草稿');del.onclick=()=>{if(!confirm('确认删除这份本机群聊草稿？'))return;groups=groups.filter(x=>x.id!==id);save(GROUPS_KEY,groups);if(window.EmoiRelay?.enabled)void window.EmoiRelay.request('/emoi/v2/conversations/'+encodeURIComponent(id),{method:'DELETE'}).catch(e=>console.warn(e.message));openMessages()};body.append(del);root.append(body);
 }
 let contactDialog=null;
 let groupDialog=null;
