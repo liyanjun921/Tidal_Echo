@@ -1,0 +1,24 @@
+name: Crystal Glass local browser source package
+on:
+  push:
+    branches:
+      - design/emoi-crystal-glass-v3
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout Crystal branch
+        uses: actions/checkout@v4
+      - name: Upload exact frontend source for local visual verification
+        uses: actions/upload-artifact@v4
+        with:
+          name: emoi-crystal-exact-web-source
+          path: web/
+          if-no-files-found: error
+          compression-level: 6
