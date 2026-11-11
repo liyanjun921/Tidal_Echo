@@ -72,8 +72,38 @@ def main():
             assert "尚未绑定 AI 服务" in driver.find_element(By.ID,"emoiPhoneView").text
             driver.save_screenshot(str(OUT/"phone-contact-detail-390.png"))
 
+            # iMessage-style screen is a real independent local conversation;
+            # a send cannot silently fall back to the legacy GPT/Claude rooms.
+            driver.execute_script("window.EmoiUiMode.openApp('chat')")
+            driver.find_element(By.CSS_SELECTOR,'[data-entry="'+store[0]["id"]+'"]').click()
+            wait(driver,lambda d:d.execute_script("return document.body.dataset.phoneScreen==='imessage'"))
+            self_peer=driver.find_element(By.CSS_SELECTOR,'.ep-im-peer-info strong').text
+            assert self_peer=="测试联系人"
+            assert "未连接 AI" in driver.find_element(By.ID,"emoiPhoneView").text
+            area=driver.find_element(By.CSS_SELECTOR,'.ep-im-composer textarea')
+            area.send_keys("这条消息只属于测试联系人")
+            driver.find_element(By.CSS_SELECTOR,'.ep-im-submit').click()
+            wait(driver,lambda d:"这条消息只属于测试联系人" in d.find_element(By.CSS_SELECTOR,'.ep-im-history').text)
+            assert "尚未发送给 AI" in driver.find_element(By.CSS_SELECTOR,'.ep-im-delivery').text
+            stored=driver.execute_script("return JSON.parse(localStorage.getItem('emoi-ui-conversation-drafts-v1'))")
+            assert len(stored['contact:'+store[0]['id']])==1
+            driver.save_screenshot(str(OUT/"phone-imessage-real-390.png"))
+
+            # A second contact sees a clean, distinct history.
+            driver.execute_script("window.EmoiUiMode.openApp('contacts')")
+            driver.find_element(By.CSS_SELECTOR,'.ep-action-primary').click()
+            dlg=driver.find_element(By.ID,"epContactDialog")
+            dlg.find_element(By.CSS_SELECTOR,'input[name="name"]').send_keys("第二位AI")
+            dlg.find_element(By.CSS_SELECTOR,'button[type="submit"]').click()
+            driver.execute_script("window.EmoiUiMode.openApp('chat')")
+            new_id=driver.execute_script("return JSON.parse(localStorage.getItem('emoi-ui-contacts-v1'))[1].id")
+            driver.find_element(By.CSS_SELECTOR,'[data-entry="'+new_id+'"]').click()
+            assert "这条消息只属于测试联系人" not in driver.find_element(By.CSS_SELECTOR,'.ep-im-history').text
+            assert not driver.find_elements(By.CSS_SELECTOR,'.ep-im-history .ep-im-row')
+
             # A user-created group is a transparent local draft, not a phantom
             # connected chat or shared memory store.
+            driver.execute_script("window.EmoiUiMode.openApp('chat')")
             driver.execute_script("window.EmoiUiMode.openApp('chat')")
             driver.find_element(By.CSS_SELECTOR,'.ep-quiet-link').click()
             group=driver.find_element(By.ID,"epGroupDialog")
