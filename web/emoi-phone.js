@@ -225,7 +225,7 @@ function openContacts(){
     const data=json.data&&typeof json.data==='object'?json.data:json;
     const name=String(data.name||data.char_name||data.displayName||'').trim().slice(0,50);
     if(!name)throw Error('档案中没有角色名字');
-    const notes=[data.description,data.personality,data.scenario,data.persona].filter(x=>typeof x==='string').join('\n\n').slice(0,300);
+    const notes=[data.description,data.personality,data.scenario,data.persona,data.system_prompt,data.creator_notes,data.first_mes].filter(x=>typeof x==='string').join('\n\n').slice(0,5000);
     openContactEditor(null,{name,notes});
   }catch(e){alert('无法解析角色档案：'+e.message)}
  };
@@ -362,7 +362,7 @@ function openApp(id){
  return launchPage(id);
 }
 function installDialogs(){
- const c=document.createElement('dialog');c.id='epContactDialog';c.className='ep-edit-dialog';c.innerHTML='<form id="epContactForm"><header><strong id="epContactHeading">添加联系人</strong><button type="button" data-ep-close="contact" aria-label="关闭">'+icon('x')+'</button></header><p>每位 AI 都拥有永久独立身份、记忆及欲望命名空间。模型绑定仍需另行完成。</p><label>联系人姓名<input name="name" type="text" required maxlength="50" autocomplete="off" placeholder="自定义名字"></label><label>角色档案 / 人物简介<textarea name="notes" maxlength="300" rows="3" placeholder="可以导入人物档案或手动填写"></textarea></label><label>头像（仅存当前设备）<input name="avatar" type="file" accept="image/jpeg,image/png,image/webp"></label><label>模型接口别名（可留空）<input name="model_route" maxlength="100" autocomplete="off" placeholder="例如：我自己的云端模型"></label><footer><button type="button" data-ep-close="contact">取消</button><button type="submit">保存联系人</button></footer></form>';
+ const c=document.createElement('dialog');c.id='epContactDialog';c.className='ep-edit-dialog';c.innerHTML='<form id="epContactForm"><header><strong id="epContactHeading">添加联系人</strong><button type="button" data-ep-close="contact" aria-label="关闭">'+icon('x')+'</button></header><p>每位 AI 都拥有永久独立身份、记忆及欲望命名空间。模型绑定仍需另行完成。</p><label>联系人姓名<input name="name" type="text" required maxlength="50" autocomplete="off" placeholder="自定义名字"></label><label>角色档案 / 人物简介<textarea name="notes" maxlength="5000" rows="4" placeholder="可以导入人物档案或手动填写"></textarea></label><label>头像（仅存当前设备）<input name="avatar" type="file" accept="image/jpeg,image/png,image/webp"></label><label>模型接口别名（可留空）<input name="model_route" maxlength="100" autocomplete="off" placeholder="例如：我自己的云端模型"></label><footer><button type="button" data-ep-close="contact">取消</button><button type="submit">保存联系人</button></footer></form>';
  const g=document.createElement('dialog');g.id='epGroupDialog';g.className='ep-edit-dialog';g.innerHTML='<form id="epGroupForm"><header><strong>创建群聊草稿</strong><button type="button" data-ep-close="group" aria-label="关闭">'+icon('x')+'</button></header><p>仅保存群组名称与成员，尚未连接群聊消息和记忆授权。</p><label>群聊名称<input name="name" required maxlength="50" placeholder="给群聊起个名字"></label><strong>选择联系人</strong><div id="epGroupMembers" class="ep-member-list"></div><footer><button type="button" data-ep-close="group">取消</button><button type="submit">保存群聊</button></footer></form>';
  document.body.append(c,g);
  c.querySelectorAll('[data-ep-close]').forEach(b=>b.onclick=()=>c.close());
