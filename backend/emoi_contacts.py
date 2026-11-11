@@ -204,6 +204,40 @@ def register(app, relay):
             db.executemany("INSERT INTO emoi_v2_members VALUES(?,?)",[(cid,id) for id in ids])
             return {"conversation":view_conversation(db,conversation(db,cid))}
 
+    @app.patch("/emoi/v2/conversations/{conversation_id}")
+    async def v2_edit_conversation(conversation_id: str, request: Request):
+        auth(request)
+        body=await request.json()
+        if not isinstance(body,dict):raise HTTPException(422,"invalid conversation")
+        with connect(path) as db:
+            old=conversation(db,conversation_id)
+            if old["kind"]!="group":
+                raise HTTPException(422,"direct conversation ownership cannot be changed")
+            title=clean_text(body.get("title",old["title"]),80,True)
+            members=body.get("members")
+            if members is None:
+                ids=[m[0] for m in db.execute("SELECT contact_id FROM emoi_v2_members WHERE conversation_id=?",(old["id"],))]
+            else:
+                if not isinstance(members,list) or not 1<=len(members)<=MAX_MEMBERS:
+                    raise HTTPException(422,"invalid members")
+                ids=[valid_id(mid) for mid in members]
+                if len(set(ids))!=len(ids):raise HTTPException(422,"duplicate members")
+                for id in ids:contact(db,id)
+            db.execute("UPDATE emoi_v2_conversations SET title=?,updated_at=? WHERE id=?",(title,now(),old["id"]))
+            db.execute("DELETE FROM emoi_v2_members WHERE conversation_id=?",(old["id"],))
+            db.executemany("INSERT INTO emoi_v2_members VALUES(?,?)",[(old["id"],id) for id in ids])
+            return {"conversation":view_conversation(db,conversation(db,old["id"]))}
+
+    @app.delete("/emoi/v2/conversations/{conversation_id}")
+    async def v2_archive_conversation(conversation_id: str,request: Request):
+        auth(request)
+        with connect(path) as db:
+            old=conversation(db,conversation_id)
+            if old["kind"]!="group":
+                raise HTTPException(422,"cannot delete the immutable direct conversation")
+            db.execute("UPDATE emoi_v2_conversations SET archived=1,updated_at=? WHERE id=?",(now(),old["id"]))
+            return {"archived":True,"id":old["id"]}
+
     @app.get("/emoi/v2/conversations/{conversation_id}/messages")
     async def v2_messages(conversation_id:str, request:Request,limit:int=60):
         auth(request)
