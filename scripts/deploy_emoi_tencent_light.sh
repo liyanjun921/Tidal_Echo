@@ -89,9 +89,18 @@ fi
 
 echo "正在建立独立的 emoi 容器，使用本机端口 $PORT"
 echo "轻量模式：不另装 Latent、Ombre、Folio、Xinchao；后续再接已有服务。"
-sudo docker compose -p "$PROJECT" -f "$BASE" -f "$LIGHT" config --quiet
-sudo docker compose -p "$PROJECT" -f "$BASE" -f "$LIGHT" up -d --build
-sudo docker compose -p "$PROJECT" -f "$BASE" -f "$LIGHT" ps
+COMPOSE_ARGS=(-f "$BASE" -f "$LIGHT")
+if sudo docker network inspect xlc-gateway_default >/dev/null 2>&1; then
+  if [[ ! -f compose.emoi.xlc.yaml ]]; then
+    echo "现有 XLC 网络可用，但缺少 Émoi 网络配置。停止，避免不完整部署。"
+    exit 2
+  fi
+  COMPOSE_ARGS+=(-f compose.emoi.xlc.yaml)
+  echo "XLC_NETWORK=ATTACHED (emoi-chat:8080)，未更改既有 Caddy 路由。"
+fi
+sudo docker compose -p "$PROJECT" "${COMPOSE_ARGS[@]}" config --quiet
+sudo docker compose -p "$PROJECT" "${COMPOSE_ARGS[@]}" up -d --build
+sudo docker compose -p "$PROJECT" "${COMPOSE_ARGS[@]}" ps
 
 ready=0
 for attempt in $(seq 1 36); do
@@ -105,7 +114,7 @@ if [[ "$ready" -eq 1 ]]; then
 else
   echo "EMOI_READY=NO"
   echo "容器已尝试启动，但未通过基础健康检查。不要重启或删除其他服务。"
-  echo "诊断命令：sudo docker compose -p emoi -f compose.emoi.yaml -f compose.emoi.light.yaml ps"
+  echo "诊断命令：sudo docker compose -p emoi -f compose.emoi.yaml -f compose.emoi.light.yaml -f compose.emoi.xlc.yaml ps"
 fi
 echo "Émoi 容器内存："
 sudo docker stats --no-stream --format '{{.Name}} {{.MemUsage}}' | grep -E '^emoi-' || true
