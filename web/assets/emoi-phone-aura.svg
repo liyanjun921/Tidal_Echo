@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 900" preserveAspectRatio="xMidYMid slice">
+<defs>
+ <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+  <stop stop-color="#ebf4fc"/>
+  <stop offset=".29" stop-color="#d2e6f7"/>
+  <stop offset=".68" stop-color="#bed6ef"/>
+  <stop offset="1" stop-color="#8fb5d7"/>
+ </linearGradient>
+ <radialGradient id="pearl" cx="50%" cy="50%" r="50%">
+  <stop stop-color="#ffffff" stop-opacity=".88"/>
+  <stop offset=".39" stop-color="#f5fcff" stop-opacity=".42"/>
+  <stop offset="1" stop-color="#f5fcff" stop-opacity="0"/>
+ </radialGradient>
+ <radialGradient id="blue" cx="50%" cy="50%" r="50%">
+  <stop stop-color="#668dc2" stop-opacity=".51"/>
+  <stop offset=".45" stop-color="#9bc6e9" stop-opacity=".28"/>
+  <stop offset="1" stop-color="#a9d1ef" stop-opacity="0"/>
+ </radialGradient>
+ <radialGradient id="lilac" cx="50%" cy="50%" r="50%">
+  <stop stop-color="#c4bbeb" stop-opacity=".38"/>
+  <stop offset=".5" stop-color="#d9d4f4" stop-opacity=".20"/>
+  <stop offset="1" stop-color="#ebe8fa" stop-opacity="0"/>
+ </radialGradient>
+ <filter id="soft" x="-40%" y="-40%" width="180%" height="180%" color-interpolation-filters="sRGB">
+  <feGaussianBlur stdDeviation="33"/>
+ </filter>
+ <filter id="halo" x="-40%" y="-40%" width="180%" height="180%">
+  <feGaussianBlur stdDeviation="14"/>
+ </filter>
+</defs>
+<rect width="420" height="900" fill="url(#background)"/>
+<g filter="url(#soft)">
+ <ellipse cx="346" cy="104" rx="220" ry="230" fill="url(#pearl)"/>
+ <ellipse cx="-45" cy="343" rx="225" ry="275" fill="url(#blue)"/>
+ <ellipse cx="430" cy="482" rx="250" ry="275" fill="url(#lilac)"/>
+ <ellipse cx="180" cy="900" rx="280" ry="240" fill="url(#pearl)" opacity=".75"/>
+ <ellipse cx="-85" cy="852" rx="205" ry="195" fill="#7fb0db" opacity=".28"/>
+</g>
+<path d="M-100 167C63 71 224 193 465 71" fill="none" stroke="#fff" stroke-opacity=".26" stroke-width="2"/>
+<path d="M-100 179C63 83 224 205 465 83" fill="none" stroke="#fff" stroke-opacity=".13" stroke-width="7" filter="url(#halo)"/>
+<path d="M-120 634C116 544 230 712 498 534" fill="none" stroke="#f8fdff" stroke-opacity=".17" stroke-width="2.4"/>
+<path d="M-80 650C120 568 250 732 485 551" fill="none" stroke="#f8fdff" stroke-opacity=".13" stroke-width="1"/>
+<circle cx="352" cy="472" r="130" fill="none" stroke="#fff" stroke-opacity=".07"/>
+<circle cx="352" cy="472" r="178" fill="none" stroke="#fff" stroke-opacity=".08"/>
+</svg>
