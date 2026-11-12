@@ -4,8 +4,10 @@
 set -Eeuo pipefail
 umask 077
 
-ROOT="$(cd "$(dirname "\${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+# Avoid hidden path fallbacks: the overlay must be next to this script\u0027s parent.
+[[ -f "$ROOT/compose.emoi.yaml" ]] || { printf "Émoi 脚本目录定位失败：%s\n" "$ROOT" >&2; exit 1; }
 PROJECT='emoi-phone-preview'
 PREVIEW='emoi-phone-preview-emoi-1'
 OFFICIAL='emoi-emoi-1'
