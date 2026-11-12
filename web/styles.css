@@ -1,6 +1,6 @@
 /* Émoi V0.5: Echo chat shell + fang-claude drawer/sheet interaction patterns.
    Independently implemented; only the V0.3 palette and glass material remain. */
-:root{--wallpaper:url('assets/water-light.webp');--ink:#304e60;--muted:#78909e;--line:rgba(97,132,151,.15);--paper:rgba(247,251,253,.88);--accent:#648ea5;--glass-alpha:.23;--viewport:100dvh;color-scheme:light;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB','Segoe UI',sans-serif;font-size:15px}
+:root{--wallpaper:url('assets/emoi-wallpaper-2.webp');--ink:#304e60;--muted:#78909e;--line:rgba(97,132,151,.15);--paper:rgba(247,251,253,.88);--accent:#648ea5;--glass-alpha:.23;--viewport:100dvh;color-scheme:light;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB','Segoe UI',sans-serif;font-size:15px}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;overscroll-behavior:none}
 body{color:var(--ink);background:#e6eff3;-webkit-font-smoothing:antialiased}

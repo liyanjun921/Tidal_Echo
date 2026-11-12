@@ -24,7 +24,7 @@ body[data-ui-mode=phone] .emoi-phone-host{
 }
 body[data-ui-mode=phone] .emoi-phone-host::before{
  content:"";position:absolute;inset:0;z-index:-2;pointer-events:none;
- background-image:radial-gradient(ellipse at 82% 2%,rgba(251,252,255,.54),transparent 41%),linear-gradient(165deg,rgba(217,233,245,.18),rgba(234,242,250,.43)),var(--emoi-active-wallpaper,url('assets/water-light.webp'));
+ background-image:radial-gradient(ellipse at 82% 2%,rgba(251,252,255,.54),transparent 41%),linear-gradient(165deg,rgba(217,233,245,.18),rgba(234,242,250,.43)),var(--emoi-active-wallpaper,url('assets/emoi-wallpaper-2.webp'));
  background-size:cover;background-position:center;transform:scale(1.01);
 }
 body[data-ui-mode=phone] .emoi-phone-host::after{

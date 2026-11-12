@@ -10,7 +10,7 @@ body[data-ui-mode=phone][data-phone-screen=home] .emoi-phone-host {
   background: #193f3e;
 }
 body[data-ui-mode=phone][data-phone-screen=home] .emoi-phone-host::before {
-  background: var(--emoi-active-wallpaper, url('assets/lily-water.webp')) center / cover no-repeat;
+  background: var(--emoi-active-wallpaper, url('assets/emoi-wallpaper-2.webp')) center / cover no-repeat;
 }
 body[data-ui-mode=phone][data-phone-screen=home] .emoi-phone-host::after {
   display: none;
