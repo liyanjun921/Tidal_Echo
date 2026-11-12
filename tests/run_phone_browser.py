@@ -36,7 +36,8 @@ def main():
         options.add_argument("--headless=new")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--disable-gpu")
+        options.add_argument("--enable-unsafe-swiftshader")
+        options.add_argument("--use-angle=swiftshader")
         options.add_argument("--window-size=390,844")
         options.add_argument("--user-data-dir="+tempfile.mkdtemp(prefix="emoi-phone-browser-"))
         driver=webdriver.Chrome(options=options)
@@ -54,27 +55,38 @@ def main():
             inner_width=driver.execute_script("return window.innerWidth")
             assert abs(mobile_bounds["left"])<=1 and abs(mobile_bounds["right"]-inner_width)<=2,mobile_bounds
             assert driver.execute_script("return getComputedStyle(document.querySelector('#emoiPhone')).borderTopWidth")=="0px"
+            ready = "return document.querySelectorAll('[data-ep-optics-ready]').length === 17"
+            snapshot = "return document.querySelector('.ep-hero-widget canvas')?.toDataURL()"
+            wait(driver, lambda d: d.execute_script(ready))
+            initial = driver.execute_script(snapshot)
+            assert initial and initial.startswith("data:image/png")
             driver.save_screenshot(str(OUT/"responsive-home-390.png"))
-            # Crystal glass: all icons are SVG with low-opacity backdrop surfaces,
-            # not solid coloured boxes or emoji glyphs.
-            optical=driver.execute_script("""
-              const a=[...document.querySelectorAll('.ep-app-icon')];
-              return {
-                n:a.length, svg:a.every(x=>!!x.querySelector('svg')),
-                sample:getComputedStyle(a[0]).backgroundImage,
-                dock:getComputedStyle(document.querySelector('.ep-dock')).backgroundImage,
-                hero:getComputedStyle(document.querySelector('.ep-hero-widget')).backgroundImage,
-                wallpaper:getComputedStyle(document.documentElement).getPropertyValue('--emoi-active-wallpaper')
-              }
-            """)
-            assert optical["n"]==8 and optical["svg"]
-            assert "rgba" in optical["sample"] and "rgba" in optical["dock"]
-            assert "lily-water.webp" in optical["wallpaper"],optical
-            # A wallpaper change must pass through the same translucent lenses.
-            driver.execute_script("""document.documentElement.style.setProperty(
-              '--emoi-active-wallpaper','url("assets/water-light.webp")')""")
+            picker = 'button[aria-label="更换桌面壁纸"]'
+            driver.find_element(By.CSS_SELECTOR, picker).click()
+            driver.find_element(By.XPATH, "//button[contains(.,'流动水光')]").click()
+            wait(driver, lambda d: d.execute_script(ready) and d.execute_script(snapshot) != initial)
             driver.save_screenshot(str(OUT/"phone-home-water-wallpaper-390.png"))
-            driver.execute_script("window.EmoiWallpapers.activate('page:home')")
+            driver.find_element(By.CSS_SELECTOR, picker).click()
+            driver.find_element(By.XPATH, "//button[contains(.,'空白画纸')]").click()
+            wait(driver, lambda d: d.execute_script("""
+              return document.querySelector('.ep-hero-widget').classList.contains('ep-on-light') &&
+                !document.querySelector('[data-ep-optics-ready]');
+            """))
+            driver.save_screenshot(str(OUT/"phone-home-paper-390.png"))
+            driver.find_element(By.CSS_SELECTOR, picker).click()
+            driver.find_element(By.CSS_SELECTOR, 'input[aria-label="上传当前页面壁纸"]').send_keys(
+                str(WEB/"assets/lily-water.webp"))
+            wait(driver, lambda d: d.execute_script(ready) and d.execute_script("return document.body.dataset.emoiWall") == "custom")
+            driver.refresh()
+            wait(driver, lambda d: d.execute_script(ready) and d.execute_script("return document.body.dataset.emoiWall") == "custom")
+            driver.find_element(By.CSS_SELECTOR, picker).click()
+            driver.find_element(By.XPATH, "//button[contains(.,'星轨夜色')]").click()
+            wait(driver, lambda d: d.execute_script(ready))
+            driver.save_screenshot(str(OUT/"phone-home-night-390.png"))
+            driver.find_element(By.CSS_SELECTOR, 'button[aria-label="打开日历"]').click()
+            wait(driver, lambda d: d.execute_script("return document.querySelector('#workspaceDialog').open"))
+            driver.execute_script("document.querySelector('#workspaceDialog').close()")
+            wait(driver, lambda d: d.execute_script("return document.body.dataset.emoiWall === 'nocturne'"))
             # A real search button opens Contacts, not an empty decorative label.
             driver.find_element(By.CSS_SELECTOR,'.ep-home-search').click()
             assert driver.execute_script("return document.body.dataset.phoneScreen")=="contacts"
@@ -170,12 +182,13 @@ def main():
             assert abs(frame['left'])<=1 and abs(frame['right']-viewport)<=2,frame
             assert driver.execute_script("return getComputedStyle(document.querySelector('#emoiPhone')).borderTopWidth")=="0px"
             columns=driver.execute_script("return getComputedStyle(document.querySelector('.ep-home-scroll')).gridTemplateColumns")
-            assert len(columns.split())==2,f"Expected fluid desktop app launcher columns, got {columns}"
+            assert len(columns.split())==4,f"Expected fluid desktop app launcher columns, got {columns}"
             assert driver.execute_script("return document.documentElement.scrollWidth <= window.innerWidth+1")
+            wait(driver, lambda d: d.execute_script(ready))
             driver.save_screenshot(str(OUT/"responsive-desktop-1440.png"))
 
             # Settings allow both independent visual modes.
-            driver.find_element(By.CSS_SELECTOR,'.ep-home-top-actions button[aria-label="界面设置"]').click()
+            driver.find_element(By.CSS_SELECTOR,'.ep-dock button[aria-label="设置"]').click()
             assert "小手机" in driver.find_element(By.ID,"emoiPhoneView").text
             assert "艺术模式" in driver.find_element(By.ID,"emoiPhoneView").text
             driver.save_screenshot(str(OUT/"phone-settings-1440.png"))

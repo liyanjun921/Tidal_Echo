@@ -260,7 +260,10 @@
       if (trigger) trigger.addEventListener('click', openPicker);
     }
     const workspace = document.getElementById('workspaceDialog');
-    if (workspace) workspace.addEventListener('close',()=>void activate(lastChat));
+    if (workspace) workspace.addEventListener('close', () => {
+      const {uiMode, phoneScreen} = document.body.dataset;
+      void activate(uiMode === 'phone' && ['home', 'settings'].includes(phoneScreen) ? 'page:home' : lastChat);
+    });
     void activate(activeContext);
   }
 

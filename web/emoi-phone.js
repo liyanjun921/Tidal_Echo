@@ -36,6 +36,17 @@ const icoPaths={
   switch:'<rect x="3" y="7" width="18" height="11" rx="5.5"/><circle cx="8.5" cy="12.5" r="3"/>'
 };
 const icon=name=>'<svg viewBox="0 0 24 24" role="presentation" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(icoPaths[name]||icoPaths.more)+'</svg>';
+const launcherGlyphs={
+ chat:'<path d="M12 3.5c-5.1 0-9.2 3.4-9.2 7.9 0 2.4 1.2 4.5 3.3 5.9l-.7 3.1 3.9-1.8c.9.3 1.8.4 2.7.4 5.1 0 9.2-3.4 9.2-7.6 0-4.5-4.1-7.9-9.2-7.9Z"/>',
+ contacts:'<circle cx="12" cy="7.4" r="4"/><path d="M4.1 19.5c0-4 3.4-6.8 7.9-6.8s7.9 2.8 7.9 6.8c0 .8-.5 1.2-1.4 1.2h-13c-.9 0-1.4-.4-1.4-1.2Z"/>',
+ reading:'<path d="M2.8 5.4c3.3-1 6.4-.5 8.4 1v13.3c-2.5-1.6-5.4-2-8.4-1.1Zm18.4 0c-3.3-1-6.4-.5-8.4 1v13.3c2.5-1.6 5.4-2 8.4-1.1Z"/>',
+ more:'<circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>',
+ room:'<path d="m2 11 9.2-8a1.2 1.2 0 0 1 1.6 0l9.2 8-1.8 2-1.2-1v7.5a1 1 0 0 1-1 1h-3.5v-6h-5v6H6a1 1 0 0 1-1-1V12l-1.2 1Z"/>'
+};
+function homeIcon(name){
+ const glyph=launcherGlyphs[name];
+ return glyph?'<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">'+glyph+'</svg>':icon(name);
+}
 const apps=[
  {id:'chat',label:'信息',icon:'chat',tone:'sky'},
  {id:'contacts',label:'通讯录',icon:'contacts',tone:'stone'},
@@ -114,10 +125,12 @@ function actionButton(label,iconName,callback,className='ep-round'){
  const b=create('button',className);b.type='button';b.setAttribute('aria-label',label);b.innerHTML=icon(iconName);b.addEventListener('click',callback);return b;
 }
 function timeText(){return new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false})}
-function dateText(){return new Date().toLocaleDateString('zh-CN',{month:'long',day:'numeric',weekday:'long'})}
 function updateClock(){
+ const now=new Date();
  for(const n of document.querySelectorAll('[data-ep-clock]'))n.textContent=timeText();
- for(const n of document.querySelectorAll('[data-ep-date]'))n.textContent=dateText();
+ for(const n of document.querySelectorAll('[data-ep-date]'))n.textContent=now.toLocaleDateString('zh-CN',{month:'long',year:'numeric'});
+ for(const n of document.querySelectorAll('[data-ep-day]'))n.textContent=now.getDate();
+ for(const n of document.querySelectorAll('[data-ep-weekday]'))n.textContent=now.toLocaleDateString('zh-CN',{weekday:'long'});
 }
 function setMode(next){
  if(next!=='phone'&&next!=='art')return;
@@ -149,37 +162,41 @@ function openHome(){
  setScreen('home');
  const root=view();root.className='ep-view ep-home';
  const headerEl=create('header','ep-home-top');
- const title=create('div','ep-home-brand');title.innerHTML='<span class="ep-overline">A PLACE TO KEEP</span><h1>Émoi</h1><small>OURSPACE</small>';
- const actions=create('div','ep-home-top-actions');
- actions.append(actionButton('更换桌面壁纸','photo',()=>window.EmoiWallpapers?.open()));
- actions.append(actionButton('界面设置','settings',openSettings));
- for(const button of actions.children)button.setAttribute('data-ep-optics','');headerEl.append(title,actions);root.append(headerEl);
+ const clock=create('time','ep-desktop-clock');clock.setAttribute('data-ep-clock','');
+ const wallpaper=actionButton('更换桌面壁纸','photo',()=>window.EmoiWallpapers?.open());
+ wallpaper.setAttribute('data-ep-optics','');
+ headerEl.append(clock,wallpaper);root.append(headerEl);
  const scroll=create('div','ep-home-scroll');
- const card=create('section','ep-hero-widget');card.setAttribute('data-ep-optics','');
- card.innerHTML='<div class="ep-widget-kicker">OUR LITTLE UNIVERSE <span class="ep-widget-serial">01 / 02</span></div><div class="ep-widget-date" data-ep-date></div><div class="ep-widget-clock" data-ep-clock></div><div class="ep-widget-footer"><span class="ep-orbit-glyph" aria-hidden="true"></span><div><strong>每一次相遇，都值得留下。</strong><small>在这里，慢慢记录我们的日常。</small></div></div>';
- card.addEventListener('click',()=>openApp('journal'));
- card.setAttribute('title','打开日记');card.setAttribute('role','button');card.tabIndex=0;
- card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openApp('journal')}});
- scroll.append(card);
- const heading=create('div','ep-app-group-title');heading.append(create('span','','我们的空间'),create('small','','APPLICATIONS'));
- scroll.append(heading);
+ const calendar=create('div','ep-calendar-widget');
+ const card=create('button','ep-hero-widget');card.type='button';card.setAttribute('data-ep-optics','');
+ card.setAttribute('aria-label','打开日历');
+ card.innerHTML='<span class="ep-calendar-date"><span data-ep-date></span><strong data-ep-day></strong></span><span class="ep-calendar-info"><strong data-ep-weekday></strong><span>查看日程 '+icon('right')+'</span></span>';
+ card.onclick=()=>openApp('calendar');
+ calendar.append(card,create('span','ep-widget-label','日历'));
+ scroll.append(calendar);
  const grid=create('div','ep-app-grid');
  for(const a of apps.filter(a=>!['settings','checklist','more'].includes(a.id))){
   const b=create('button','ep-app');b.type='button';b.dataset.epApp=a.id;
-  b.innerHTML='<span class="ep-app-icon tone-'+a.tone+'">'+icon(a.icon)+'</span><span class="ep-app-label"></span>';
+  b.innerHTML='<span class="ep-app-icon">'+homeIcon(a.icon)+'</span><span class="ep-app-label"></span>';
   b.querySelector('.ep-app-label').textContent=a.label;
   b.querySelector('.ep-app-icon').setAttribute('data-ep-optics','');
   b.addEventListener('click',()=>openApp(a.id));grid.append(b);
  }
  scroll.append(grid);
- const search=create('button','ep-home-search');search.type='button';search.setAttribute('aria-label','搜索联系人');
- search.innerHTML=icon('search')+'<span>搜索联系人</span>';
- search.addEventListener('click',()=>openContacts());
- scroll.append(search);
+ const reading=create('div','ep-reading-widget');
+ const shortcut=actionButton('打开共读书房','reading',()=>openApp('reading'),'ep-reading-lens');
+ shortcut.setAttribute('data-ep-optics','');
+ shortcut.innerHTML='<span>'+homeIcon('reading')+'<strong>书房</strong><small>继续共读</small></span>';
+ reading.append(shortcut,create('span','ep-widget-label','共读'));
+ scroll.append(reading);
  root.append(scroll);
+ const search=actionButton('搜索联系人','search',openContacts,'ep-home-search');
+ search.setAttribute('data-ep-optics','');
+ search.innerHTML='<span>'+icon('search')+'搜索</span>';
+ root.append(search);
  const dock=create('nav','ep-dock');dock.setAttribute('aria-label','常用应用');
  for(const id of dockIds){const a=apps.find(x=>x.id===id);const b=create('button','ep-dock-app');b.type='button';b.setAttribute('aria-label',a.label);
- b.innerHTML='<span class="ep-dock-icon tone-'+a.tone+'">'+icon(a.icon)+'</span>';b.querySelector('.ep-dock-icon').setAttribute('data-ep-optics','');b.addEventListener('click',()=>openApp(id));dock.append(b)}
+ b.innerHTML='<span class="ep-dock-icon">'+homeIcon(a.icon)+'</span>';b.querySelector('.ep-dock-icon').setAttribute('data-ep-optics','');b.addEventListener('click',()=>openApp(id));dock.append(b)}
  dock.setAttribute('data-ep-optics','');root.append(dock);
  updateClock();
 }
