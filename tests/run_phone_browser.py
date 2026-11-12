@@ -67,6 +67,26 @@ def main():
                 return center > 20 && center < 85 && ctx.getImageData(0, 0, 1, 1).data[3] === 0;
               });
             """), "Glass must transmit the wallpaper and clip its corners"
+            ink_toggle = '.ep-home-ink-toggle'
+            home_colors = """
+              return [...new Set(Array.from(document.querySelectorAll(
+                '.ep-app-label,.ep-app-icon svg,.ep-dock-icon svg,.ep-widget-copy,.ep-desktop-clock,.ep-home-search'
+              ), node => getComputedStyle(node).color))];
+            """
+            assert driver.execute_script(home_colors) == ['rgb(255, 255, 255)']
+            assert driver.execute_script("""
+              const root = document.documentElement;
+              const frame = document.querySelector('#emoiPhone').getBoundingClientRect();
+              return root.hasAttribute('data-emoi-home') && getComputedStyle(root).backgroundImage !== 'none' &&
+                Math.abs(frame.top) < 1 && Math.abs(frame.bottom - innerHeight) < 2;
+            """)
+            driver.find_element(By.CSS_SELECTOR, ink_toggle).click()
+            assert driver.execute_script(home_colors) == ['rgb(17, 17, 17)']
+            driver.refresh()
+            wait(driver, lambda d: d.execute_script(ready))
+            assert driver.execute_script(home_colors) == ['rgb(17, 17, 17)']
+            driver.find_element(By.CSS_SELECTOR, ink_toggle).click()
+            assert driver.execute_script(home_colors) == ['rgb(255, 255, 255)']
             driver.save_screenshot(str(OUT/"responsive-home-390.png"))
             driver.find_element(By.CSS_SELECTOR, '.ep-home-edit').click()
             driver.find_element(By.CSS_SELECTOR, '[data-widget=calendar]').click()
@@ -91,9 +111,9 @@ def main():
             driver.find_element(By.CSS_SELECTOR, picker).click()
             driver.find_element(By.XPATH, "//button[contains(.,'空白画纸')]").click()
             wait(driver, lambda d: d.execute_script("""
-              return document.querySelector('[data-widget=calendar]').classList.contains('ep-on-light') &&
-                !document.querySelector('[data-ep-optics-ready]');
+              return document.body.dataset.emoiWall === 'paper' && !document.querySelector('[data-ep-optics-ready]');
             """))
+            assert driver.execute_script(home_colors) == ['rgb(255, 255, 255)']
             driver.save_screenshot(str(OUT/"phone-home-paper-390.png"))
             driver.find_element(By.CSS_SELECTOR, picker).click()
             driver.find_element(By.CSS_SELECTOR, 'input[aria-label="上传当前页面壁纸"]').send_keys(

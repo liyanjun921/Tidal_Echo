@@ -6,10 +6,7 @@
   if (!phone) return;
   const forced = matchMedia('(forced-colors: active)');
   const targets = new Map();
-  const sample = document.createElement('canvas');
-  sample.width = sample.height = 48;
-  const pixels = sample.getContext('2d', {willReadFrequently: true});
-  let colors, image, source, engine, frame = 0;
+  let image, source, engine, frame = 0;
 
   const vertex = `
     attribute vec2 position;
@@ -98,7 +95,7 @@
 
   function loadWallpaper(css) {
     source = css;
-    image = colors = null;
+    image = null;
     clearLenses();
     const match = /^url\((?:"([^"]+)"|'([^']+)'|([^)]*))\)$/.exec(css);
     if (!match) return;
@@ -117,20 +114,6 @@
     return {width, height, left: (box.width - width) / 2, top: (box.height - height) / 2};
   }
 
-  function foreground(node, rect, box) {
-    if (!colors) return;
-    const at = (value, total) => Math.max(0, Math.min(47, Math.floor(value / total * 48)));
-    let brightness = 0, count = 0;
-    for (const y of [0.25, 0.5, 0.75]) for (const x of [0.2, 0.5, 0.8]) {
-      const index = 4 * (at(rect.left - box.left + rect.width * x, box.width)
-        + 48 * at(rect.top - box.top + rect.height * y, box.height));
-      const light = colors[index] * 0.213 + colors[index + 1] * 0.715 + colors[index + 2] * 0.072;
-      brightness += light;
-      count++;
-    }
-    node.classList.toggle('ep-on-light', brightness / count > 160);
-  }
-
   function render() {
     if (forced.matches || document.body.dataset.uiMode !== 'phone' || document.body.dataset.phoneScreen !== 'home') {
       clearLenses();
@@ -141,22 +124,8 @@
     const box = phone.getBoundingClientRect();
     if (!box.width || !box.height) return;
     const nodes = [...phone.querySelectorAll('[data-ep-optics]')];
-    const labels = phone.querySelectorAll('.ep-app-label, .ep-widget-label, .ep-desktop-clock');
-    if (!image) {
-      const light = document.body.dataset.emoiWall === 'paper';
-      for (const node of [...nodes, ...labels]) node.classList.toggle('ep-on-light', light);
-      return;
-    }
+    if (!image) return;
     const scene = layout(box);
-    const stamp = [image.src, box.width, box.height].join('|');
-    if (sample.dataset.stamp !== stamp && pixels) {
-      sample.dataset.stamp = stamp;
-      pixels.clearRect(0, 0, 48, 48);
-      pixels.drawImage(image, scene.left / box.width * 48, scene.top / box.height * 48,
-        scene.width / box.width * 48, scene.height / box.height * 48);
-      try { colors = pixels.getImageData(0, 0, 48, 48).data; } catch { colors = null; }
-    }
-    for (const node of [...nodes, ...labels]) foreground(node, node.getBoundingClientRect(), box);
     if (engine === undefined) engine = createRenderer();
     if (!engine || engine.gl.isContextLost()) return;
     const {canvas, gl, uniforms} = engine;

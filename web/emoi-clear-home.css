@@ -1,16 +1,26 @@
 /* The home screen owns its viewport and its material. The app pages keep
    their own wallpaper and layout rules. */
+html[data-emoi-home] {
+  --ep-home-wallpaper: var(--emoi-active-wallpaper, url('assets/emoi-wallpaper-2.webp'));
+  background: #193f3e var(--ep-home-wallpaper) center / cover no-repeat;
+  min-height: 100%;
+}
 body[data-ui-mode=phone][data-phone-screen=home] {
-  background: #193f3e;
+  background: transparent;
+  overscroll-behavior: none;
 }
 body[data-ui-mode=phone][data-phone-screen=home] .emoi-phone-host {
-  width: 100%;
+  inset: 0;
+  width: auto;
   height: 100%;
   height: 100dvh;
-  background: #193f3e;
+  background: transparent;
 }
 body[data-ui-mode=phone][data-phone-screen=home] .emoi-phone-host::before {
-  background: var(--emoi-active-wallpaper, url('assets/emoi-wallpaper-2.webp')) center / cover no-repeat;
+  background: var(--ep-home-wallpaper) center / cover no-repeat;
+}
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  body[data-ui-mode=phone][data-phone-screen=home] .emoi-phone-host { height: auto; }
 }
 body[data-ui-mode=phone][data-phone-screen=home] .emoi-phone-host::after {
   display: none;
@@ -22,8 +32,8 @@ body[data-ui-mode=phone] .ep-home {
   --ep-ink-shadow: 0 1px 3px #001815aa, 0 0 10px #00181577;
   color: var(--ep-ink-home);
 }
-body[data-ui-mode=phone] .ep-home .ep-on-light {
-  --ep-ink-home: #173134;
+body[data-ui-mode=phone] .ep-home[data-home-ink=black] {
+  --ep-ink-home: #111;
   --ep-ink-shadow: 0 1px 2px #fff9, 0 0 8px #fff9;
 }
 body[data-ui-mode=phone] .ep-home-top {
@@ -32,7 +42,7 @@ body[data-ui-mode=phone] .ep-home-top {
   padding: max(8px, env(safe-area-inset-top)) max(var(--ep-gutter), env(safe-area-inset-right))
     8px max(var(--ep-gutter), env(safe-area-inset-left));
 }
-@media (display-mode: standalone) {
+@media (display-mode: standalone), (display-mode: fullscreen) {
   body[data-ui-mode=phone] .ep-home-top { padding-top: max(8px, calc(env(safe-area-inset-top) + 5px)); }
   .ep-desktop-clock { visibility: hidden; }
 }
@@ -64,8 +74,9 @@ body[data-ui-mode=phone] .ep-home-top {
   padding: 5px 13px;
   border: 1px solid #fff5;
   border-radius: 18px;
-  background: #122c387d;
-  color: #fff;
+  background: #d7faf624;
+  color: var(--ep-ink-home, #fff);
+  text-shadow: var(--ep-ink-shadow, none);
   font-size: 13px;
   font-weight: 580;
 }
@@ -177,7 +188,7 @@ body[data-ui-mode=phone] .ep-home .ep-app-label {
   display: grid;
   justify-items: center;
   gap: clamp(6px, 1.6dvh, 14px);
-  padding: 0 max(12px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom))
+  padding: 0 max(12px, env(safe-area-inset-right)) max(10px, calc(env(safe-area-inset-bottom) + 6px))
     max(12px, env(safe-area-inset-left));
 }
 .ep-home-search > span { display: flex; align-items: center; gap: 5px; }

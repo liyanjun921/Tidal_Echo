@@ -7,6 +7,7 @@
 const MODE_KEY='emoi-ui-mode-v1';
 const CONTACTS_KEY='emoi-ui-contacts-v1';
 const GROUPS_KEY='emoi-ui-groups-v1';
+const HOME_INK_KEY='emoi-home-ink-v1';
 const phone=document.getElementById('emoiPhone');
 if(!phone)return;
 const $=(s,r=document)=>r.querySelector(s);
@@ -132,16 +133,19 @@ function updateClock(){
  for(const n of document.querySelectorAll('[data-ep-day]'))n.textContent=now.getDate();
  for(const n of document.querySelectorAll('[data-ep-weekday]'))n.textContent=now.toLocaleDateString('zh-CN',{weekday:'long'});
 }
+function syncHomeViewport(){
+ document.documentElement.toggleAttribute('data-emoi-home',mode==='phone'&&screen==='home');
+}
 function setMode(next){
  if(next!=='phone'&&next!=='art')return;
- mode=next;document.body.dataset.uiMode=next;
+ mode=next;document.body.dataset.uiMode=next;syncHomeViewport();
  try{localStorage.setItem(MODE_KEY,next)}catch{}
  if(next==='phone'){const menu=$('#moreMenu');if(menu)menu.hidden=true;const drawer=$('#drawerWrap');if(drawer)drawer.hidden=true;const workspace=$('#workspaceDialog');if(workspace?.open)workspace.close();openHome()}else{phone.hidden=true;document.getElementById('app').inert=false;document.getElementById('app').removeAttribute('aria-hidden');}
 }
 function setScreen(next){
  if(next!=='home'){homeEditing=false;homeSelection=null}
  screen=next;
- document.body.dataset.phoneScreen=next;
+ document.body.dataset.phoneScreen=next;syncHomeViewport();
  phone.hidden=next==='legacy'||mode!=='phone';
  const app=document.getElementById('app');
  app.inert=mode==='phone'&&next!=='legacy';
@@ -173,6 +177,9 @@ const initialHomeLayout=[
 ];
 let homeLayout=readHomeLayout();
 let homeEditing=false, homeSelection=null;
+let darkHomeInk=false;
+try{darkHomeInk=localStorage.getItem(HOME_INK_KEY)==='black'}catch{}
+
 
 function readHomeLayout(){
  try{
@@ -284,12 +291,26 @@ function openHome(){
  const previousScroll=phone.querySelector('.ep-home-scroll')?.scrollTop||0;
  const root=view();root.className='ep-view ep-home';
  root.toggleAttribute('data-home-editing',homeEditing);
+ root.dataset.homeInk=darkHomeInk?'black':'white';
  const top=create('header','ep-home-top');
  const clock=create('time','ep-desktop-clock');clock.setAttribute('data-ep-clock','');
  const actions=create('div','ep-home-actions');
  const wallpaper=actionButton('更换桌面壁纸','photo',()=>window.EmoiWallpapers?.open(),'ep-home-control ep-home-square');
  wallpaper.setAttribute('data-ep-optics','');
- actions.append(wallpaper);
+ const ink=homeTextButton('',()=>{
+  darkHomeInk=!darkHomeInk;
+  try{localStorage.setItem(HOME_INK_KEY,darkHomeInk?'black':'white')}catch{}
+  root.dataset.homeInk=darkHomeInk?'black':'white';
+  updateInkControl();
+ });
+ function updateInkControl(){
+  ink.textContent=darkHomeInk?'白字':'黑字';
+  ink.setAttribute('aria-label',darkHomeInk?'切换为白色图标和文字':'切换为黑色图标和文字');
+ }
+ updateInkControl();
+ ink.classList.add('ep-home-ink-toggle');
+ ink.setAttribute('data-ep-optics','');
+ actions.append(wallpaper,ink);
  if(homeEditing)actions.append(homeTextButton('添加小组件',openWidgetPicker));
  const edit=homeTextButton(homeEditing?'完成':'编辑',()=>{
   editHome(!homeEditing);
