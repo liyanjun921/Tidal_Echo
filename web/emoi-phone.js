@@ -448,7 +448,7 @@ function openMessages(){
 function openMessageRecipients(){
  const dialog=create('dialog','ep-edit-dialog ep-message-recipients');
  dialog.setAttribute('aria-label','新信息');
- const title=create('header','');title.append(create('strong','','新信息'),actionButton('关闭','x',()=>dialog.close()));
+ const title=create('header','ep-recipients-head');title.append(create('strong','','新信息'),actionButton('关闭','x',()=>dialog.close()));
  const group=homeTextButton('创建群聊',()=>{
   dialog.close();
   if(contacts.length<2){openContacts();return}
@@ -457,8 +457,11 @@ function openMessageRecipients(){
  const recipients=create('div','ep-member-list');
  for(const p of contacts)recipients.append(listItem(p.id,p.name,'','contacts',()=>{dialog.close();openContactConversation(p.id)}));
  if(contacts.length<2)recipients.append(create('p','ep-help','创建群聊需要至少两位 AI 联系人。'));
+ const actions=create('div','ep-recipients-actions');
+ const add=homeTextButton('添加联系人',()=>{dialog.close();openContacts();openContactEditor()});
  const manage=homeTextButton('前往通讯录',()=>{dialog.close();openContacts()});
- dialog.append(title,group,recipients,manage);
+ actions.append(add,manage);
+ dialog.append(title,group,recipients,actions);
  dialog.addEventListener('close',()=>dialog.remove(),{once:true});
  document.body.append(dialog);dialog.showModal();
 }
@@ -549,7 +552,6 @@ function openContactEditor(id=null,prefill=null){
  $('#epContactHeading').textContent=p?'编辑联系人':'添加联系人';
  contactDialog.dataset.editId=p?.id||'';
  contactDialog.showModal();
- form.elements.name.focus();
 }
 function openGroupEditor(id=null){
  const g=groups.find(x=>x.id===id);
@@ -566,7 +568,7 @@ function openGroupEditor(id=null){
   label.append(input,create('span','',c.name));members.append(label);
  }
  if(!contacts.length)members.append(create('p','ep-help','先添加联系人，才能选择群成员。'));
- dlg.showModal();form.elements.name.focus();
+ dlg.showModal();
 }
 function openSettings(){
  setScreen('settings');const root=view();root.className='ep-view ep-settings';root.append(header('设置',openHome));
@@ -630,8 +632,8 @@ function openApp(id){
  return launchPage(id);
 }
 function installDialogs(){
- const c=document.createElement('dialog');c.id='epContactDialog';c.className='ep-edit-dialog';c.innerHTML='<form id="epContactForm"><header><strong id="epContactHeading">添加联系人</strong><button type="button" data-ep-close="contact" aria-label="关闭">'+icon('x')+'</button></header><p>每位 AI 都拥有永久独立身份、记忆及欲望命名空间。模型绑定仍需另行完成。</p><label>联系人姓名<input name="name" type="text" required maxlength="50" autocomplete="off" placeholder="自定义名字"></label><label>角色档案 / 人物简介<textarea name="notes" maxlength="5000" rows="4" placeholder="可以导入人物档案或手动填写"></textarea></label><label>头像（仅存当前设备）<input name="avatar" type="file" accept="image/jpeg,image/png,image/webp"></label><label>回复模型<select name="model_route"><option value="">不绑定</option><option value="default">默认 API 模型</option><option value="gpt">GPT API</option><option value="claude">Claude API</option></select></label><footer><button type="button" data-ep-close="contact">取消</button><button type="submit">保存联系人</button></footer></form>';
- const g=document.createElement('dialog');g.id='epGroupDialog';g.className='ep-edit-dialog';g.innerHTML='<form id="epGroupForm"><header><strong id="epGroupHeading">创建群聊</strong><button type="button" data-ep-close="group" aria-label="关闭">'+icon('x')+'</button></header><p>已绑定 API 模型的成员会依次回复群消息。</p><label>群聊名称<input name="name" required maxlength="50" placeholder="给群聊起个名字"></label><strong>选择联系人</strong><div id="epGroupMembers" class="ep-member-list"></div><p id="epGroupError" role="status"></p><footer><button type="button" data-ep-close="group">取消</button><button type="submit">保存群聊</button></footer></form>';
+ const c=document.createElement('dialog');c.id='epContactDialog';c.className='ep-edit-dialog';c.innerHTML='<form id="epContactForm"><header><strong id="epContactHeading">添加联系人</strong><button type="button" data-ep-close="contact" aria-label="关闭" autofocus>'+icon('x')+'</button></header><p>每位 AI 都拥有永久独立身份、记忆及欲望命名空间。模型绑定仍需另行完成。</p><label>联系人姓名<input name="name" type="text" required maxlength="50" autocomplete="off" placeholder="自定义名字"></label><label>角色档案 / 人物简介<textarea name="notes" maxlength="5000" rows="4" placeholder="可以导入人物档案或手动填写"></textarea></label><label>头像（仅存当前设备）<input name="avatar" type="file" accept="image/jpeg,image/png,image/webp"></label><label>回复模型<select name="model_route"><option value="">不绑定</option><option value="default">默认 API 模型</option><option value="gpt">GPT API</option><option value="claude">Claude API</option></select></label><footer><button type="button" data-ep-close="contact">取消</button><button type="submit">保存联系人</button></footer></form>';
+ const g=document.createElement('dialog');g.id='epGroupDialog';g.className='ep-edit-dialog';g.innerHTML='<form id="epGroupForm"><header><strong id="epGroupHeading">创建群聊</strong><button type="button" data-ep-close="group" aria-label="关闭" autofocus>'+icon('x')+'</button></header><p>已绑定 API 模型的成员会依次回复群消息。</p><label>群聊名称<input name="name" required maxlength="50" placeholder="给群聊起个名字"></label><strong>选择联系人</strong><div id="epGroupMembers" class="ep-member-list"></div><p id="epGroupError" role="status"></p><footer><button type="button" data-ep-close="group">取消</button><button type="submit">保存群聊</button></footer></form>';
  document.body.append(c,g);
  c.querySelectorAll('[data-ep-close]').forEach(b=>b.onclick=()=>c.close());
  g.querySelectorAll('[data-ep-close]').forEach(b=>b.onclick=()=>g.close());
@@ -673,13 +675,46 @@ function installDialogs(){
 
  };
 }
+function trackPhoneViewport(){
+ const root=document.documentElement;
+ const viewport=window.visualViewport;
+ const touch=matchMedia('(pointer: coarse)');
+ root.toggleAttribute('data-ep-standalone',navigator.standalone===true||matchMedia('(display-mode: standalone)').matches);
+ if(!viewport)return;
+ let frame=0;
+ let unoccludedHeight=0;
+ let width=0;
+ function update(){
+  frame=0;
+  const followsKeyboard=touch.matches&&Math.abs(viewport.scale-1)<.02;
+  const top=followsKeyboard?Math.max(0,viewport.offsetTop):0;
+  root.style.setProperty('--ep-visual-top',top+'px');
+  if(followsKeyboard)root.style.setProperty('--ep-visual-height',viewport.height+'px');
+  else root.style.removeProperty('--ep-visual-height');
+  if(!followsKeyboard){root.removeAttribute('data-ep-keyboard');return}
+  const editing=document.activeElement?.matches('textarea, input, [contenteditable="true"]');
+  if(width!==viewport.width||!editing){
+   width=viewport.width;
+   unoccludedHeight=viewport.height;
+  }
+  const layoutHeight=Math.max(unoccludedHeight,root.clientHeight);
+  root.toggleAttribute('data-ep-keyboard',layoutHeight-viewport.height>100);
+ }
+ function schedule(){if(!frame)frame=requestAnimationFrame(update)}
+ viewport.addEventListener('resize',schedule,{passive:true});
+ viewport.addEventListener('scroll',schedule,{passive:true});
+ window.addEventListener('pageshow',schedule);
+ document.addEventListener('focusin',schedule);
+ document.addEventListener('focusout',schedule);
+ update();
+}
 function init(){
  const artButton=$('#emoiSwitchToPhone');
  if(artButton)artButton.addEventListener('click',()=>setMode('phone'));
  const back=document.createElement('button');back.id='epLegacyHome';back.type='button';back.setAttribute('aria-label','返回小手机桌面');
  back.innerHTML=icon('back');back.addEventListener('click',openHome);
  document.querySelector('#app .topbar')?.prepend(back);
- installDialogs();setMode(mode);
+ trackPhoneViewport();installDialogs();setMode(mode);
  updateClock();setInterval(updateClock,60000);
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)updateClock()});
  for(const dlg of ['workspaceDialog','wrenRoom']){

@@ -10,6 +10,7 @@ const icons={
  back:'<path d="m15 18-6-6 6-6"/>',
  arrow:'<path d="m5 12 7-7 7 7m-7-7v14"/>',
  info:'<circle cx="12" cy="12" r="10"/><path d="M12 11v6m0-9v.5"/>',
+ photo:'<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1.5"/><path d="m4 17 5-5 4 4 3-3 4 4"/>',
  people:'<circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6m-2-5c4 0 7 2 8 5"/>'
 };
 const icon=name=>'<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">'+(icons[name]||icons.info)+'</svg>';
@@ -55,9 +56,17 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
  const title=document.createElement('strong');title.textContent=item.name||'联系人';
  const subtitle=document.createElement('small');subtitle.textContent=kind==='group'?[...names.values()].join(' · '):'信息';
  info.append(title,subtitle);person.append(avatar,info);
- header.append(back,person);
+ const actions=document.createElement('div');actions.className='ep-im-actions';
+ const wallpaper=document.createElement('button');wallpaper.type='button';wallpaper.className='ep-im-more';
+ wallpaper.setAttribute('aria-label','更换聊天背景');wallpaper.innerHTML=icon('photo');
+ wallpaper.onclick=()=>{
+  void window.EmoiWallpapers?.activate('chat:'+key);
+  window.EmoiWallpapers?.open();
+ };
+ actions.append(wallpaper);
+ header.append(back,person,actions);
  if(manage){
-  const more=document.createElement('button');more.type='button';more.className='ep-im-more';more.setAttribute('aria-label','管理群聊');more.innerHTML=icon('info');more.onclick=manage;header.append(more);
+  const more=document.createElement('button');more.type='button';more.className='ep-im-more';more.setAttribute('aria-label','管理群聊');more.innerHTML=icon('info');more.onclick=manage;actions.append(more);
  }
  root.append(header);
  if(kind==='contact')void window.EmoiAvatars?.paint(avatar,item.id);
@@ -77,6 +86,18 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
  composer.append(input,submit);footer.append(composer);root.append(footer);
  let sending=false,replying=false,timer,remoteRows=[],pendingRequest=null;
  const isOpen=()=>root.contains(history);
+ let stickToBottom=true;
+ body.addEventListener('scroll',()=>{
+  stickToBottom=body.scrollHeight-body.scrollTop-body.clientHeight<60;
+ },{passive:true});
+ if(window.ResizeObserver){
+  const observer=new ResizeObserver(()=>{
+   if(!isOpen()){observer.disconnect();return}
+   if(stickToBottom)body.scrollTop=body.scrollHeight;
+  });
+  observer.observe(body);
+ }
+
  const report=text=>{notice.textContent=text;notice.hidden=!text};
  const updateSend=()=>{submit.disabled=!input.value.trim()||sending||replying};
  function paint(){

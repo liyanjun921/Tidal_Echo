@@ -2,13 +2,13 @@
    IMPORTANT: bump CACHE on every front-end change, or installed clients keep the
    old shell (the precached index.html won't refresh until the SW reinstalls). */
 const AI_NAME = "Émoi";
-const CACHE = "emoi-v16-mobile-glass";
+const CACHE = "emoi-v17-ios-layout";
 const scopedPrefix = "emoi-v";
 const PRECACHE = [
   "./index.html", "./legacy-storage.js", "./styles.css", "./polish.css", "./emoi-archive-glass.css", "./emoi-phone.css", "./emoi-liquid.css", "./emoi-imessage.css", "./emoi-crystal.css", "./emoi-responsive.css", "./emoi-clear-home.css", "./emoi-wallpapers.js", "./emoi-phone.js", "./emoi-avatars.js", "./emoi-imessage.js", "./emoi-optics.js", "./assets/emoi-wallpaper-1.webp", "./assets/emoi-wallpaper-2.webp", "./assets/emoi-wallpaper-3.webp", "./assets/emoi-phone-aura.svg", "./assets/emoi-archive-botanical.svg", "./assets/emoi-archive-nocturne.svg", "./connection.css", "./app.js", "./reading.js", "./reading.css", "./checklist.js", "./checklist.css", "./cinema.js", "./cinema.css", "./relay-client.js", "./rich-text.js", "./memory.js", "./native-memory.js", "./ombre-memory.js", "./continuity.js", "./wren-room.js", "./wren-room.css", "./xinchao-room.js", "./xinchao-room.css", "./living-context.js", "./living-context.css",
   "./assets/water-light.webp", "./assets/lily-water.webp",
   "./assets/water-light-thumb.webp", "./assets/lily-water-thumb.webp",
-].map(path => /\.(js|css)$/.test(path) ? path + "?v=16" : path);
+].map(path => /\.(js|css)$/.test(path) ? path + "?v=17" : path);
 
 self.addEventListener("install", (e) => {
   e.waitUntil(

@@ -4,6 +4,7 @@ html[data-emoi-home] {
   --ep-home-wallpaper: var(--emoi-active-wallpaper, url('assets/emoi-wallpaper-2.webp'));
   background: #193f3e var(--ep-home-wallpaper) center / cover no-repeat;
   min-height: 100%;
+  background-attachment: fixed;
 }
 body[data-ui-mode=phone][data-phone-screen=home] {
   background: transparent;
@@ -18,9 +19,6 @@ body[data-ui-mode=phone][data-phone-screen=home] .emoi-phone-host {
 }
 body[data-ui-mode=phone][data-phone-screen=home] .emoi-phone-host::before {
   background: var(--ep-home-wallpaper) center / cover no-repeat;
-}
-@media (display-mode: standalone), (display-mode: fullscreen) {
-  body[data-ui-mode=phone][data-phone-screen=home] .emoi-phone-host { height: auto; }
 }
 body[data-ui-mode=phone][data-phone-screen=home] .emoi-phone-host::after {
   display: none;
@@ -43,7 +41,7 @@ body[data-ui-mode=phone] .ep-home-top {
     8px max(var(--ep-gutter), env(safe-area-inset-left));
 }
 @media (display-mode: standalone), (display-mode: fullscreen) {
-  body[data-ui-mode=phone] .ep-home-top { padding-top: max(8px, calc(env(safe-area-inset-top) + 5px)); }
+  body[data-ui-mode=phone] .ep-home-top { padding-top: calc(env(safe-area-inset-top) + 12px); }
   .ep-desktop-clock { visibility: hidden; }
 }
 .ep-desktop-clock {
@@ -246,5 +244,33 @@ body[data-ui-mode=phone] .ep-home .ep-dock-app { height: auto; }
     background: Canvas;
     border: 1px solid CanvasText;
     color: CanvasText;
+  }
+}
+
+@media (pointer: coarse) and (orientation: portrait) {
+  html[data-ep-standalone] body[data-ui-mode=phone] .ep-home-top {
+    padding-top: max(56px, calc(env(safe-area-inset-top) + 10px));
+  }
+  html[data-ep-standalone] body[data-ui-mode=phone] .ep-home-bottom {
+    padding-bottom: max(18px, calc(env(safe-area-inset-bottom) + 6px));
+  }
+}
+
+/* The installed iOS app keeps its shell in normal flow. Some WebKit
+   versions clip fixed containers to the smaller cold-start viewport. */
+@media (pointer: coarse) {
+  html[data-ep-standalone] body[data-ui-mode=phone] {
+    height: 100vh;
+  }
+  html[data-ep-standalone] body[data-ui-mode=phone] .emoi-phone-host,
+  html[data-ep-standalone] body[data-ui-mode=phone][data-phone-screen=legacy] #app {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    height: 100vh;
+  }
+  html[data-ep-standalone][data-ep-keyboard] body[data-ui-mode=phone][data-phone-screen=imessage] .emoi-phone-host {
+    top: var(--ep-visual-top, 0px);
+    height: var(--ep-visual-height, 100dvh);
   }
 }

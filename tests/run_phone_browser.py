@@ -143,10 +143,13 @@ def main():
             driver.save_screenshot(str(OUT/"phone-messages-empty-390.png"))
 
             driver.find_element(By.CSS_SELECTOR,'.ep-messages-top [aria-label="新信息"]').click()
-            driver.find_element(By.XPATH,"//dialog//button[.='前往通讯录']").click()
-            driver.find_element(By.CSS_SELECTOR,'.ep-action-primary').click()
+            driver.find_element(By.XPATH,"//dialog//button[.='添加联系人']").click()
             dlg=driver.find_element(By.ID,"epContactDialog")
             assert dlg.get_attribute("open") is not None
+            assert driver.execute_script("""
+              const rect = document.getElementById('epContactDialog').getBoundingClientRect();
+              return rect.top >= 0 && rect.bottom <= innerHeight + 1;
+            """)
             dlg.find_element(By.CSS_SELECTOR,'input[name="name"]').send_keys("测试联系人")
             dlg.find_element(By.CSS_SELECTOR,'textarea[name="notes"]').send_keys("仅本机人物档案")
             dlg.find_element(By.CSS_SELECTOR,'button[type="submit"]').click()
@@ -181,6 +184,9 @@ def main():
                 getComputedStyle(shell).backgroundImage.includes('url(') &&
                 document.getElementById('emoiStartup').hidden;
             """)
+            driver.find_element(By.CSS_SELECTOR,'[aria-label="更换聊天背景"]').click()
+            driver.find_element(By.CSS_SELECTOR,'#emoiWallpaperDialog [data-wall="green-bokeh"]').click()
+            assert driver.execute_script("return document.body.dataset.emoiWall") == "green-bokeh"
             driver.save_screenshot(str(OUT/"phone-imessage-real-390.png"))
 
             # A second contact sees a clean, distinct history.
@@ -208,6 +214,7 @@ def main():
             assert "自定义小群" in driver.find_element(By.ID,"emoiPhoneView").text
             assert len(driver.execute_script("return JSON.parse(localStorage.getItem('emoi-ui-groups-v1'))[0].members"))==2
             assert not driver.find_elements(By.CSS_SELECTOR,'.ep-im-history .ep-im-row')
+            assert driver.execute_script("return document.body.dataset.emoiWall") != "green-bokeh"
             driver.save_screenshot(str(OUT/"phone-group-chat-390.png"))
 
             # Existing apps open their real implementations in the phone frame.
