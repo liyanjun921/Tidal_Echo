@@ -1,0 +1,243 @@
+/*
+ Émoi / CRYSTAL — phone visual system v3
+ A real clear-glass treatment, not white translucent plastic.
+ Material formula: low-opacity surface + locally refracted scene + edge caustic +
+ secondary inner rim + unblurred content and a tiny shadow.
+ User-supplied Liquid Glass architecture informs the optical layer.
+ Avoid coloured opaque app tiles and opaque chat bubbles.
+*/
+:root{
+  --crystal-reflect:rgba(255,255,255,.75);
+  --crystal-rim:rgba(255,255,255,.57);
+  --crystal-rim-shadow:rgba(13,35,43,.38);
+  --crystal-faint:rgba(255,255,255,.055);
+  --crystal-glow:rgba(255,255,255,.16);
+  --crystal-light:rgba(245,252,255,.96);
+  --crystal-glass-shadow:0 9px 25px rgba(1,22,32,.21),0 2px 5px rgba(3,20,31,.14),
+    inset 0 1.25px 1px rgba(255,255,255,.85),
+    inset 0 -1px 2px rgba(11,37,53,.22),
+    inset -1px 0 1px rgba(255,255,255,.21);
+}
+body[data-ui-mode=phone] .emoi-phone-host{
+  color:var(--crystal-light);
+  background-color:#163f4a;
+}
+body[data-ui-mode=phone] .emoi-phone-host::before{
+  background-image:
+    linear-gradient(180deg,rgba(6,19,25,.15) 0%,transparent 30%,transparent 65%,rgba(3,18,24,.26) 100%),
+    var(--emoi-active-wallpaper,url('assets/lily-water.webp'));
+  background-position:center;
+  background-size:cover;
+  filter:none;
+  transform:none;
+}
+body[data-ui-mode=phone] .emoi-phone-host::after{background:none}
+/* iMESSAGE. The wallpaper continues underneath real translucent bubbles.
+   Use layered optical rims with minimal fill instead of blue/white solid pills. */
+body[data-ui-mode=phone] .ep-im-screen{
+  background:transparent;color:#fff;isolation:isolate;
+}
+body[data-ui-mode=phone] .ep-im-screen::before{display:none}
+body[data-ui-mode=phone] .ep-im-header{
+  min-height:78px;
+  border-bottom:1px solid rgba(255,255,255,.32);
+  background:linear-gradient(180deg,rgba(7,21,28,.16),rgba(255,255,255,.018));
+  -webkit-backdrop-filter:blur(2px) saturate(158%);
+  backdrop-filter:blur(2px) saturate(158%);
+  box-shadow:inset 0 -1px 0 rgba(255,255,255,.15);
+}
+body[data-ui-mode=phone] .ep-im-back,
+body[data-ui-mode=phone] .ep-im-more{
+  background:linear-gradient(155deg,rgba(255,255,255,.10),rgba(255,255,255,.025));
+  border:1px solid rgba(255,255,255,.46);
+  color:white;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.62),0 4px 12px rgba(2,25,34,.16);
+  -webkit-backdrop-filter:blur(1.2px) saturate(156%);
+  backdrop-filter:blur(1.2px) saturate(156%)
+}
+body[data-ui-mode=phone] .ep-im-avatar,
+body[data-ui-mode=phone] .ep-im-big-avatar{
+  background:linear-gradient(152deg,rgba(255,255,255,.18),rgba(10,52,58,.18));
+  border:1px solid rgba(255,255,255,.58);
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.75),0 6px 16px rgba(0,20,30,.2);
+  color:#fff;
+  -webkit-backdrop-filter:blur(1.3px) saturate(150%);
+  backdrop-filter:blur(1.3px) saturate(150%)
+}
+body[data-ui-mode=phone] .ep-im-peer-info strong,
+body[data-ui-mode=phone] .ep-im-peer-info small{
+  color:#fff;text-shadow:0 1px 4px rgba(0,17,25,.73)
+}
+body[data-ui-mode=phone] .ep-im-timeline{padding:16px 15px 17px}
+body[data-ui-mode=phone] .ep-im-conversation-start p,
+body[data-ui-mode=phone] .ep-im-conversation-start small{
+  color:#fff;text-shadow:0 1px 4px rgba(0,15,23,.7)
+}
+body[data-ui-mode=phone] .ep-im-history{gap:14px}
+body[data-ui-mode=phone] .ep-im-bubble{
+  position:relative;isolation:isolate;
+  padding:11px 15px;border-radius:23px;
+  border:1px solid rgba(255,255,255,.52);
+  color:#fff;font-size:14.5px;line-height:1.58;
+  text-shadow:0 1px 2px rgba(5,19,24,.57);
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.58),
+    inset 0 -1px 1px rgba(0,26,34,.21),
+    0 4px 12px rgba(1,25,33,.20);
+  -webkit-backdrop-filter:blur(2.3px) saturate(170%) brightness(.98);
+  backdrop-filter:blur(2.3px) saturate(170%) brightness(.98);
+}
+body[data-ui-mode=phone] .ep-im-mine .ep-im-bubble{
+  background:linear-gradient(155deg,rgba(38,115,167,.23),rgba(17,71,111,.20) 68%,
+    rgba(12,60,89,.17));
+  border-bottom-right-radius:8px
+}
+body[data-ui-mode=phone] .ep-im-theirs .ep-im-bubble{
+  background:linear-gradient(152deg,rgba(255,255,255,.17),rgba(255,255,255,.057) 68%,
+    rgba(13,38,48,.11));
+  border-bottom-left-radius:8px
+}
+body[data-ui-mode=phone] .ep-im-bubble::before{
+  content:"";position:absolute;pointer-events:none;inset:1px;border-radius:inherit;
+  background:radial-gradient(ellipse at 13% 0%,rgba(255,255,255,.25),transparent 44%);
+  z-index:-1
+}
+body[data-ui-mode=phone] .ep-im-bubble::after{
+  content:"";position:absolute;pointer-events:none;inset:1.5px;border-radius:inherit;
+  border-top:1px solid rgba(255,255,255,.45);
+  border-left:1px solid rgba(255,255,255,.11);
+  opacity:.85
+}
+body[data-ui-mode=phone] .ep-im-delivery,
+body[data-ui-mode=phone] .ep-im-notice{
+  color:rgba(255,255,255,.95);
+  text-shadow:0 1px 3px rgba(0,14,24,.73)
+}
+body[data-ui-mode=phone] .ep-im-footer{
+  padding:9px 13px 15px;
+  background:linear-gradient(180deg,transparent,rgba(3,25,32,.13));
+  -webkit-backdrop-filter:none;backdrop-filter:none
+}
+body[data-ui-mode=phone] .ep-im-attach,
+body[data-ui-mode=phone] .ep-im-submit{
+  background:linear-gradient(135deg,rgba(255,255,255,.17),rgba(255,255,255,.028));
+  color:#fff;border:1px solid rgba(255,255,255,.53);
+  box-shadow:inset 0 1.1px 1px rgba(255,255,255,.66),
+    inset 0 -1px 1px rgba(5,35,44,.18),
+    0 4px 13px rgba(0,21,28,.21);
+  -webkit-backdrop-filter:blur(1.2px) saturate(166%);
+  backdrop-filter:blur(1.2px) saturate(166%)
+}
+body[data-ui-mode=phone] .ep-im-submit:disabled{opacity:.48}
+body[data-ui-mode=phone] .ep-im-composer{
+  position:relative;isolation:isolate;background:transparent;
+  border:0;box-shadow:none;
+  -webkit-backdrop-filter:none;backdrop-filter:none
+}
+body[data-ui-mode=phone] .ep-im-composer::before{
+  background:linear-gradient(150deg,rgba(255,255,255,.13),rgba(255,255,255,.023) 70%,
+    rgba(6,30,43,.044));
+  border:1px solid rgba(255,255,255,.52);
+  box-shadow:0 0 0 1px rgba(255,255,255,.14),
+    inset 0 1px 1px rgba(255,255,255,.61),
+    inset 0 -1px 2px rgba(2,29,39,.2),0 5px 16px rgba(0,20,32,.18);
+  -webkit-backdrop-filter:blur(2px) saturate(170%);
+  backdrop-filter:blur(2px) saturate(170%)
+}
+body[data-ui-mode=phone] .ep-im-composer textarea{
+  color:#fff;text-shadow:0 1px 3px rgba(1,20,26,.55);
+  caret-color:#fff;background:transparent!important;
+}
+body[data-ui-mode=phone] .ep-im-composer textarea::placeholder{
+  color:rgba(255,255,255,.85);text-shadow:0 1px 3px rgba(0,19,28,.51)
+}
+/* The new crystal aesthetic is wallpaper-first, even in Conversations. */
+body[data-ui-mode=phone] .ep-list-screen,
+body[data-ui-mode=phone] .ep-detail-screen,
+body[data-ui-mode=phone] .ep-settings{
+  background:linear-gradient(155deg,rgba(10,29,37,.16),rgba(6,28,40,.10))
+}
+body[data-ui-mode=phone] .ep-page-header,
+body[data-ui-mode=phone] .ep-list-panel,
+body[data-ui-mode=phone] .ep-settings-panel{
+  background:linear-gradient(140deg,rgba(255,255,255,.09),rgba(255,255,255,.025));
+  border-color:rgba(255,255,255,.41);
+  -webkit-backdrop-filter:blur(2.5px) saturate(160%);
+  backdrop-filter:blur(2.5px) saturate(160%)
+}
+body[data-ui-mode=phone] .ep-list-intro h2,
+body[data-ui-mode=phone] .ep-page-header strong,
+body[data-ui-mode=phone] .ep-list-row strong,
+body[data-ui-mode=phone] .ep-list-row small,
+body[data-ui-mode=phone] .ep-list-intro small,
+body[data-ui-mode=phone] .ep-inline-empty,
+body[data-ui-mode=phone] .ep-list-empty strong,
+body[data-ui-mode=phone] .ep-list-empty p,
+body[data-ui-mode=phone] .ep-help,
+body[data-ui-mode=phone] .ep-link,
+body[data-ui-mode=phone] .ep-quiet-link,
+body[data-ui-mode=phone] .ep-compat-link,
+body[data-ui-mode=phone] .ep-settings-heading h2,
+body[data-ui-mode=phone] .ep-settings-heading p{
+  color:#fff;text-shadow:0 1px 3px rgba(0,22,32,.74)
+}
+body[data-ui-mode=phone] .ep-list-row,
+body[data-ui-mode=phone] .ep-settings-panel .ep-list-row{
+  border-bottom-color:rgba(255,255,255,.18)
+}
+body[data-ui-mode=phone] .ep-list-avatar,
+body[data-ui-mode=phone] .ep-header-button{
+  color:#fff;border:1px solid rgba(255,255,255,.49);
+  background:linear-gradient(145deg,rgba(255,255,255,.19),rgba(255,255,255,.038));
+  -webkit-backdrop-filter:blur(1px) saturate(158%);
+  backdrop-filter:blur(1px) saturate(158%)
+}
+body[data-ui-mode=phone] .ep-list-avatar svg{color:white}
+@media(max-width:600px){
+ body[data-ui-mode=phone] .ep-home-scroll{padding-inline:17px}
+ body[data-ui-mode=phone] .ep-app-grid{row-gap:16px}
+ body[data-ui-mode=phone] .ep-hero-widget{min-height:169px}
+ body[data-ui-mode=phone] .ep-dock{margin-inline:13px}
+}
+@media(max-height:750px){
+ body[data-ui-mode=phone] .ep-hero-widget{min-height:144px;margin-bottom:15px}
+ body[data-ui-mode=phone] .ep-app-grid{row-gap:12px}
+ body[data-ui-mode=phone] .ep-home-top{padding-top:9px}
+}
+/* Accessibility: material changes, never disappear text or controls. */
+@media(forced-colors:active){
+ body[data-ui-mode=phone] .ep-app-icon,
+ body[data-ui-mode=phone] .ep-dock,
+ body[data-ui-mode=phone] .ep-im-bubble{
+  -webkit-backdrop-filter:none;backdrop-filter:none;
+  color:CanvasText;background:Canvas;border:1px solid CanvasText
+ }
+}
+
+/* The initial empty conversation remains airy and unobstructed: no large
+   blurred rectangle obscuring the user's own wallpaper. */
+body[data-ui-mode=phone] .ep-im-conversation-start{
+  border:0;
+  border-radius:0;
+  background:none;
+  box-shadow:none;
+  -webkit-backdrop-filter:none;
+  backdrop-filter:none;
+  padding:15px 12px 9px;
+}
+body[data-ui-mode=phone] .ep-im-conversation-start p{
+  font-size:13px;
+  text-shadow:0 1px 5px rgba(0,12,20,.82);
+}
+body[data-ui-mode=phone] .ep-im-conversation-start small{
+  display:block;
+  max-width:255px;
+  padding:9px 13px;
+  border-radius:16px;
+  background:linear-gradient(145deg,rgba(7,37,45,.14),rgba(255,255,255,.045));
+  border:1px solid rgba(255,255,255,.18);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.15);
+  -webkit-backdrop-filter:blur(1px) saturate(145%);
+  backdrop-filter:blur(1px) saturate(145%);
+  color:white;
+  text-shadow:0 1px 4px rgba(0,13,20,.81);
+}

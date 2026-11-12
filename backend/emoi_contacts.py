@@ -2,7 +2,7 @@
 
 Every route requires the existing relay owner bearer authentication.
 Creates additive tables; legacy gpt/claude/group messages are untouched.
-No LLM delivery and no OB/Desire engine permissions are claimed by these records.
+Replies use explicit per-agent model bindings and the history of this conversation only.
 """
 from __future__ import annotations
 
@@ -12,10 +12,12 @@ import sqlite3
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from fastapi import HTTPException, Request
+import httpx
+from fastapi import BackgroundTasks, HTTPException, Request
 
 MAX_CONTACTS = 120
 MAX_MEMBERS = 20
+MODEL_ROUTES = {"default", "gpt", "claude"}
 UUID_PATTERN = re.compile(r"^[0-9a-fA-F-]{36}$")
 
 
@@ -77,6 +79,7 @@ def init(path):
         );
         CREATE INDEX IF NOT EXISTS idx_emoi_v2_messages_conv ON emoi_v2_messages(conversation_id,created_at);
         """)
+        db.execute("UPDATE emoi_v2_messages SET delivery='interrupted' WHERE delivery='replying'")
 
 
 def register(app, relay):
@@ -106,11 +109,72 @@ def register(app, relay):
             "memory_connected": False, "desire_connected": False,
         }
 
+    def model_members(db, cid):
+        return db.execute("""
+          SELECT c.* FROM emoi_v2_members m JOIN emoi_v2_contacts c ON c.id=m.contact_id
+          WHERE m.conversation_id=? AND c.archived=0 ORDER BY m.rowid
+        """, (cid,)).fetchall()
+
+    def reply_targets(db, cid):
+        return [member for member in model_members(db, cid) if member["model_route"] in MODEL_ROUTES]
+
+    async def generate_replies(cid, message_id, recipients):
+        completed = 0
+        try:
+            url = relay["loop_base_url"]() + "/loop/contact-reply"
+            async with httpx.AsyncClient(timeout=135, trust_env=False) as client:
+                for recipient in recipients:
+                    with connect(path) as db:
+                        active = {m["id"]: m for m in reply_targets(db, cid)}
+                        if not db.execute("SELECT 1 FROM emoi_v2_conversations WHERE id=? AND archived=0", (cid,)).fetchone():
+                            break
+                        current = active.get(recipient["id"])
+                        if not current or current["model_route"] != recipient["model_route"]:
+                            continue
+                        rows = db.execute("""
+                          SELECT m.author, m.contact_id, m.text, c.name
+                          FROM emoi_v2_messages m LEFT JOIN emoi_v2_contacts c ON c.id=m.contact_id
+                          WHERE m.conversation_id=? ORDER BY m.rowid DESC LIMIT 40
+                        """, (cid,)).fetchall()
+                    history = [dict(row) for row in reversed(rows)]
+                    try:
+                        response = await client.post(url, json={
+                            "route": current["model_route"], "contact_id": current["id"],
+                            "name": current["name"], "notes": current["notes"], "history": history,
+                        })
+                        response.raise_for_status()
+                        text = clean_text(response.json().get("text"), 10000, True)
+                    except (httpx.HTTPError, ValueError, HTTPException):
+                        continue
+                    with connect(path) as db:
+                        db.execute("BEGIN IMMEDIATE")
+                        still_member = db.execute("""
+                          SELECT 1 FROM emoi_v2_members m
+                          JOIN emoi_v2_contacts c ON c.id=m.contact_id
+                          JOIN emoi_v2_conversations v ON v.id=m.conversation_id
+                          WHERE v.id=? AND c.id=? AND c.archived=0 AND v.archived=0
+                        """, (cid, current["id"])).fetchone()
+                        if not still_member:
+                            continue
+                        db.execute("""
+                          INSERT INTO emoi_v2_messages(id,conversation_id,author,contact_id,text,nonce,delivery,created_at)
+                          VALUES(?,?,'contact',?,?,?,'generated',?)
+                        """, (str(uuid4()), cid, current["id"], text, "reply:"+message_id+":"+current["id"], now()))
+                        completed += 1
+        finally:
+            state = "replied" if completed == len(recipients) else "partial" if completed else "model_failed"
+            with connect(path) as db:
+                db.execute("UPDATE emoi_v2_messages SET delivery=? WHERE id=?", (state, message_id))
+
     def view_conversation(db, row):
         members=[m[0] for m in db.execute(
             "SELECT contact_id FROM emoi_v2_members WHERE conversation_id=? ORDER BY rowid",(row["id"],))]
+        latest = db.execute("""
+          SELECT text,created_at FROM emoi_v2_messages WHERE conversation_id=?
+          ORDER BY created_at DESC,id DESC LIMIT 1
+        """, (row["id"],)).fetchone()
         return {
-            "id":row["id"],"kind":row["kind"],"title":row["title"],
+            "id":row["id"],"kind":row["kind"],"title":row["title"],"latest":dict(latest) if latest else None,
             "members":members,"memory_namespace":row["memory_namespace"],
             "created_at":row["created_at"],"connected":False,
         }
@@ -245,10 +309,12 @@ def register(app, relay):
         with connect(path) as db:
             conv=conversation(db,conversation_id)
             msgs=db.execute("SELECT * FROM emoi_v2_messages WHERE conversation_id=? ORDER BY created_at DESC,id DESC LIMIT ?",(conv["id"],limit)).fetchall()
-            return {"messages":[dict(row) for row in reversed(msgs)],"model_connected":False}
+            return {"messages":[dict(row) for row in reversed(msgs)],
+                    "model_connected": bool(relay.get("loop_base_url") and reply_targets(db, conv["id"])),
+                    "replying": any(row["delivery"] == "replying" for row in msgs)}
 
     @app.post("/emoi/v2/conversations/{conversation_id}/messages")
-    async def v2_save_message(conversation_id:str,request:Request):
+    async def v2_save_message(conversation_id:str,request:Request,background:BackgroundTasks):
         auth(request)
         body=await request.json()
         if not isinstance(body,dict):raise HTTPException(422,"invalid message")
@@ -257,13 +323,22 @@ def register(app, relay):
         if not re.fullmatch(r"[A-Za-z0-9_-]{12,100}",nonce):
             raise HTTPException(422,"invalid nonce")
         with connect(path) as db:
+            db.execute("BEGIN IMMEDIATE")
             conv=conversation(db,conversation_id)
             old=db.execute("SELECT * FROM emoi_v2_messages WHERE conversation_id=? AND nonce=?",(conv["id"],nonce)).fetchone()
-            if old:return {"message":dict(old),"already_saved":True}
+            if old:
+                return {"message":dict(old),"already_saved":True}
+            if db.execute("SELECT 1 FROM emoi_v2_messages WHERE conversation_id=? AND delivery='replying'", (conv["id"],)).fetchone():
+                raise HTTPException(409, "请等这轮 AI 回复结束")
+            recipients = reply_targets(db, conv["id"]) if relay.get("loop_base_url") else []
             mid=str(uuid4())
-            db.execute("INSERT INTO emoi_v2_messages(id,conversation_id,author,contact_id,text,nonce,created_at) VALUES(?,?,'human',NULL,?,?,?)",
-                (mid,conv["id"],text,nonce,now()))
+            db.execute("""
+              INSERT INTO emoi_v2_messages(id,conversation_id,author,contact_id,text,nonce,delivery,created_at)
+              VALUES(?,?,'human',NULL,?,?,?,?)
+            """, (mid,conv["id"],text,nonce,"replying" if recipients else "stored_not_delivered",now()))
             row=db.execute("SELECT * FROM emoi_v2_messages WHERE id=?",(mid,)).fetchone()
-            return {"message":dict(row),"model_dispatched":False}
+        if recipients:
+            background.add_task(generate_replies, conv["id"], mid, recipients)
+        return {"message":dict(row),"model_dispatched":bool(recipients)}
 
     return {"init":lambda:init(path)}

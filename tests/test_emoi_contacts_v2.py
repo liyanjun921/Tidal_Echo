@@ -3,9 +3,11 @@ import tempfile
 import unittest
 from pathlib import Path
 from uuid import uuid4
+from unittest.mock import patch
 
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
+import httpx
 from backend.emoi_contacts import register
 
 
@@ -17,7 +19,7 @@ class ContactIsolationTests(unittest.TestCase):
         def check_auth(request):
             if request.headers.get("authorization") != "Bearer test-only-owner":
                 raise HTTPException(401, "unauthorized")
-        runtime = register(app, {"DB_PATH":path,"check_auth":check_auth})
+        runtime = register(app, {"DB_PATH":path,"check_auth":check_auth,"loop_base_url":lambda:"http://loop.test"})
         runtime["init"]()
         self.client=TestClient(app)
         self.h={"Authorization":"Bearer test-only-owner"}
@@ -96,6 +98,38 @@ class ContactIsolationTests(unittest.TestCase):
         self.assertEqual(a.json()["message"]["author"],"human")
         self.assertEqual(a.json()["message"]["delivery"],"stored_not_delivered")
         self.assertEqual(len(self.client.get(url,headers=self.h).json()["messages"]),1)
+
+    def test_group_replies_are_ordered_isolated_and_idempotent(self):
+        a = self.post("/emoi/v2/contacts", {"name":"甲","notes":"甲的私有档案","model_route":"gpt"}).json()
+        b = self.post("/emoi/v2/contacts", {"name":"乙","notes":"乙的私有档案","model_route":"claude"}).json()
+        direct = "/emoi/v2/conversations/" + a["conversation_id"] + "/messages"
+        payloads = []
+
+        def reply(request):
+            import json
+            data = json.loads(request.content)
+            payloads.append(data)
+            return httpx.Response(200, json={"text": data["name"] + "的回复"})
+
+        real_client = httpx.AsyncClient
+        with patch("backend.emoi_contacts.httpx.AsyncClient", side_effect=lambda **kwargs:
+                   real_client(transport=httpx.MockTransport(reply), **kwargs)):
+            self.post(direct, {"text":"私聊独有内容","nonce":uuid4().hex})
+            payloads.clear()
+            members = [a["contact"]["id"], b["contact"]["id"]]
+            group = self.post("/emoi/v2/conversations", {"title":"测试群","members":members}).json()["conversation"]
+            url = "/emoi/v2/conversations/" + group["id"] + "/messages"
+            message = {"text":"群聊问候","nonce":uuid4().hex}
+            self.assertTrue(self.post(url, message).json()["model_dispatched"])
+            self.assertTrue(self.post(url, message).json()["already_saved"])
+
+        self.assertEqual([data["route"] for data in payloads], ["gpt","claude"])
+        self.assertEqual([row["text"] for row in payloads[1]["history"]], ["群聊问候","甲的回复"])
+        self.assertEqual([data["notes"] for data in payloads], ["甲的私有档案","乙的私有档案"])
+        result = self.client.get(url, headers=self.h).json()
+        self.assertFalse(result["replying"])
+        self.assertEqual([row["contact_id"] for row in result["messages"]], [None,*members])
+        self.assertEqual(result["messages"][0]["delivery"], "replied")
 
 
 if __name__ == "__main__":

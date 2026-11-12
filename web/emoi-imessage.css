@@ -75,3 +75,204 @@ body[data-ui-mode=phone] .ep-im-screen::before{
  .ep-im-header{padding-top:9px}
 }
 @media(prefers-reduced-motion:reduce){.ep-im-submit,.ep-im-bubble{transition:none}}
+
+/* Messages uses a quiet, readable system surface over the desktop wallpaper. */
+body[data-ui-mode=phone] #emoiPhoneView:is(.ep-messages,.ep-im-screen) {
+  --im-paper: #fff;
+  --im-bar: #f6f6f8;
+  --im-ink: #17171a;
+  --im-muted: #62626a;
+  --im-rule: #e4e4e9;
+  --im-blue: #0065d8;
+  --im-outgoing: #006ddd;
+  --im-bubble-out: rgba(160, 167, 186, .15);
+  --im-bubble-in: rgba(251, 250, 255, .12);
+  --im-rim-out: rgba(255, 255, 255, .45);
+  --im-rim-in: rgba(255, 255, 255, .5);
+  background: var(--im-paper);
+  color: var(--im-ink);
+  isolation: isolate;
+}
+body[data-ui-mode=phone][data-dark=true] #emoiPhoneView:is(.ep-messages,.ep-im-screen) {
+  --im-paper: #121214;
+  --im-bar: #1b1b1e;
+  --im-ink: #f5f5f7;
+  --im-muted: #aeaeb8;
+  --im-rule: #333338;
+  --im-blue: #70b5ff;
+  --im-outgoing: #076bd4;
+  --im-bubble-out: rgba(144, 165, 207, .18);
+  --im-bubble-in: rgba(242, 246, 255, .10);
+  --im-rim-out: rgba(233, 241, 255, .31);
+  --im-rim-in: rgba(244, 246, 255, .35);
+}
+.ep-messages-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: max(6px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    0 max(16px, env(safe-area-inset-left));
+}
+.ep-messages-action {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: var(--im-blue);
+  border-radius: 50%;
+  background: var(--im-bar);
+}
+.ep-messages-action svg { width: 22px; height: 22px; }
+.ep-messages-list {
+  width: min(100%, 760px);
+  margin-inline: auto;
+  padding: 2px max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom))
+    max(18px, env(safe-area-inset-left));
+  overflow: auto;
+}
+.ep-messages-list h1 { margin: 10px 0 12px; font-size: 34px; line-height: 1.1; letter-spacing: -.04em; }
+.ep-messages-search {
+  width: 100%;
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 14px;
+  background: var(--im-bar);
+  color: var(--im-ink);
+  margin-bottom: 10px;
+}
+.ep-message-thread {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+}
+.ep-thread-avatar {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #5779a1;
+  color: #fff;
+}
+.ep-thread-avatar svg { width: 22px; height: 22px; }
+.ep-thread-copy { flex: 1; display: grid; min-width: 0; border-bottom: 1px solid var(--im-rule); padding: 14px 0; gap: 4px; }
+.ep-thread-topline { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.ep-thread-topline strong,.ep-thread-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ep-thread-topline time,.ep-thread-preview,.ep-thread-empty { color: var(--im-muted); font-size: 13px; }
+.ep-thread-topline time { flex: none; }
+.ep-messages-legacy { margin: 14px 0; padding: 8px 0; color: var(--im-blue); font-size: 13px; }
+.ep-message-recipients .ep-home-control { background: #264563; color: #fff; }
+.ep-message-recipients .ep-member-list { margin: 10px 0; }
+
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-header {
+  min-height: 70px;
+  padding: max(7px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right))
+    7px max(14px, env(safe-area-inset-left));
+  background: var(--im-bar);
+  border-color: var(--im-rule);
+  width: 100%;
+  max-width: none;
+}
+body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-back,.ep-im-more) {
+  color: var(--im-blue);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-peer-info strong { color: var(--im-ink); text-shadow: none; }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-peer-info small {
+  color: var(--im-muted);
+  text-shadow: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-content { justify-content: flex-start; }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-conversation-start { margin: 10px auto; }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-conversation-start[hidden] { display: none; }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-conversation-start :is(p,small) { color: var(--im-muted); text-shadow: none; }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-history { gap: 8px; }
+body[data-ui-mode=phone] #emoiPhoneView.ep-im-screen {
+  background-image: linear-gradient(#f6f8fcad, #e9edf4a8),
+    var(--emoi-active-wallpaper, url('assets/water-light.webp'));
+  background-size: cover;
+  background-position: center;
+}
+body[data-ui-mode=phone][data-dark=true] #emoiPhoneView.ep-im-screen {
+  background-image: linear-gradient(#131a25cc, #10141dbf),
+    var(--emoi-active-wallpaper, url('assets/water-light.webp'));
+}
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-bubble {
+  padding: 5px 10px;
+  border-radius: 10px;
+  color: var(--im-ink);
+  font-size: 16px;
+  line-height: 1.42;
+  box-shadow: 0 4px 6px #0000000d, inset 0 1px 1px #ffffff26;
+  -webkit-backdrop-filter: blur(1.5px) contrast(1.02) brightness(1.02);
+  backdrop-filter: blur(1.5px) contrast(1.02) brightness(1.02);
+  text-shadow: none;
+}
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-mine .ep-im-bubble {
+  background: var(--im-bubble-out);
+  border: 1px solid var(--im-rim-out);
+  border-bottom-right-radius: 4px;
+}
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-theirs .ep-im-bubble {
+  background: var(--im-bubble-in);
+  border: 1px solid var(--im-rim-in);
+  border-bottom-left-radius: 4px;
+}
+@media (forced-colors: active) {
+  body[data-ui-mode=phone] #emoiPhoneView .ep-im-bubble { forced-color-adjust: auto; }
+}
+.ep-im-date { align-self: center; margin: 10px 0; }
+.ep-im-date,.ep-im-sender { color: var(--im-muted); font-size: 11px; }
+.ep-im-sender { margin-left: 8px; }
+body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-delivery,.ep-im-notice) { color: var(--im-muted); text-shadow: none; }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-footer {
+  background: var(--im-paper);
+  border: 0;
+  padding-bottom: max(12px, calc(env(safe-area-inset-bottom) + 5px));
+}
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-composer { border: 1px solid var(--im-rule); background: var(--im-paper); box-shadow: none; }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-composer textarea { background: transparent; color: var(--im-ink); font-size: 16px; }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-composer textarea::placeholder { color: var(--im-muted); }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-submit { background: var(--im-outgoing); color: #fff; box-shadow: none; }
+body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-bubble,.ep-im-composer)::before,
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-bubble::after { content: none; }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-composer textarea {
+  text-shadow: none;
+  caret-color: var(--im-blue);
+}
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-composer textarea::placeholder { text-shadow: none; }
+
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-header {
+  grid-template-columns: minmax(78px, 1fr) minmax(0, 2fr) minmax(78px, 1fr);
+}
+.ep-im-actions { display: flex; align-items: center; justify-content: flex-end; }
+@media (pointer: coarse) {
+  body[data-ui-mode=phone][data-phone-screen=imessage] .emoi-phone-host {
+    inset: var(--ep-visual-top, 0px) 0 auto;
+    height: var(--ep-visual-height, 100dvh);
+  }
+  html[data-ep-keyboard] body[data-ui-mode=phone] #emoiPhoneView .ep-im-footer {
+    padding-bottom: 8px;
+  }
+}
+@media (pointer: coarse) and (orientation: portrait) {
+  html[data-ep-standalone] body[data-ui-mode=phone] #emoiPhoneView .ep-im-header,
+  html[data-ep-standalone] body[data-ui-mode=phone] .ep-messages-top,
+  html[data-ep-standalone] body[data-ui-mode=phone] .ep-page-header {
+    padding-top: max(56px, calc(env(safe-area-inset-top) + 8px));
+  }
+  html[data-ep-keyboard] body[data-ui-mode=phone] #emoiPhoneView .ep-im-header {
+    padding-top: max(7px, env(safe-area-inset-top));
+  }
+}

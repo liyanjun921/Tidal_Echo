@@ -148,7 +148,28 @@ function wire(){
  for(const name of ['gpt','claude']){
  $('#agent-'+name).onsubmit=async e=>{e.preventDefault();const f=e.target,body={agent:name,connection_mode:f.elements.connection_mode.value,persona:f.elements.persona.value};if(body.connection_mode==='api')for(const key of ['url','model','key','protocol'])body[key]=f.elements[key].value;else if(name==='gpt')body.subscription_model=f.elements.subscription_model.value;
  try{const result=await json('/app/loop/agents','POST',body);f.elements.key.value='';emit('agents',result.agents);toast(name.toUpperCase()+' 连接配置已保存；订阅不会自动切到 API')}catch(e){toast(e.message)}};
- $('#test-'+name).onclick=async()=>{try{$('#settingsStatus').textContent='正在测试…';await json('/app/loop/agents/test','POST',{agent:name});$('#settingsStatus').textContent=name.toUpperCase()+' 测试通过'}catch(e){$('#settingsStatus').textContent=e.message}};
+ $('#test-'+name).onclick=async()=>{
+  const control=$('#test-'+name),status=$('#test-'+name+'-status');
+  if(control.disabled)return;
+  control.disabled=true;
+  status.textContent='正在请求模型，请勿重复点击…';
+  status.dataset.state='running';
+  $('#settingsStatus').textContent=name.toUpperCase()+' 正在测试…';
+  try{
+   const result=await json('/app/loop/agents/test','POST',{agent:name});
+   const message=name.toUpperCase()+' 测试通过'+(result.model?' · '+result.model:'');
+   status.textContent=message;
+   status.dataset.state='success';
+   $('#settingsStatus').textContent=message;
+  }catch(e){
+   const message='测试失败：'+(e?.message||'未知错误，请检查服务器与模型配置');
+   status.textContent=message;
+   status.dataset.state='error';
+   $('#settingsStatus').textContent=message;
+  }finally{
+   control.disabled=false;
+  }
+ };
  }
  $('#mcpForm').onsubmit=async e=>{e.preventDefault();const f=e.target;try{const auth=f.elements.authorization.value.trim();await json('/app/loop/mcp','POST',{name:f.elements.serverName.value,transport:'http',url:f.elements.url.value,headers:auth?{Authorization:auth}:{},enabled:true});f.elements.authorization.value='';await toolStatus();toast('工具服务器已保存')}catch(e){toast(e.message)}};
  $('#notificationButton').onclick=()=>notify().catch(e=>toast(e.message));

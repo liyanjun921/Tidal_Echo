@@ -36,7 +36,8 @@ def main():
         options.add_argument("--headless=new")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--disable-gpu")
+        options.add_argument("--enable-unsafe-swiftshader")
+        options.add_argument("--use-angle=swiftshader")
         options.add_argument("--window-size=390,844")
         options.add_argument("--user-data-dir="+tempfile.mkdtemp(prefix="emoi-phone-browser-"))
         driver=webdriver.Chrome(options=options)
@@ -46,21 +47,109 @@ def main():
             wait(driver,lambda d:d.execute_script("return !!window.EmoiUiMode && !!window.EmoiApp"))
             wait(driver,lambda d:d.execute_script("return document.body.dataset.phoneScreen==='home'"))
             assert driver.execute_script("return document.body.dataset.uiMode")=="phone"
-            assert driver.execute_script("return document.querySelectorAll('.ep-app').length")==10
+            assert driver.execute_script("return document.querySelectorAll('.ep-app').length")==9
             assert driver.execute_script("return document.documentElement.scrollWidth <= window.innerWidth+1"),"390px horizontal overflow"
             assert driver.find_element(By.ID,"emoiPhone").is_displayed()
-            driver.save_screenshot(str(OUT/"phone-home-390.png"))
+            assert not driver.find_elements(By.CSS_SELECTOR,'.ep-statusbar,.ep-home-indicator'),"Fake phone furniture must not exist"
+            mobile_bounds=driver.execute_script("return document.querySelector('#emoiPhone').getBoundingClientRect().toJSON()")
+            inner_width=driver.execute_script("return window.innerWidth")
+            assert abs(mobile_bounds["left"])<=1 and abs(mobile_bounds["right"]-inner_width)<=2,mobile_bounds
+            assert driver.execute_script("return getComputedStyle(document.querySelector('#emoiPhone')).borderTopWidth")=="0px"
+            ready = "return document.querySelectorAll('[data-ep-optics]').length > 0 && document.querySelectorAll('[data-ep-optics-ready]').length === document.querySelectorAll('[data-ep-optics]').length"
+            snapshot = "return document.querySelector('[data-widget=calendar] canvas')?.toDataURL()"
+            wait(driver, lambda d: d.execute_script(ready))
+            initial = driver.execute_script(snapshot)
+            assert initial and initial.startswith("data:image/png")
+            assert driver.execute_script("""
+              return Array.from(document.querySelectorAll('.ep-optical-canvas')).every(canvas => {
+                const ctx = canvas.getContext('2d');
+                const center = ctx.getImageData(canvas.width >> 1, canvas.height >> 1, 1, 1).data[3];
+                return center > 20 && center < 85 && ctx.getImageData(0, 0, 1, 1).data[3] === 0;
+              });
+            """), "Glass must transmit the wallpaper and clip its corners"
+            ink_toggle = '.ep-home-ink-toggle'
+            home_colors = """
+              return [...new Set(Array.from(document.querySelectorAll(
+                '.ep-app-label,.ep-app-icon svg,.ep-dock-icon svg,.ep-widget-copy,.ep-desktop-clock,.ep-home-search'
+              ), node => getComputedStyle(node).color))];
+            """
+            assert driver.execute_script(home_colors) == ['rgb(255, 255, 255)']
+            assert driver.execute_script("""
+              const root = document.documentElement;
+              const frame = document.querySelector('#emoiPhone').getBoundingClientRect();
+              return root.hasAttribute('data-emoi-home') && getComputedStyle(root).backgroundImage !== 'none' &&
+                Math.abs(frame.top) < 1 && Math.abs(frame.bottom - innerHeight) < 2;
+            """)
+            driver.find_element(By.CSS_SELECTOR, ink_toggle).click()
+            assert driver.execute_script(home_colors) == ['rgb(17, 17, 17)']
+            driver.refresh()
+            wait(driver, lambda d: d.execute_script(ready))
+            assert driver.execute_script(home_colors) == ['rgb(17, 17, 17)']
+            driver.find_element(By.CSS_SELECTOR, ink_toggle).click()
+            assert driver.execute_script(home_colors) == ['rgb(255, 255, 255)']
+            driver.save_screenshot(str(OUT/"responsive-home-390.png"))
+            driver.find_element(By.CSS_SELECTOR, '.ep-home-edit').click()
+            driver.find_element(By.CSS_SELECTOR, '[data-widget=calendar]').click()
+            driver.find_element(By.XPATH, "//button[.='放大']").click()
+            assert driver.find_element(By.CSS_SELECTOR, '[data-widget=calendar][data-wide]')
+            driver.find_element(By.XPATH, "//button[.='后移']").click()
+            assert driver.find_element(By.CSS_SELECTOR, '.ep-home-grid > :first-child').get_attribute('data-home-id') == 'widget:reading'
+            driver.find_element(By.XPATH, "//button[.='移除']").click()
+            assert not driver.find_elements(By.CSS_SELECTOR, '[data-widget=calendar]')
+            driver.find_element(By.XPATH, "//button[.='添加小组件']").click()
+            driver.find_element(By.XPATH, "//dialog[@aria-label='添加小组件']//button[.='日历']").click()
+            driver.find_element(By.CSS_SELECTOR, '.ep-home-edit').click()
+            driver.refresh()
+            wait(driver, lambda d: d.execute_script(ready))
+            assert driver.find_element(By.CSS_SELECTOR, '[data-widget=calendar]:first-child')
+            assert not driver.find_elements(By.CSS_SELECTOR, '[data-widget=calendar][data-wide]')
+            picker = 'button[aria-label="更换桌面壁纸"]'
+            driver.find_element(By.CSS_SELECTOR, picker).click()
+            driver.find_element(By.XPATH, "//button[contains(.,'流动水光')]").click()
+            wait(driver, lambda d: d.execute_script(ready) and d.execute_script(snapshot) != initial)
+            driver.save_screenshot(str(OUT/"phone-home-water-wallpaper-390.png"))
+            driver.find_element(By.CSS_SELECTOR, picker).click()
+            driver.find_element(By.XPATH, "//button[contains(.,'空白画纸')]").click()
+            wait(driver, lambda d: d.execute_script("""
+              return document.body.dataset.emoiWall === 'paper' && !document.querySelector('[data-ep-optics-ready]');
+            """))
+            assert driver.execute_script(home_colors) == ['rgb(255, 255, 255)']
+            driver.save_screenshot(str(OUT/"phone-home-paper-390.png"))
+            driver.find_element(By.CSS_SELECTOR, picker).click()
+            driver.find_element(By.CSS_SELECTOR, 'input[aria-label="上传当前页面壁纸"]').send_keys(
+                os.environ.get("EMOI_TEST_WALLPAPER", str(WEB/"assets/lily-water.webp")))
+            wait(driver, lambda d: d.execute_script(ready) and d.execute_script("return document.body.dataset.emoiWall") == "custom")
+            driver.save_screenshot(str(OUT/"phone-home-custom-390.png"))
+            driver.refresh()
+            wait(driver, lambda d: d.execute_script(ready) and d.execute_script("return document.body.dataset.emoiWall") == "custom")
+            driver.find_element(By.CSS_SELECTOR, picker).click()
+            driver.find_element(By.XPATH, "//button[contains(.,'星轨夜色')]").click()
+            wait(driver, lambda d: d.execute_script(ready))
+            driver.save_screenshot(str(OUT/"phone-home-night-390.png"))
+            driver.find_element(By.CSS_SELECTOR, 'button[aria-label="打开日历"]').click()
+            wait(driver, lambda d: d.execute_script("return document.querySelector('#workspaceDialog').open"))
+            driver.execute_script("document.querySelector('#workspaceDialog').close()")
+            wait(driver, lambda d: d.execute_script("return document.body.dataset.emoiWall === 'nocturne'"))
+            # A real search button opens Contacts, not an empty decorative label.
+            driver.find_element(By.CSS_SELECTOR,'.ep-home-search').click()
+            assert driver.execute_script("return document.body.dataset.phoneScreen")=="contacts"
+            driver.execute_script("window.EmoiUiMode.openHome()")
 
             # The phone UI starts with NO pre-made AI identities, regardless of the
             # legacy GPT/Claude room identifiers preserved inside the back end.
             driver.find_element(By.CSS_SELECTOR,'[data-ep-app="chat"]').click()
             wait(driver,lambda d:d.execute_script("return document.body.dataset.phoneScreen==='messages'"))
-            assert "还没有联系人" in driver.find_element(By.ID,"emoiPhoneView").text
+            assert "还没有会话" in driver.find_element(By.ID,"emoiPhoneView").text
             driver.save_screenshot(str(OUT/"phone-messages-empty-390.png"))
 
-            driver.find_element(By.CSS_SELECTOR,'.ep-list-actions .ep-round').click()
+            driver.find_element(By.CSS_SELECTOR,'.ep-messages-top [aria-label="新信息"]').click()
+            driver.find_element(By.XPATH,"//dialog//button[.='添加联系人']").click()
             dlg=driver.find_element(By.ID,"epContactDialog")
             assert dlg.get_attribute("open") is not None
+            assert driver.execute_script("""
+              const rect = document.getElementById('epContactDialog').getBoundingClientRect();
+              return rect.top >= 0 && rect.bottom <= innerHeight + 1;
+            """)
             dlg.find_element(By.CSS_SELECTOR,'input[name="name"]').send_keys("测试联系人")
             dlg.find_element(By.CSS_SELECTOR,'textarea[name="notes"]').send_keys("仅本机人物档案")
             dlg.find_element(By.CSS_SELECTOR,'button[type="submit"]').click()
@@ -79,7 +168,7 @@ def main():
             wait(driver,lambda d:d.execute_script("return document.body.dataset.phoneScreen==='imessage'"))
             self_peer=driver.find_element(By.CSS_SELECTOR,'.ep-im-peer-info strong').text
             assert self_peer=="测试联系人"
-            assert "未连接 AI" in driver.find_element(By.ID,"emoiPhoneView").text
+            assert "消息保存在本机" in driver.find_element(By.ID,"emoiPhoneView").text
             area=driver.find_element(By.CSS_SELECTOR,'.ep-im-composer textarea')
             area.send_keys("这条消息只属于测试联系人")
             driver.find_element(By.CSS_SELECTOR,'.ep-im-submit').click()
@@ -87,6 +176,17 @@ def main():
             assert "尚未发送给 AI" in driver.find_element(By.CSS_SELECTOR,'.ep-im-delivery').text
             stored=driver.execute_script("return JSON.parse(localStorage.getItem('emoi-ui-conversation-drafts-v1'))")
             assert len(stored['contact:'+store[0]['id']])==1
+            assert driver.execute_script("""
+              const bubble = document.querySelector('.ep-im-mine .ep-im-bubble');
+              const shell = document.querySelector('.ep-im-screen');
+              const glass = getComputedStyle(bubble);
+              return glass.backgroundColor === 'rgba(160, 167, 186, 0.15)' &&
+                getComputedStyle(shell).backgroundImage.includes('url(') &&
+                document.getElementById('emoiStartup').hidden;
+            """)
+            driver.find_element(By.CSS_SELECTOR,'[aria-label="更换聊天背景"]').click()
+            driver.find_element(By.CSS_SELECTOR,'#emoiWallpaperDialog [data-wall="green-bokeh"]').click()
+            assert driver.execute_script("return document.body.dataset.emoiWall") == "green-bokeh"
             driver.save_screenshot(str(OUT/"phone-imessage-real-390.png"))
 
             # A second contact sees a clean, distinct history.
@@ -101,19 +201,21 @@ def main():
             assert "这条消息只属于测试联系人" not in driver.find_element(By.CSS_SELECTOR,'.ep-im-history').text
             assert not driver.find_elements(By.CSS_SELECTOR,'.ep-im-history .ep-im-row')
 
-            # A user-created group is a transparent local draft, not a phantom
-            # connected chat or shared memory store.
+            # Two selected contacts create a separate group conversation.
             driver.execute_script("window.EmoiUiMode.openApp('chat')")
-            driver.execute_script("window.EmoiUiMode.openApp('chat')")
-            driver.find_element(By.CSS_SELECTOR,'.ep-quiet-link').click()
+            driver.find_element(By.CSS_SELECTOR,'[aria-label="新信息"]').click()
+            driver.find_element(By.XPATH,"//dialog//button[.='创建群聊']").click()
             group=driver.find_element(By.ID,"epGroupDialog")
             group.find_element(By.CSS_SELECTOR,'input[name="name"]').send_keys("自定义小群")
-            group.find_element(By.CSS_SELECTOR,'.ep-member input[type="checkbox"]').click()
+            for member in group.find_elements(By.CSS_SELECTOR,'.ep-member input[type="checkbox"]'):
+                member.click()
             group.find_element(By.CSS_SELECTOR,'button[type="submit"]').click()
-            wait(driver,lambda d:"自定义小群" in d.find_element(By.ID,"emoiPhoneView").text)
-            assert "群聊草稿" in driver.find_element(By.ID,"emoiPhoneView").text
-            assert len(driver.execute_script("return JSON.parse(localStorage.getItem('emoi-ui-groups-v1'))"))==1
-            driver.save_screenshot(str(OUT/"phone-group-draft-390.png"))
+            wait(driver,lambda d:d.execute_script("return document.body.dataset.phoneScreen==='imessage'"))
+            assert "自定义小群" in driver.find_element(By.ID,"emoiPhoneView").text
+            assert len(driver.execute_script("return JSON.parse(localStorage.getItem('emoi-ui-groups-v1'))[0].members"))==2
+            assert not driver.find_elements(By.CSS_SELECTOR,'.ep-im-history .ep-im-row')
+            assert driver.execute_script("return document.body.dataset.emoiWall") != "green-bokeh"
+            driver.save_screenshot(str(OUT/"phone-group-chat-390.png"))
 
             # Existing apps open their real implementations in the phone frame.
             driver.execute_script("window.EmoiUiMode.openHome()")
@@ -135,14 +237,23 @@ def main():
             driver.set_window_size(1440,900);driver.refresh()
             wait(driver,lambda d:d.execute_script("return !!window.EmoiUiMode && document.body.dataset.phoneScreen==='home'"))
             width=driver.execute_script("return Math.round(document.querySelector('#emoiPhone').getBoundingClientRect().width)")
-            assert 395<=width<=415,f"Expected centered phone on desktop, got {width}"
+            viewport=driver.execute_script("return window.innerWidth")
+            assert abs(width-viewport)<=2,f"Desktop MUST be a full-width website, not a 407px phone: {width} vs {viewport}"
             frame=driver.execute_script("return document.querySelector('#emoiPhone').getBoundingClientRect().toJSON()")
-            assert abs((frame['left']+frame['right'])/2 - 720)<3
+            assert abs(frame['left'])<=1 and abs(frame['right']-viewport)<=2,frame
+            assert driver.execute_script("return getComputedStyle(document.querySelector('#emoiPhone')).borderTopWidth")=="0px"
+            columns=driver.execute_script("return getComputedStyle(document.querySelector('.ep-home-grid')).gridTemplateColumns")
+            assert len(columns.split())==8,f"Expected fluid desktop app launcher columns, got {columns}"
             assert driver.execute_script("return document.documentElement.scrollWidth <= window.innerWidth+1")
-            driver.save_screenshot(str(OUT/"phone-desktop-1440.png"))
+            wait(driver, lambda d: d.execute_script(ready))
+            driver.save_screenshot(str(OUT/"responsive-desktop-1440.png"))
+            driver.set_window_size(820, 1180)
+            wait(driver, lambda d: len(d.execute_script(
+                "return getComputedStyle(document.querySelector('.ep-home-grid')).gridTemplateColumns").split()) == 6)
+            driver.save_screenshot(str(OUT/"responsive-tablet-820.png"))
 
             # Settings allow both independent visual modes.
-            driver.find_element(By.CSS_SELECTOR,'.ep-home-top-actions button[aria-label="界面设置"]').click()
+            driver.find_element(By.CSS_SELECTOR,'.ep-dock button[aria-label="设置"]').click()
             assert "小手机" in driver.find_element(By.ID,"emoiPhoneView").text
             assert "艺术模式" in driver.find_element(By.ID,"emoiPhoneView").text
             driver.save_screenshot(str(OUT/"phone-settings-1440.png"))
