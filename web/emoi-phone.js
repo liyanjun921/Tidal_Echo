@@ -145,7 +145,24 @@ function setMode(next){
  if(next!=='phone'&&next!=='art')return;
  mode=next;document.body.dataset.uiMode=next;syncHomeViewport();
  try{localStorage.setItem(MODE_KEY,next)}catch{}
- if(next==='phone'){const menu=$('#moreMenu');if(menu)menu.hidden=true;const drawer=$('#drawerWrap');if(drawer)drawer.hidden=true;const workspace=$('#workspaceDialog');if(workspace?.open)workspace.close();openHome()}else{phone.hidden=true;document.getElementById('app').inert=false;document.getElementById('app').removeAttribute('aria-hidden');}
+ if(next==='phone'){
+  const menu=$('#moreMenu');if(menu)menu.hidden=true;
+  const drawer=$('#drawerWrap');if(drawer)drawer.hidden=true;
+  const workspace=$('#workspaceDialog');if(workspace?.open)workspace.close();
+  try{openHome()}
+  catch(error){
+   console.error('Émoi 桌面启动失败',error);
+   mode='art';document.body.dataset.uiMode=mode;syncHomeViewport();
+   phone.hidden=true;
+   const app=document.getElementById('app');app.inert=false;app.removeAttribute('aria-hidden');
+   const startup=$('#emoiStartup');
+   if(startup){startup.hidden=false;startup.querySelector('span').textContent='桌面未能打开，请重新加载。'}
+   return;
+  }
+ }else{
+  phone.hidden=true;document.getElementById('app').inert=false;document.getElementById('app').removeAttribute('aria-hidden');
+ }
+ const startup=$('#emoiStartup');if(startup)startup.hidden=true;
 }
 function setScreen(next){
  if(next!=='home'){homeEditing=false;homeSelection=null}

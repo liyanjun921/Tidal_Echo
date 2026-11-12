@@ -3,7 +3,7 @@
 (() => {
   'use strict';
   const phone = document.getElementById('emoiPhone');
-  if (!phone) return;
+  if (!phone || matchMedia('(hover: none) and (pointer: coarse)').matches) return;
   const forced = matchMedia('(forced-colors: active)');
   const targets = new Map();
   let image, source, engine, frame = 0;

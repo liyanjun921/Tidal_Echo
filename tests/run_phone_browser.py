@@ -173,6 +173,14 @@ def main():
             assert "尚未发送给 AI" in driver.find_element(By.CSS_SELECTOR,'.ep-im-delivery').text
             stored=driver.execute_script("return JSON.parse(localStorage.getItem('emoi-ui-conversation-drafts-v1'))")
             assert len(stored['contact:'+store[0]['id']])==1
+            assert driver.execute_script("""
+              const bubble = document.querySelector('.ep-im-mine .ep-im-bubble');
+              const shell = document.querySelector('.ep-im-screen');
+              const glass = getComputedStyle(bubble);
+              return glass.backgroundColor === 'rgba(160, 167, 186, 0.15)' &&
+                getComputedStyle(shell).backgroundImage.includes('url(') &&
+                document.getElementById('emoiStartup').hidden;
+            """)
             driver.save_screenshot(str(OUT/"phone-imessage-real-390.png"))
 
             # A second contact sees a clean, distinct history.

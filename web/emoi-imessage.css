@@ -85,7 +85,10 @@ body[data-ui-mode=phone] #emoiPhoneView:is(.ep-messages,.ep-im-screen) {
   --im-rule: #e4e4e9;
   --im-blue: #0065d8;
   --im-outgoing: #006ddd;
-  --im-incoming: #e9e9ee;
+  --im-bubble-out: rgba(160, 167, 186, .15);
+  --im-bubble-in: rgba(251, 250, 255, .12);
+  --im-rim-out: rgba(255, 255, 255, .45);
+  --im-rim-in: rgba(255, 255, 255, .5);
   background: var(--im-paper);
   color: var(--im-ink);
   isolation: isolate;
@@ -98,7 +101,10 @@ body[data-ui-mode=phone][data-dark=true] #emoiPhoneView:is(.ep-messages,.ep-im-s
   --im-rule: #333338;
   --im-blue: #70b5ff;
   --im-outgoing: #076bd4;
-  --im-incoming: #2c2c30;
+  --im-bubble-out: rgba(144, 165, 207, .18);
+  --im-bubble-in: rgba(242, 246, 255, .10);
+  --im-rim-out: rgba(233, 241, 255, .31);
+  --im-rim-in: rgba(244, 246, 255, .35);
 }
 .ep-messages-top {
   display: flex;
@@ -192,9 +198,40 @@ body[data-ui-mode=phone] #emoiPhoneView .ep-im-conversation-start { margin: 10px
 body[data-ui-mode=phone] #emoiPhoneView .ep-im-conversation-start[hidden] { display: none; }
 body[data-ui-mode=phone] #emoiPhoneView .ep-im-conversation-start :is(p,small) { color: var(--im-muted); text-shadow: none; }
 body[data-ui-mode=phone] #emoiPhoneView .ep-im-history { gap: 8px; }
-body[data-ui-mode=phone] #emoiPhoneView .ep-im-bubble { font-size: 16px; line-height: 1.36; border: 0; box-shadow: none; text-shadow: none; }
-body[data-ui-mode=phone] #emoiPhoneView .ep-im-mine .ep-im-bubble { background: var(--im-outgoing); color: #fff; border-bottom-right-radius: 5px; }
-body[data-ui-mode=phone] #emoiPhoneView .ep-im-theirs .ep-im-bubble { background: var(--im-incoming); color: var(--im-ink); border-bottom-left-radius: 5px; }
+body[data-ui-mode=phone] #emoiPhoneView.ep-im-screen {
+  background-image: linear-gradient(#f6f8fcad, #e9edf4a8),
+    var(--emoi-active-wallpaper, url('assets/water-light.webp'));
+  background-size: cover;
+  background-position: center;
+}
+body[data-ui-mode=phone][data-dark=true] #emoiPhoneView.ep-im-screen {
+  background-image: linear-gradient(#131a25cc, #10141dbf),
+    var(--emoi-active-wallpaper, url('assets/water-light.webp'));
+}
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-bubble {
+  padding: 5px 10px;
+  border-radius: 10px;
+  color: var(--im-ink);
+  font-size: 16px;
+  line-height: 1.42;
+  box-shadow: 0 4px 6px #0000000d, inset 0 1px 1px #ffffff26;
+  -webkit-backdrop-filter: blur(1.5px) contrast(1.02) brightness(1.02);
+  backdrop-filter: blur(1.5px) contrast(1.02) brightness(1.02);
+  text-shadow: none;
+}
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-mine .ep-im-bubble {
+  background: var(--im-bubble-out);
+  border: 1px solid var(--im-rim-out);
+  border-bottom-right-radius: 4px;
+}
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-theirs .ep-im-bubble {
+  background: var(--im-bubble-in);
+  border: 1px solid var(--im-rim-in);
+  border-bottom-left-radius: 4px;
+}
+@media (forced-colors: active) {
+  body[data-ui-mode=phone] #emoiPhoneView .ep-im-bubble { forced-color-adjust: auto; }
+}
 .ep-im-date { align-self: center; margin: 10px 0; }
 .ep-im-date,.ep-im-sender { color: var(--im-muted); font-size: 11px; }
 .ep-im-sender { margin-left: 8px; }
