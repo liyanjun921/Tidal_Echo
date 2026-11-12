@@ -47,7 +47,7 @@ def main():
             wait(driver,lambda d:d.execute_script("return !!window.EmoiUiMode && !!window.EmoiApp"))
             wait(driver,lambda d:d.execute_script("return document.body.dataset.phoneScreen==='home'"))
             assert driver.execute_script("return document.body.dataset.uiMode")=="phone"
-            assert driver.execute_script("return document.querySelectorAll('.ep-app').length")==8
+            assert driver.execute_script("return document.querySelectorAll('.ep-app').length")==9
             assert driver.execute_script("return document.documentElement.scrollWidth <= window.innerWidth+1"),"390px horizontal overflow"
             assert driver.find_element(By.ID,"emoiPhone").is_displayed()
             assert not driver.find_elements(By.CSS_SELECTOR,'.ep-statusbar,.ep-home-indicator'),"Fake phone furniture must not exist"
@@ -55,12 +55,34 @@ def main():
             inner_width=driver.execute_script("return window.innerWidth")
             assert abs(mobile_bounds["left"])<=1 and abs(mobile_bounds["right"]-inner_width)<=2,mobile_bounds
             assert driver.execute_script("return getComputedStyle(document.querySelector('#emoiPhone')).borderTopWidth")=="0px"
-            ready = "return document.querySelectorAll('[data-ep-optics-ready]').length === 17"
-            snapshot = "return document.querySelector('.ep-hero-widget canvas')?.toDataURL()"
+            ready = "return document.querySelectorAll('[data-ep-optics]').length > 0 && document.querySelectorAll('[data-ep-optics-ready]').length === document.querySelectorAll('[data-ep-optics]').length"
+            snapshot = "return document.querySelector('[data-widget=calendar] canvas')?.toDataURL()"
             wait(driver, lambda d: d.execute_script(ready))
             initial = driver.execute_script(snapshot)
             assert initial and initial.startswith("data:image/png")
+            assert driver.execute_script("""
+              return Array.from(document.querySelectorAll('.ep-optical-canvas')).every(canvas => {
+                const ctx = canvas.getContext('2d');
+                const center = ctx.getImageData(canvas.width >> 1, canvas.height >> 1, 1, 1).data[3];
+                return center > 20 && center < 85 && ctx.getImageData(0, 0, 1, 1).data[3] === 0;
+              });
+            """), "Glass must transmit the wallpaper and clip its corners"
             driver.save_screenshot(str(OUT/"responsive-home-390.png"))
+            driver.find_element(By.CSS_SELECTOR, '.ep-home-edit').click()
+            driver.find_element(By.CSS_SELECTOR, '[data-widget=calendar]').click()
+            driver.find_element(By.XPATH, "//button[.='放大']").click()
+            assert driver.find_element(By.CSS_SELECTOR, '[data-widget=calendar][data-wide]')
+            driver.find_element(By.XPATH, "//button[.='后移']").click()
+            assert driver.find_element(By.CSS_SELECTOR, '.ep-home-grid > :first-child').get_attribute('data-home-id') == 'widget:reading'
+            driver.find_element(By.XPATH, "//button[.='移除']").click()
+            assert not driver.find_elements(By.CSS_SELECTOR, '[data-widget=calendar]')
+            driver.find_element(By.XPATH, "//button[.='添加小组件']").click()
+            driver.find_element(By.XPATH, "//dialog[@aria-label='添加小组件']//button[.='日历']").click()
+            driver.find_element(By.CSS_SELECTOR, '.ep-home-edit').click()
+            driver.refresh()
+            wait(driver, lambda d: d.execute_script(ready))
+            assert driver.find_element(By.CSS_SELECTOR, '[data-widget=calendar]:first-child')
+            assert not driver.find_elements(By.CSS_SELECTOR, '[data-widget=calendar][data-wide]')
             picker = 'button[aria-label="更换桌面壁纸"]'
             driver.find_element(By.CSS_SELECTOR, picker).click()
             driver.find_element(By.XPATH, "//button[contains(.,'流动水光')]").click()
@@ -69,14 +91,15 @@ def main():
             driver.find_element(By.CSS_SELECTOR, picker).click()
             driver.find_element(By.XPATH, "//button[contains(.,'空白画纸')]").click()
             wait(driver, lambda d: d.execute_script("""
-              return document.querySelector('.ep-hero-widget').classList.contains('ep-on-light') &&
+              return document.querySelector('[data-widget=calendar]').classList.contains('ep-on-light') &&
                 !document.querySelector('[data-ep-optics-ready]');
             """))
             driver.save_screenshot(str(OUT/"phone-home-paper-390.png"))
             driver.find_element(By.CSS_SELECTOR, picker).click()
             driver.find_element(By.CSS_SELECTOR, 'input[aria-label="上传当前页面壁纸"]').send_keys(
-                str(WEB/"assets/lily-water.webp"))
+                os.environ.get("EMOI_TEST_WALLPAPER", str(WEB/"assets/lily-water.webp")))
             wait(driver, lambda d: d.execute_script(ready) and d.execute_script("return document.body.dataset.emoiWall") == "custom")
+            driver.save_screenshot(str(OUT/"phone-home-custom-390.png"))
             driver.refresh()
             wait(driver, lambda d: d.execute_script(ready) and d.execute_script("return document.body.dataset.emoiWall") == "custom")
             driver.find_element(By.CSS_SELECTOR, picker).click()
@@ -181,11 +204,15 @@ def main():
             frame=driver.execute_script("return document.querySelector('#emoiPhone').getBoundingClientRect().toJSON()")
             assert abs(frame['left'])<=1 and abs(frame['right']-viewport)<=2,frame
             assert driver.execute_script("return getComputedStyle(document.querySelector('#emoiPhone')).borderTopWidth")=="0px"
-            columns=driver.execute_script("return getComputedStyle(document.querySelector('.ep-home-scroll')).gridTemplateColumns")
-            assert len(columns.split())==4,f"Expected fluid desktop app launcher columns, got {columns}"
+            columns=driver.execute_script("return getComputedStyle(document.querySelector('.ep-home-grid')).gridTemplateColumns")
+            assert len(columns.split())==8,f"Expected fluid desktop app launcher columns, got {columns}"
             assert driver.execute_script("return document.documentElement.scrollWidth <= window.innerWidth+1")
             wait(driver, lambda d: d.execute_script(ready))
             driver.save_screenshot(str(OUT/"responsive-desktop-1440.png"))
+            driver.set_window_size(820, 1180)
+            wait(driver, lambda d: len(d.execute_script(
+                "return getComputedStyle(document.querySelector('.ep-home-grid')).gridTemplateColumns").split()) == 6)
+            driver.save_screenshot(str(OUT/"responsive-tablet-820.png"))
 
             # Settings allow both independent visual modes.
             driver.find_element(By.CSS_SELECTOR,'.ep-dock button[aria-label="设置"]').click()

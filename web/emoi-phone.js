@@ -139,6 +139,7 @@ function setMode(next){
  if(next==='phone'){const menu=$('#moreMenu');if(menu)menu.hidden=true;const drawer=$('#drawerWrap');if(drawer)drawer.hidden=true;const workspace=$('#workspaceDialog');if(workspace?.open)workspace.close();openHome()}else{phone.hidden=true;document.getElementById('app').inert=false;document.getElementById('app').removeAttribute('aria-hidden');}
 }
 function setScreen(next){
+ if(next!=='home'){homeEditing=false;homeSelection=null}
  screen=next;
  document.body.dataset.phoneScreen=next;
  phone.hidden=next==='legacy'||mode!=='phone';
@@ -158,46 +159,199 @@ function header(title,onBack){
  return el;
 }
 function view(){const v=$('#emoiPhoneView');v.replaceChildren();return v}
+const HOME_LAYOUT_KEY='emoi-home-layout-v1';
+const homeWidgets={
+ calendar:{label:'日历', icon:'calendar', markup:'<span class="ep-widget-month" data-ep-date></span><strong class="ep-widget-day" data-ep-day></strong><span data-ep-weekday></span>'},
+ reading:{label:'共读', icon:'reading', markup:'<strong>书房</strong><span>继续共读</span>'},
+ room:{label:'Room', icon:'room', markup:'<strong>自主空间</strong><span>打开 Room</span>'}
+};
+const widgetId=id=>'widget:'+id;
+const homeApps=apps.filter(app=>!['more','settings'].includes(app.id));
+const initialHomeLayout=[
+ {id:widgetId('calendar'),wide:false},{id:widgetId('reading'),wide:false},
+ ...homeApps.map(({id})=>({id,wide:false}))
+];
+let homeLayout=readHomeLayout();
+let homeEditing=false, homeSelection=null;
+
+function readHomeLayout(){
+ try{
+  const stored=JSON.parse(localStorage.getItem(HOME_LAYOUT_KEY));
+  if(!Array.isArray(stored))return initialHomeLayout.slice();
+  const allowed=new Set([...homeApps.map(({id})=>id),...Object.keys(homeWidgets).map(widgetId)]);
+  const items=[];
+  for(const item of stored){
+   if(!allowed.delete(item?.id))continue;
+   items.push({id:item.id,wide:item.wide===true && item.id.startsWith('widget:')});
+  }
+  for(const {id} of homeApps)if(allowed.has(id))items.push({id,wide:false});
+  return items;
+ }catch{return initialHomeLayout.slice()}
+}
+
+function homeTextButton(label,handler){
+ const button=create('button','ep-home-control',label);
+ button.type='button';button.onclick=handler;
+ return button;
+}
+
+function editHome(enabled,selection=null){
+ homeEditing=enabled;homeSelection=selection;
+ openHome();
+ (selection?phone.querySelector('[data-home-id="'+selection+'"]'):null)?.focus({preventScroll:true});
+}
+
+function commitHomeLayout(items,selection){
+ if(!save(HOME_LAYOUT_KEY,items))return;
+ homeLayout=items;
+ editHome(true,selection);
+}
+
+function moveHomeItem(id,index){
+ const items=homeLayout.slice();
+ const current=items.findIndex(item=>item.id===id);
+ if(current<0||current===index||index<0||index>=items.length)return;
+ const [item]=items.splice(current,1);
+ items.splice(index,0,item);
+ commitHomeLayout(items,id);
+}
+
+function openWidgetPicker(){
+ const picker=create('dialog','ep-home-picker');
+ picker.setAttribute('aria-label','添加小组件');
+ picker.append(create('h2','','添加小组件'));
+ for(const [id,{label}] of Object.entries(homeWidgets)){
+  const button=homeTextButton(label,()=>{
+   const key=widgetId(id);
+   picker.close();
+   commitHomeLayout([{id:key,wide:false},...homeLayout],key);
+  });
+  button.disabled=homeLayout.some(item=>item.id===widgetId(id));
+  picker.append(button);
+ }
+ picker.append(homeTextButton('关闭',()=>picker.close()));
+ picker.addEventListener('close',()=>picker.remove(),{once:true});
+ document.body.append(picker);picker.showModal();
+}
+
+function bindHomeGesture(button,id){
+ let press,ignoreClick=false;
+ const clear=()=>{if(press)clearTimeout(press.timer);press=null};
+ button.addEventListener('pointerdown',event=>{
+  if(!event.isPrimary||event.button!==0)return;
+  ignoreClick=false;
+  press={x:event.clientX,y:event.clientY,id:event.pointerId,dragging:false};
+  if(!homeEditing)press.timer=setTimeout(()=>{
+   clear();editHome(true,id);
+  },500);
+  else button.setPointerCapture(event.pointerId);
+ });
+ button.addEventListener('pointermove',event=>{
+  if(!press||press.id!==event.pointerId||Math.hypot(event.clientX-press.x,event.clientY-press.y)<9&&!press.dragging)return;
+  if(!homeEditing){clear();return}
+  press.dragging=true;
+  button.classList.add('ep-home-dragging');
+  const target=document.elementFromPoint(event.clientX,event.clientY)?.closest('[data-home-id]');
+  const grid=button.parentElement;
+  grid.querySelector('.ep-home-drop')?.classList.remove('ep-home-drop');
+  press.target=target?.parentElement===grid&&target!==button?target:null;
+  press.target?.classList.add('ep-home-drop');
+ });
+ function finish(event){
+  if(!press||press.id!==event.pointerId)return;
+  const {dragging,target}=press;
+  clear();
+  button.classList.remove('ep-home-dragging');
+  target?.classList.remove('ep-home-drop');
+  if(!dragging)return;
+  ignoreClick=true;
+  if(event.type==='pointerup'&&target)moveHomeItem(id,homeLayout.findIndex(item=>item.id===target.dataset.homeId));
+ }
+ button.addEventListener('pointerup',finish);
+ button.addEventListener('pointercancel',finish);
+ button.addEventListener('lostpointercapture',finish);
+ button.addEventListener('pointerleave',()=>{if(!homeEditing)clear()});
+ button.addEventListener('contextmenu',event=>event.preventDefault());
+ button.addEventListener('click',event=>{
+  if(ignoreClick&&event.detail){ignoreClick=false;return}
+  if(homeEditing)editHome(true,id);
+  else openApp(id.replace(/^widget:/,''));
+ });
+}
+
 function openHome(){
  setScreen('home');
+ const previousScroll=phone.querySelector('.ep-home-scroll')?.scrollTop||0;
  const root=view();root.className='ep-view ep-home';
- const headerEl=create('header','ep-home-top');
+ root.toggleAttribute('data-home-editing',homeEditing);
+ const top=create('header','ep-home-top');
  const clock=create('time','ep-desktop-clock');clock.setAttribute('data-ep-clock','');
- const wallpaper=actionButton('更换桌面壁纸','photo',()=>window.EmoiWallpapers?.open());
+ const actions=create('div','ep-home-actions');
+ const wallpaper=actionButton('更换桌面壁纸','photo',()=>window.EmoiWallpapers?.open(),'ep-home-control ep-home-square');
  wallpaper.setAttribute('data-ep-optics','');
- headerEl.append(clock,wallpaper);root.append(headerEl);
- const scroll=create('div','ep-home-scroll');
- const calendar=create('div','ep-calendar-widget');
- const card=create('button','ep-hero-widget');card.type='button';card.setAttribute('data-ep-optics','');
- card.setAttribute('aria-label','打开日历');
- card.innerHTML='<span class="ep-calendar-date"><span data-ep-date></span><strong data-ep-day></strong></span><span class="ep-calendar-info"><strong data-ep-weekday></strong><span>查看日程 '+icon('right')+'</span></span>';
- card.onclick=()=>openApp('calendar');
- calendar.append(card,create('span','ep-widget-label','日历'));
- scroll.append(calendar);
- const grid=create('div','ep-app-grid');
- for(const a of apps.filter(a=>!['settings','checklist','more'].includes(a.id))){
-  const b=create('button','ep-app');b.type='button';b.dataset.epApp=a.id;
-  b.innerHTML='<span class="ep-app-icon">'+homeIcon(a.icon)+'</span><span class="ep-app-label"></span>';
-  b.querySelector('.ep-app-label').textContent=a.label;
-  b.querySelector('.ep-app-icon').setAttribute('data-ep-optics','');
-  b.addEventListener('click',()=>openApp(a.id));grid.append(b);
+ actions.append(wallpaper);
+ if(homeEditing)actions.append(homeTextButton('添加小组件',openWidgetPicker));
+ const edit=homeTextButton(homeEditing?'完成':'编辑',()=>{
+  editHome(!homeEditing);
+  phone.querySelector('.ep-home-edit').focus({preventScroll:true});
+ });
+ edit.classList.add('ep-home-edit');edit.setAttribute('aria-pressed',String(homeEditing));
+ actions.append(edit);top.append(clock,actions);root.append(top);
+ if(homeEditing){
+  const bar=create('div','ep-home-editbar');
+  const index=homeLayout.findIndex(item=>item.id===homeSelection);
+  if(index<0)bar.append(create('span','','拖动图标或小组件，也可点选后移动'));
+  else{
+   const selected=homeLayout[index];
+   const widget=homeWidgets[selected.id.split(':')[1]];
+   for(const [label,offset] of [['前移',-1],['后移',1]]){
+    const control=homeTextButton(label,()=>moveHomeItem(selected.id,index+offset));
+    control.disabled=!homeLayout[index+offset];bar.append(control);
+   }
+   if(widget){
+    bar.append(homeTextButton(selected.wide?'缩小':'放大',()=>commitHomeLayout(
+     homeLayout.map(item=>item===selected?{...item,wide:!item.wide}:item),selected.id)));
+    bar.append(homeTextButton('移除',()=>commitHomeLayout(homeLayout.filter(item=>item!==selected),null)));
+   }
+  }
+  root.append(bar);
  }
- scroll.append(grid);
- const reading=create('div','ep-reading-widget');
- const shortcut=actionButton('打开共读书房','reading',()=>openApp('reading'),'ep-reading-lens');
- shortcut.setAttribute('data-ep-optics','');
- shortcut.innerHTML='<span>'+homeIcon('reading')+'<strong>书房</strong><small>继续共读</small></span>';
- reading.append(shortcut,create('span','ep-widget-label','共读'));
- scroll.append(reading);
- root.append(scroll);
- const search=actionButton('搜索联系人','search',openContacts,'ep-home-search');
- search.setAttribute('data-ep-optics','');
+ const scroll=create('div','ep-home-scroll');
+ const grid=create('div','ep-home-grid');
+ for(const {id,wide} of homeLayout){
+  const widget=homeWidgets[id.split(':')[1]];
+  const button=create('button',widget?'ep-home-widget':'ep-app');
+  button.type='button';button.dataset.homeId=id;
+  if(homeEditing)button.setAttribute('aria-pressed',String(homeSelection===id));
+  if(widget){
+   button.dataset.widget=id.split(':')[1];
+   button.toggleAttribute('data-wide',wide);
+   button.setAttribute('data-ep-optics','');
+   button.setAttribute('aria-label',id===widgetId('reading')?'打开共读书房':'打开'+widget.label);
+   button.innerHTML='<span class="ep-widget-copy">'+widget.markup+'</span><span class="ep-widget-glyph">'+icon(widget.icon)+'</span>';
+  }else{
+   const app=homeApps.find(item=>item.id===id);
+   button.dataset.epApp=id;
+   const lens=create('span','ep-app-icon');lens.setAttribute('data-ep-optics','');lens.innerHTML=homeIcon(app.icon);
+   button.append(lens,create('span','ep-app-label',app.label));
+  }
+  bindHomeGesture(button,id);grid.append(button);
+ }
+ scroll.append(grid);root.append(scroll);
+ scroll.scrollTop=previousScroll;
+ const bottom=create('div','ep-home-bottom');
+ const search=actionButton('搜索联系人','search',openContacts,'ep-home-control ep-home-search');
  search.innerHTML='<span>'+icon('search')+'搜索</span>';
- root.append(search);
+ search.setAttribute('data-ep-optics','');
  const dock=create('nav','ep-dock');dock.setAttribute('aria-label','常用应用');
- for(const id of dockIds){const a=apps.find(x=>x.id===id);const b=create('button','ep-dock-app');b.type='button';b.setAttribute('aria-label',a.label);
- b.innerHTML='<span class="ep-dock-icon">'+homeIcon(a.icon)+'</span>';b.querySelector('.ep-dock-icon').setAttribute('data-ep-optics','');b.addEventListener('click',()=>openApp(id));dock.append(b)}
- dock.setAttribute('data-ep-optics','');root.append(dock);
+ for(const id of dockIds){
+  const app=apps.find(item=>item.id===id);
+  const button=actionButton(app.label,app.icon,()=>openApp(id),'ep-dock-app');
+  button.innerHTML='<span class="ep-dock-icon" data-ep-optics>'+homeIcon(app.icon)+'</span>';
+  dock.append(button);
+ }
+ dock.setAttribute('data-ep-optics','');
+ bottom.append(search,dock);root.append(bottom);
  updateClock();
 }
 function listItem(id,title,subtitle,iconName,handler){

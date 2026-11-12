@@ -19,7 +19,7 @@
       gl_Position = vec4(position, 0.0, 1.0);
     }`;
   const fragment = `
-    precision mediump float;
+    precision highp float;
     varying vec2 uv;
     uniform sampler2D wallpaper;
     uniform vec4 crop;
@@ -37,29 +37,25 @@
       vec2 n = vec2(roundBox(p + vec2(0.5, 0.0), halfSize, r) - d,
                     roundBox(p + vec2(0.0, 0.5), halfSize, r) - d);
       n = normalize(n + vec2(0.0001));
-      float bevel = smoothstep(-r * 0.72, -1.0, d);
+      float bevel = smoothstep(-r * 0.75, -0.8, d);
       float wave = sin(uv.y * 12.0 + uv.x * 3.0) * cos(uv.x * 8.0);
-      vec2 warped = uv - n * bevel * bevel * depth / size
-                      + (uv - 0.5) * 0.023 + vec2(wave, -wave) * bevel / size;
-      vec2 scene = crop.xy + warped * crop.zw;
-      vec2 blur = crop.zw / size * (0.65 + bevel * 0.7);
-      vec3 c = texture2D(wallpaper, scene).rgb * 0.56
-             + texture2D(wallpaper, scene + blur).rgb * 0.22
-             + texture2D(wallpaper, scene - blur).rgb * 0.22;
-      float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
-      c = clamp(mix(vec3(luma), c, 1.15), 0.0, 1.0);
+      vec2 shift = -n * bevel * bevel * depth
+                   + (uv - 0.5) * 0.55 + vec2(wave, -wave) * (0.12 + 0.4 * bevel);
+      vec3 c = texture2D(wallpaper, crop.xy + (uv + shift / size) * crop.zw).rgb;
       float light = dot(n, normalize(vec2(-0.65, -1.0)));
-      float glint = exp(-pow((d + 1.05) / 0.78, 2.0));
-      float shoulder = exp(-pow((d + 3.6) / 2.2, 2.0));
-      c = mix(c * (1.0 - bevel * 0.14), vec3(1.0),
-              0.035 + glint * (0.15 + 0.48 * max(light, 0.0) + 0.20 * max(-light, 0.0))
-              + shoulder * (0.08 + 0.09 * abs(light)));
-      gl_FragColor = vec4(c, (1.0 - smoothstep(-1.0, 0.25, d)) * 0.97);
+      float rim = (d + 1.1) / 0.72;
+      float shoulder = (d + 3.3) / 1.65;
+      float glint = exp(-rim * rim);
+      float inner = exp(-shoulder * shoulder);
+      c = mix(c * (1.0 - inner * 0.12), vec3(1.0),
+        glint * (0.13 + 0.47 * max(light, 0.0) + 0.16 * max(-light, 0.0)));
+      float opacity = (0.19 + 0.52 * bevel) * (1.0 - smoothstep(-1.2, 0.25, d));
+      gl_FragColor = vec4(c, opacity);
     }`;
 
   function createRenderer() {
     const canvas = document.createElement('canvas');
-    const gl = canvas.getContext('webgl', {alpha: true, premultipliedAlpha: false, depth: false, antialias: false});
+    const gl = canvas.getContext('webgl', {alpha: true, premultipliedAlpha: false, depth: false, antialias: false, preserveDrawingBuffer: true});
     if (!gl) return null;
     const program = gl.createProgram();
     for (const [type, code] of [[gl.VERTEX_SHADER, vertex], [gl.FRAGMENT_SHADER, fragment]]) {
@@ -124,15 +120,15 @@
   function foreground(node, rect, box) {
     if (!colors) return;
     const at = (value, total) => Math.max(0, Math.min(47, Math.floor(value / total * 48)));
-    let bright = 0, count = 0;
+    let brightness = 0, count = 0;
     for (const y of [0.25, 0.5, 0.75]) for (const x of [0.2, 0.5, 0.8]) {
       const index = 4 * (at(rect.left - box.left + rect.width * x, box.width)
         + 48 * at(rect.top - box.top + rect.height * y, box.height));
       const light = colors[index] * 0.213 + colors[index + 1] * 0.715 + colors[index + 2] * 0.072;
-      bright += light > 173;
+      brightness += light;
       count++;
     }
-    node.classList.toggle('ep-on-light', bright >= count * 0.78);
+    node.classList.toggle('ep-on-light', brightness / count > 160);
   }
 
   function render() {
@@ -189,8 +185,10 @@
     }
     if (!active.length) return;
     const scale = Math.min(devicePixelRatio || 1, 1.5);
-    canvas.width = Math.max(1, ...active.map(({rect}) => Math.ceil(rect.width * scale)));
-    canvas.height = Math.max(1, ...active.map(({rect}) => Math.ceil(rect.height * scale)));
+    const width = Math.max(...active.map(({rect}) => Math.ceil(rect.width * scale)));
+    const height = Math.max(...active.map(({rect}) => Math.ceil(rect.height * scale)));
+    if (canvas.width !== width) canvas.width = width;
+    if (canvas.height !== height) canvas.height = height;
     for (const {node, rect} of active) {
       const w = Math.ceil(rect.width * scale), h = Math.ceil(rect.height * scale);
       let layer = targets.get(node);
@@ -209,7 +207,7 @@
         (rect.top - box.top - scene.top) / scene.height, rect.width / scene.width, rect.height / scene.height);
       gl.uniform2f(uniforms.size, rect.width, rect.height);
       gl.uniform1f(uniforms.radius, parseFloat(getComputedStyle(node).borderTopLeftRadius) || 0);
-      gl.uniform1f(uniforms.depth, Math.min(19, Math.min(rect.width, rect.height) * 0.24));
+      gl.uniform1f(uniforms.depth, Math.min(13, Math.min(rect.width, rect.height) * 0.16));
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       const ctx = layer.getContext('2d');
       ctx.clearRect(0, 0, w, h);
