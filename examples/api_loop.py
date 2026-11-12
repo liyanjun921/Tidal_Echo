@@ -1980,12 +1980,20 @@ async def loop_contact_reply(request: Request):
     if not isinstance(body, dict) or body.get("route") not in ("default", "gpt", "claude"):
         raise HTTPException(422, "invalid contact model route")
     agent = body["route"]
-    if agent == "default":
+    # Resolve the same per-agent model route as the ordinary GPT/Claude chat.
+    # ContextVar reset is essential: concurrent contacts must never share
+    # another contact's model selection or identity.
+    agent_token = CURRENT_AGENT.set("" if agent == "default" else agent)
+    try:
         route = next(iter(main_chain()), {})
-    else:
-        route = load_config().get("agents", {}).get(agent, {})
-    if route.get("connection_mode", "api") != "api" or route.get("protocol") not in (None, "", "openai", "anthropic") or not all(route.get(key) for key in ("url", "key", "model")):
-        raise HTTPException(503, "请先配置此联系人绑定的模型 API")
+    finally:
+        CURRENT_AGENT.reset(agent_token)
+    is_gpt_plan = agent == "gpt" and route.get("protocol") == "chatgpt_plan"
+    if is_gpt_plan:
+        if not route.get("model"):
+            raise HTTPException(503, "请先在 GPT 设置中选择可用的 ChatGPT 订阅模型")
+    elif route.get("protocol") not in (None, "", "openai", "anthropic") or not all(route.get(key) for key in ("url", "key", "model")):
+        raise HTTPException(503, "请先配置此联系人绑定的模型连接")
     rows = body.get("history")
     if not isinstance(rows, list) or not rows:
         raise HTTPException(422, "invalid conversation history")
@@ -2004,7 +2012,14 @@ async def loop_contact_reply(request: Request):
             speaker = str(row.get("name") or "用户")[:60]
             messages.append({"role": "user", "content": f"{speaker}：{text}"})
     try:
-        result = await asyncio.wait_for(complete_chat(route, messages, None), timeout=26)
+        if is_gpt_plan:
+            # Reuse the official subscription adapter; never fall back to a
+            # previously saved API key when this mode is selected.
+            result = await asyncio.wait_for(plan_chat(route, messages, None), timeout=120)
+        else:
+            result = await asyncio.wait_for(complete_chat(route, messages, None), timeout=26)
+    except PlanError as exc:
+        raise HTTPException(exc.status if 400 <= exc.status < 600 else 502, exc.message) from None
     except (ModelError, httpx.HTTPError, TimeoutError, ValueError):
         raise HTTPException(502, "联系人模型回复失败") from None
     text = result["text"][:10000].strip()

@@ -2,7 +2,7 @@
 
 Every route requires the existing relay owner bearer authentication.
 Creates additive tables; legacy gpt/claude/group messages are untouched.
-Replies use explicit API bindings and the history of this conversation only.
+Replies use explicit per-agent model bindings and the history of this conversation only.
 """
 from __future__ import annotations
 
@@ -122,7 +122,7 @@ def register(app, relay):
         completed = 0
         try:
             url = relay["loop_base_url"]() + "/loop/contact-reply"
-            async with httpx.AsyncClient(timeout=31, trust_env=False) as client:
+            async with httpx.AsyncClient(timeout=135, trust_env=False) as client:
                 for recipient in recipients:
                     with connect(path) as db:
                         active = {m["id"]: m for m in reply_targets(db, cid)}

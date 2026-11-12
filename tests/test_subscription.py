@@ -198,6 +198,89 @@ class SubscriptionTests(unittest.TestCase):
             self.assertEqual(client.post("/loop/agents", json={"agent": "claude", "connection_mode": "chatgpt_plan"}).status_code, 422)
             self.assertFalse(client.get("/loop/subscriptions").json()["claude"]["ready"])
 
+    def test_contact_gpt_uses_subscription_route_without_api_fallback(self):
+        loop = fixtures.loop
+        with TestClient(loop.app) as client:
+            # Keep the old API values deliberately: subscription must still win.
+            response = client.post("/loop/agents", json={
+                "agent": "gpt", "connection_mode": "api",
+                "url": "https://example.invalid/v1", "key": "old-key-marker",
+                "model": "old-api-model", "protocol": "openai"
+            })
+            self.assertEqual(response.status_code, 200, response.text)
+            response = client.post("/loop/agents", json={
+                "agent": "gpt", "connection_mode": "chatgpt_plan",
+                "subscription_model": "available-model"
+            })
+            self.assertEqual(response.status_code, 200, response.text)
+            seen = []
+
+            async def subscription_reply(route, messages, tools):
+                seen.append((route, messages, tools))
+                return {"text": "订阅通道的真实测试替身"}
+
+            with patch.object(loop, "plan_chat", side_effect=subscription_reply) as subscribed:
+                with patch.object(loop, "complete_chat") as api:
+                    response = client.post("/loop/contact-reply", json={
+                        "route": "gpt", "contact_id": "contact-one",
+                        "name": "甲", "notes": "只属于甲的设定",
+                        "history": [{"author": "human", "name": "我", "text": "你好"}]
+                    })
+                    self.assertEqual(response.status_code, 200, response.text)
+                    self.assertEqual(response.json()["text"], "订阅通道的真实测试替身")
+                    subscribed.assert_called_once()
+                    api.assert_not_called()
+            self.assertEqual(seen[0][0]["protocol"], "chatgpt_plan")
+            self.assertEqual(seen[0][0]["model"], "available-model")
+            self.assertIsNone(seen[0][2])
+            self.assertIn("只属于甲的设定", seen[0][1][0]["content"])
+            self.assertEqual(loop.CURRENT_AGENT.get(), "")
+
+    def test_contact_subscription_error_does_not_fall_back_to_api(self):
+        loop = fixtures.loop
+        with TestClient(loop.app) as client:
+            self.assertEqual(client.post("/loop/agents", json={
+                "agent": "gpt", "connection_mode": "chatgpt_plan",
+                "subscription_model": "available-model"
+            }).status_code, 200)
+
+            async def unavailable(*args, **kwargs):
+                raise auth.PlanError(429, "套餐使用额度已达上限")
+
+            with patch.object(loop, "plan_chat", side_effect=unavailable):
+                with patch.object(loop, "complete_chat") as api:
+                    response = client.post("/loop/contact-reply", json={
+                        "route": "gpt", "contact_id": "contact-one", "name": "甲",
+                        "history": [{"author": "human", "text": "你好"}]
+                    })
+                    self.assertEqual(response.status_code, 429)
+                    self.assertIn("套餐", response.text)
+                    api.assert_not_called()
+
+    def test_contact_gpt_api_still_uses_existing_route(self):
+        loop = fixtures.loop
+        with TestClient(loop.app) as client:
+            self.assertEqual(client.post("/loop/agents", json={
+                "agent": "gpt", "connection_mode": "api",
+                "url": "https://example.invalid/v1", "key": "test-key",
+                "model": "api-model", "protocol": "openai"
+            }).status_code, 200)
+
+            async def api_reply(route, messages, tools):
+                self.assertEqual(route["model"], "api-model")
+                return {"text": "API 通道正常"}
+
+            with patch.object(loop, "plan_chat") as subscribed:
+                with patch.object(loop, "complete_chat", side_effect=api_reply) as api:
+                    response = client.post("/loop/contact-reply", json={
+                        "route": "gpt", "contact_id": "contact-one", "name": "甲",
+                        "history": [{"author": "human", "text": "你好"}]
+                    })
+                    self.assertEqual(response.status_code, 200, response.text)
+                    self.assertEqual(response.json()["text"], "API 通道正常")
+                    api.assert_called_once()
+                    subscribed.assert_not_called()
+
     def test_loopback_callback_completes_without_exposing_credentials(self):
         result = auth.start_login(self.store)
         query = parse_qs(urlsplit(result["authorization_url"]).query)

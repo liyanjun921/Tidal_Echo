@@ -26,7 +26,7 @@ const deliveryLabels={
  local_only:'仅保存在本机 · 尚未发送给 AI',
  stored_not_delivered:'已存入会话 · 未绑定回复模型',
  replying:'等待 AI 回复…', partial:'部分成员未能回复',
- model_failed:'模型回复失败 · 请检查联系人绑定和 API 设置',
+ model_failed:'模型回复失败 · 请检查联系人绑定和模型连接',
  interrupted:'回复因服务重启中断'
 };
 function messageBubble(msg,members,showName){
