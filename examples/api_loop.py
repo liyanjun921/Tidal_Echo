@@ -1973,6 +1973,46 @@ def _atts_from(body: dict[str, Any], msg_id: int | None) -> list[dict[str, Any]]
     return relay_message_attachments(msg_id)
 
 
+@app.post("/loop/contact-reply")
+async def loop_contact_reply(request: Request):
+    """Generate one in-app reply using a contact profile and the supplied chat."""
+    body = await request.json()
+    if not isinstance(body, dict) or body.get("route") not in ("default", "gpt", "claude"):
+        raise HTTPException(422, "invalid contact model route")
+    agent = body["route"]
+    if agent == "default":
+        route = next(iter(main_chain()), {})
+    else:
+        route = load_config().get("agents", {}).get(agent, {})
+    if route.get("connection_mode", "api") != "api" or route.get("protocol") not in (None, "", "openai", "anthropic") or not all(route.get(key) for key in ("url", "key", "model")):
+        raise HTTPException(503, "请先配置此联系人绑定的模型 API")
+    rows = body.get("history")
+    if not isinstance(rows, list) or not rows:
+        raise HTTPException(422, "invalid conversation history")
+    name = str(body.get("name") or "")[:60]
+    notes = str(body.get("notes") or "")[:5000]
+    prompt = (f"你是这场聊天中的{name}。按以下角色档案自然回复。"
+              "只写你自己的下一条消息，不代替其他人发言。\n" + notes)
+    messages = [{"role": "system", "content": prompt}]
+    for row in rows[-40:]:
+        if not isinstance(row, dict):
+            continue
+        text = str(row.get("text") or "")[:3000]
+        if row.get("author") == "contact" and row.get("contact_id") == body.get("contact_id"):
+            messages.append({"role": "assistant", "content": text})
+        else:
+            speaker = str(row.get("name") or "用户")[:60]
+            messages.append({"role": "user", "content": f"{speaker}：{text}"})
+    try:
+        result = await asyncio.wait_for(complete_chat(route, messages, None), timeout=26)
+    except (ModelError, httpx.HTTPError, TimeoutError, ValueError):
+        raise HTTPException(502, "联系人模型回复失败") from None
+    text = result["text"][:10000].strip()
+    if not text:
+        raise HTTPException(502, "联系人模型返回空消息")
+    return {"text": text}
+
+
 @app.post("/loop/chat")
 async def loop_chat(request: Request):
     """Direct chat without the relay round-trip (no streaming, no act chips). Handy for tests."""

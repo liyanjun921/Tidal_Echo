@@ -139,10 +139,12 @@ def main():
             # legacy GPT/Claude room identifiers preserved inside the back end.
             driver.find_element(By.CSS_SELECTOR,'[data-ep-app="chat"]').click()
             wait(driver,lambda d:d.execute_script("return document.body.dataset.phoneScreen==='messages'"))
-            assert "还没有联系人" in driver.find_element(By.ID,"emoiPhoneView").text
+            assert "还没有会话" in driver.find_element(By.ID,"emoiPhoneView").text
             driver.save_screenshot(str(OUT/"phone-messages-empty-390.png"))
 
-            driver.find_element(By.CSS_SELECTOR,'.ep-list-actions .ep-round').click()
+            driver.find_element(By.CSS_SELECTOR,'.ep-messages-top [aria-label="新信息"]').click()
+            driver.find_element(By.XPATH,"//dialog//button[.='前往通讯录']").click()
+            driver.find_element(By.CSS_SELECTOR,'.ep-action-primary').click()
             dlg=driver.find_element(By.ID,"epContactDialog")
             assert dlg.get_attribute("open") is not None
             dlg.find_element(By.CSS_SELECTOR,'input[name="name"]').send_keys("测试联系人")
@@ -163,7 +165,7 @@ def main():
             wait(driver,lambda d:d.execute_script("return document.body.dataset.phoneScreen==='imessage'"))
             self_peer=driver.find_element(By.CSS_SELECTOR,'.ep-im-peer-info strong').text
             assert self_peer=="测试联系人"
-            assert "未连接 AI" in driver.find_element(By.ID,"emoiPhoneView").text
+            assert "消息保存在本机" in driver.find_element(By.ID,"emoiPhoneView").text
             area=driver.find_element(By.CSS_SELECTOR,'.ep-im-composer textarea')
             area.send_keys("这条消息只属于测试联系人")
             driver.find_element(By.CSS_SELECTOR,'.ep-im-submit').click()
@@ -185,19 +187,20 @@ def main():
             assert "这条消息只属于测试联系人" not in driver.find_element(By.CSS_SELECTOR,'.ep-im-history').text
             assert not driver.find_elements(By.CSS_SELECTOR,'.ep-im-history .ep-im-row')
 
-            # A user-created group is a transparent local draft, not a phantom
-            # connected chat or shared memory store.
+            # Two selected contacts create a separate group conversation.
             driver.execute_script("window.EmoiUiMode.openApp('chat')")
-            driver.execute_script("window.EmoiUiMode.openApp('chat')")
-            driver.find_element(By.CSS_SELECTOR,'.ep-quiet-link').click()
+            driver.find_element(By.CSS_SELECTOR,'[aria-label="新信息"]').click()
+            driver.find_element(By.XPATH,"//dialog//button[.='创建群聊']").click()
             group=driver.find_element(By.ID,"epGroupDialog")
             group.find_element(By.CSS_SELECTOR,'input[name="name"]').send_keys("自定义小群")
-            group.find_element(By.CSS_SELECTOR,'.ep-member input[type="checkbox"]').click()
+            for member in group.find_elements(By.CSS_SELECTOR,'.ep-member input[type="checkbox"]'):
+                member.click()
             group.find_element(By.CSS_SELECTOR,'button[type="submit"]').click()
-            wait(driver,lambda d:"自定义小群" in d.find_element(By.ID,"emoiPhoneView").text)
-            assert "群聊草稿" in driver.find_element(By.ID,"emoiPhoneView").text
-            assert len(driver.execute_script("return JSON.parse(localStorage.getItem('emoi-ui-groups-v1'))"))==1
-            driver.save_screenshot(str(OUT/"phone-group-draft-390.png"))
+            wait(driver,lambda d:d.execute_script("return document.body.dataset.phoneScreen==='imessage'"))
+            assert "自定义小群" in driver.find_element(By.ID,"emoiPhoneView").text
+            assert len(driver.execute_script("return JSON.parse(localStorage.getItem('emoi-ui-groups-v1'))[0].members"))==2
+            assert not driver.find_elements(By.CSS_SELECTOR,'.ep-im-history .ep-im-row')
+            driver.save_screenshot(str(OUT/"phone-group-chat-390.png"))
 
             # Existing apps open their real implementations in the phone frame.
             driver.execute_script("window.EmoiUiMode.openHome()")

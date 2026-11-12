@@ -12,6 +12,7 @@ const phone=document.getElementById('emoiPhone');
 if(!phone)return;
 const $=(s,r=document)=>r.querySelector(s);
 const icoPaths={
+  compose:'<path d="M12 4H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-7M10 14l1-4 7-7 3 3-7 7-4 1Z"/>',
   chat:'<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 9 9 0 0 1-4-.95L3 21l1.95-5a9 9 0 1 1 16.05-4.5Z"/>',
   contacts:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   memory:'<path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 3v6h6M7.5 14a5 5 0 0 0 9 2"/><path d="M12 11v4"/>',
@@ -67,8 +68,7 @@ function safeRead(key){
 }
 let contacts=safeRead(CONTACTS_KEY).filter(x=>x&&typeof x.id==='string'&&typeof x.name==='string');
 let groups=safeRead(GROUPS_KEY).filter(x=>x&&typeof x.id==='string'&&typeof x.name==='string');
-const remote={direct:new Map()};
-const modelInactive='尚未绑定独立模型';
+const remote={direct:new Map(),latest:new Map()};
 async function remoteSaveContact(person,isNew){
  if(!window.EmoiRelay?.enabled)return;
  try{
@@ -85,8 +85,8 @@ async function remoteSaveGroup(group,isNew){
  try{
    const path=isNew?'/emoi/v2/conversations':'/emoi/v2/conversations/'+encodeURIComponent(group.id);
    await window.EmoiRelay.json(path,isNew?'POST':'PATCH',{id:group.id,title:group.name,kind:'group',members:group.members});
-   group.remote=true;save(GROUPS_KEY,groups)
- }catch(e){console.warn('Émoi 群聊草稿同步未完成：',e.message)}
+   group.remote=true;return true;
+ }catch(e){console.warn('Émoi 群聊同步未完成：',e.message);return false}
 }
 async function syncRemote(){
  if(!window.EmoiRelay?.enabled)return;
@@ -106,8 +106,13 @@ async function syncRemote(){
   }
   save(CONTACTS_KEY,contacts);
   for(const conv of rooms.conversations||[]){
+    if(conv.latest)remote.latest.set(conv.id,conv.latest);
     if(conv.kind==='direct')for(const id of conv.members||[])remote.direct.set(id,conv.id);
-    if(conv.kind==='group'&&!groups.some(g=>g.id===conv.id))groups.push({id:conv.id,name:conv.title,members:conv.members||[],remote:true});
+    if(conv.kind==='group'){
+     const local=groups.find(g=>g.id===conv.id);
+     if(local)Object.assign(local,{name:conv.title,members:conv.members||[],remote:true});
+     else groups.push({id:conv.id,name:conv.title,members:conv.members||[],remote:true});
+    }
   }
   for(const g of groups){if(!(rooms.conversations||[]).some(c=>c.id===g.id))await remoteSaveGroup(g,true)}
   save(GROUPS_KEY,groups);
@@ -382,25 +387,63 @@ function listItem(id,title,subtitle,iconName,handler){
  b.append(ava,content);const arrow=create('span','ep-row-chevron');arrow.innerHTML=icon('right');b.append(arrow);b.addEventListener('click',handler);return b;
 }
 function openMessages(){
- setScreen('messages');const root=view();root.className='ep-view ep-list-screen';root.append(header('信息',openHome));
- const content=create('div','ep-list-scroll');
- const title=create('div','ep-list-intro');title.append(create('small','','MESSAGES'),create('h2','','对话'));
- content.append(title);
- const topActions=create('div','ep-list-actions');
- topActions.append(actionButton('添加联系人','plus',()=>openContactEditor()));
- const addText=create('button','ep-link','新联系人');addText.type='button';addText.onclick=()=>openContactEditor();topActions.append(addText);
- content.append(topActions);
- const list=create('div','ep-list-panel');
- for(const p of contacts)list.append(listItem(p.id,p.name,modelInactive,'contacts',()=>openContactConversation(p.id)));
- for(const g of groups)list.append(listItem(g.id,g.name,'私人群聊 · '+g.members.length+' 位成员','chat',()=>openGroupConversation(g.id)));
- if(!contacts.length&&!groups.length){
-   const empty=create('div','ep-list-empty');empty.innerHTML='<span class="ep-empty-symbol">'+icon('chat')+'</span><strong>还没有联系人</strong><p>这里不会预先替你创建 GPT 或 Claude。<br>添加属于自己的 AI 联系人，再决定如何连接。</p>';
-   list.append(empty);
+ setScreen('messages');
+ const root=view();root.className='ep-view ep-messages';
+ const top=create('header','ep-messages-top');
+ top.append(actionButton('返回桌面','back',openHome,'ep-messages-action'));
+ const compose=actionButton('新信息','compose',openMessageRecipients,'ep-messages-action');
+ top.append(compose);
+ const list=create('div','ep-messages-list');
+ const heading=create('h1','','信息');
+ const search=create('input','ep-messages-search');search.type='search';search.placeholder='搜索';search.setAttribute('aria-label','搜索会话');
+ const rows=create('div','ep-message-threads');
+ const threads=[
+  ...contacts.map(p=>({id:p.id,name:p.name,kind:'contact',remoteId:remote.direct.get(p.id),open:()=>openContactConversation(p.id)})),
+  ...groups.map(g=>({id:g.id,name:g.name,kind:'group',remoteId:g.id,members:g.members.length,open:()=>openGroupConversation(g.id)}))
+ ].map(thread=>{
+  const saved=remote.latest.get(thread.remoteId);
+  const local=window.EmoiMessageApp?.latest(thread.kind,thread.id);
+  return {...thread,last:local && (!saved || local.created_at>=saved.created_at)?local:saved};
+ }).sort((a,b)=>String(b.last?.created_at||'').localeCompare(String(a.last?.created_at||'')));
+ function renderThreads(){
+  const query=search.value.trim().toLowerCase();
+  const matches=threads.filter(thread=>[thread.name,thread.last?.text].some(text=>text?.toLowerCase().includes(query)));
+  rows.replaceChildren();
+  for(const thread of matches){
+   const row=create('button','ep-message-thread');row.type='button';row.dataset.entry=thread.id;
+   const avatar=create('span','ep-thread-avatar',thread.kind==='contact'?thread.name.slice(0,1):undefined);
+   if(thread.kind==='group')avatar.innerHTML=icon('contacts');else void window.EmoiAvatars?.paint(avatar,thread.id);
+   const copy=create('span','ep-thread-copy');
+   const topLine=create('span','ep-thread-topline');
+   topLine.append(create('strong','',thread.name));
+   if(thread.last?.created_at)topLine.append(create('time','',new Date(thread.last.created_at).toLocaleDateString('zh-CN',{month:'numeric',day:'numeric'})));
+   copy.append(topLine,create('span','ep-thread-preview',thread.last?.text||(thread.kind==='group'?thread.members+' 位成员':'新会话')));
+   row.append(avatar,copy);row.onclick=thread.open;rows.append(row);
+  }
+  if(!matches.length)rows.append(create('p','ep-thread-empty',query?'没有匹配的会话':'还没有会话。点右上角写新信息。'));
  }
- content.append(list);
- const btn=create('button','ep-compat-link','打开原有会话（兼容入口）');btn.type='button';btn.addEventListener('click',openLegacy);content.append(btn);
- const group=create('button','ep-quiet-link');group.innerHTML=icon('plus')+' 创建群聊草稿';group.type='button';group.addEventListener('click',openGroupEditor);content.append(group);
- root.append(content);
+ search.addEventListener('input',renderThreads);renderThreads();
+ list.append(heading,search,rows);
+ const legacy=homeTextButton('原有会话',openLegacy);legacy.className='ep-messages-legacy';
+ list.append(legacy);root.append(top,list);
+}
+
+function openMessageRecipients(){
+ const dialog=create('dialog','ep-edit-dialog ep-message-recipients');
+ dialog.setAttribute('aria-label','新信息');
+ const title=create('header','');title.append(create('strong','','新信息'),actionButton('关闭','x',()=>dialog.close()));
+ const group=homeTextButton('创建群聊',()=>{
+  dialog.close();
+  if(contacts.length<2){openContacts();return}
+  openGroupEditor();
+ });
+ const recipients=create('div','ep-member-list');
+ for(const p of contacts)recipients.append(listItem(p.id,p.name,'','contacts',()=>{dialog.close();openContactConversation(p.id)}));
+ if(contacts.length<2)recipients.append(create('p','ep-help','创建群聊需要至少两位 AI 联系人。'));
+ const manage=homeTextButton('前往通讯录',()=>{dialog.close();openContacts()});
+ dialog.append(title,group,recipients,manage);
+ dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+ document.body.append(dialog);dialog.showModal();
 }
 function openContacts(){
  setScreen('contacts');const root=view();root.className='ep-view ep-list-screen';root.append(header('通讯录',openHome));
@@ -427,7 +470,7 @@ function openContacts(){
  toolbar.append(add,upload,file);intro.append(toolbar);content.append(intro);
  const list=create('div','ep-list-panel');
  if(!contacts.length)list.append(create('p','ep-inline-empty','尚未添加联系人。姓名、头像与个人档案都由你决定。'));
- for(const p of contacts)list.append(listItem(p.id,p.name,'个人资料 · 本机草稿','contacts',()=>openContactDetail(p.id)));
+ for(const p of contacts)list.append(listItem(p.id,p.name,p.model_route?'角色档案 · '+p.model_route:'角色档案','contacts',()=>openContactDetail(p.id)));
  content.append(list);
  content.append(create('p','ep-help','联系人首先保存在本设备；连接私人服务器后同步身份和独立命名空间。模型、OB 与欲望系统运行权限仍要分别接通和验收。'));
  root.append(content);
@@ -440,8 +483,8 @@ function openContactConversation(id){
 function openGroupConversation(id){
  const g=groups.find(x=>x.id===id);if(!g){openMessages();return}
  setScreen('imessage');const root=view();
- const names=(g.members||[]).map(id=>contacts.find(x=>x.id===id)?.name).filter(Boolean);
- window.EmoiMessageApp?.open(root,{kind:'group',item:g,contactNames:names,conversationId:g.remote?g.id:'',goBack:openMessages});
+ const members=(g.members||[]).map(id=>contacts.find(x=>x.id===id)).filter(Boolean);
+ window.EmoiMessageApp?.open(root,{kind:'group',item:g,members,conversationId:g.remote?g.id:'',goBack:openMessages,manage:()=>openGroupDetail(id)});
 }
 function openContactDetail(id){
  const person=contacts.find(x=>x.id===id);if(!person){openContacts();return;}
@@ -451,7 +494,8 @@ function openContactDetail(id){
  const avatar=create('div','ep-profile-avatar');avatar.textContent=person.name.slice(0,1).toUpperCase();
  body.append(avatar,create('h2','',person.name),create('p','ep-subtitle',person.notes||'还没有填写人物简介'));
  const status=create('div','ep-status-card');
- status.innerHTML='<span class="ep-status-dot"></span><div><strong>尚未绑定 AI 服务</strong><p>这是可编辑的联系人档案。聊天、记忆和唤醒不会误接到其他联系人。</p></div>';
+ status.append(create('span','ep-status-dot'),create('strong','',
+  ['default','gpt','claude'].includes(person.model_route)?'回复路由 · '+person.model_route:'尚未绑定 AI 服务'));
  body.append(status);
  const edit=create('button','ep-action-primary','编辑联系人');edit.type='button';edit.onclick=()=>openContactEditor(person.id);body.append(edit);
  const del=create('button','ep-danger-action','删除联系人草稿');del.type='button';del.onclick=()=>{if(!confirm('确认删除这张本机联系人草稿？已有云端数据不会修改。'))return;contacts=contacts.filter(x=>x.id!==id);save(CONTACTS_KEY,contacts);if(window.EmoiRelay?.enabled)void window.EmoiRelay.request('/emoi/v2/contacts/'+encodeURIComponent(id),{method:'DELETE'}).catch(e=>console.warn(e.message));openContacts()};body.append(del);
@@ -460,21 +504,31 @@ function openContactDetail(id){
 }
 function openGroupDetail(id){
  const g=groups.find(x=>x.id===id);if(!g){openMessages();return}
- setScreen('group-detail');const root=view();root.className='ep-view ep-detail-screen';root.append(header('群聊草稿',openMessages));
+ setScreen('group-detail');const root=view();root.className='ep-view ep-detail-screen';root.append(header('群聊',()=>openGroupConversation(id)));
  const body=create('div','ep-detail-body');const av=create('div','ep-profile-avatar');av.innerHTML=icon('chat');body.append(av,create('h2','',g.name));
  const names=g.members.map(id=>contacts.find(x=>x.id===id)?.name).filter(Boolean);
  body.append(create('p','ep-subtitle',names.length?'成员：'+names.join('、'):'尚未添加成员'));
- const status=create('p','ep-help','这是本机群聊草稿，并未创建真实的群聊会话或授权共享记忆。');body.append(status);
+
  const edit=create('button','ep-action-primary','编辑群聊');edit.onclick=()=>openGroupEditor(g.id);body.append(edit);
- const del=create('button','ep-danger-action','删除群聊草稿');del.onclick=()=>{if(!confirm('确认删除这份本机群聊草稿？'))return;groups=groups.filter(x=>x.id!==id);save(GROUPS_KEY,groups);if(window.EmoiRelay?.enabled)void window.EmoiRelay.request('/emoi/v2/conversations/'+encodeURIComponent(id),{method:'DELETE'}).catch(e=>console.warn(e.message));openMessages()};body.append(del);root.append(body);
+ const del=create('button','ep-danger-action','归档群聊');del.onclick=async()=>{
+  if(!confirm('确认归档这个群聊？'))return;
+  if(g.remote && !window.EmoiRelay?.enabled){alert('连接私人服务器后才能归档此群');return}
+  try{if(g.remote)await window.EmoiRelay.request('/emoi/v2/conversations/'+encodeURIComponent(id),{method:'DELETE'})}
+  catch(e){alert('归档失败：'+e.message);return}
+  groups=groups.filter(x=>x.id!==id);save(GROUPS_KEY,groups);openMessages();
+ };body.append(del);root.append(body);
 }
 let contactDialog=null;
-let groupDialog=null;
 function openContactEditor(id=null,prefill=null){
  const p=contacts.find(x=>x.id===id);
  if(contactDialog?.open)contactDialog.close();
  contactDialog=$('#epContactDialog');const form=$('#epContactForm');
- form.reset();form.elements.name.value=p?.name||prefill?.name||'';form.elements.notes.value=p?.notes||prefill?.notes||'';form.elements.model_route.value=p?.model_route||'';
+ form.reset();form.elements.name.value=p?.name||prefill?.name||'';form.elements.notes.value=p?.notes||prefill?.notes||'';const route=form.elements.model_route;
+ for(const option of [...route.options])if(option.dataset.legacy)option.remove();
+ if(p?.model_route && ![...route.options].some(option=>option.value===p.model_route)){
+  const option=create('option','',p.model_route+'（旧别名）');option.value=p.model_route;option.dataset.legacy='';route.append(option);
+ }
+ route.value=p?.model_route||'';
  $('#epContactHeading').textContent=p?'编辑联系人':'添加联系人';
  contactDialog.dataset.editId=p?.id||'';
  contactDialog.showModal();
@@ -486,6 +540,8 @@ function openGroupEditor(id=null){
  if(dlg.open)dlg.close();
  form.reset();form.elements.name.value=g?.name||'';
  dlg.dataset.editId=g?.id||'';
+ $('#epGroupHeading').textContent=g?'编辑群聊':'创建群聊';
+ $('#epGroupError').textContent='';
  const members=$('#epGroupMembers');members.replaceChildren();
  for(const c of contacts){
   const label=create('label','ep-member');
@@ -557,8 +613,8 @@ function openApp(id){
  return launchPage(id);
 }
 function installDialogs(){
- const c=document.createElement('dialog');c.id='epContactDialog';c.className='ep-edit-dialog';c.innerHTML='<form id="epContactForm"><header><strong id="epContactHeading">添加联系人</strong><button type="button" data-ep-close="contact" aria-label="关闭">'+icon('x')+'</button></header><p>每位 AI 都拥有永久独立身份、记忆及欲望命名空间。模型绑定仍需另行完成。</p><label>联系人姓名<input name="name" type="text" required maxlength="50" autocomplete="off" placeholder="自定义名字"></label><label>角色档案 / 人物简介<textarea name="notes" maxlength="5000" rows="4" placeholder="可以导入人物档案或手动填写"></textarea></label><label>头像（仅存当前设备）<input name="avatar" type="file" accept="image/jpeg,image/png,image/webp"></label><label>模型接口别名（可留空）<input name="model_route" maxlength="100" autocomplete="off" placeholder="例如：我自己的云端模型"></label><footer><button type="button" data-ep-close="contact">取消</button><button type="submit">保存联系人</button></footer></form>';
- const g=document.createElement('dialog');g.id='epGroupDialog';g.className='ep-edit-dialog';g.innerHTML='<form id="epGroupForm"><header><strong>创建群聊草稿</strong><button type="button" data-ep-close="group" aria-label="关闭">'+icon('x')+'</button></header><p>仅保存群组名称与成员，尚未连接群聊消息和记忆授权。</p><label>群聊名称<input name="name" required maxlength="50" placeholder="给群聊起个名字"></label><strong>选择联系人</strong><div id="epGroupMembers" class="ep-member-list"></div><footer><button type="button" data-ep-close="group">取消</button><button type="submit">保存群聊</button></footer></form>';
+ const c=document.createElement('dialog');c.id='epContactDialog';c.className='ep-edit-dialog';c.innerHTML='<form id="epContactForm"><header><strong id="epContactHeading">添加联系人</strong><button type="button" data-ep-close="contact" aria-label="关闭">'+icon('x')+'</button></header><p>每位 AI 都拥有永久独立身份、记忆及欲望命名空间。模型绑定仍需另行完成。</p><label>联系人姓名<input name="name" type="text" required maxlength="50" autocomplete="off" placeholder="自定义名字"></label><label>角色档案 / 人物简介<textarea name="notes" maxlength="5000" rows="4" placeholder="可以导入人物档案或手动填写"></textarea></label><label>头像（仅存当前设备）<input name="avatar" type="file" accept="image/jpeg,image/png,image/webp"></label><label>回复模型<select name="model_route"><option value="">不绑定</option><option value="default">默认 API 模型</option><option value="gpt">GPT API</option><option value="claude">Claude API</option></select></label><footer><button type="button" data-ep-close="contact">取消</button><button type="submit">保存联系人</button></footer></form>';
+ const g=document.createElement('dialog');g.id='epGroupDialog';g.className='ep-edit-dialog';g.innerHTML='<form id="epGroupForm"><header><strong id="epGroupHeading">创建群聊</strong><button type="button" data-ep-close="group" aria-label="关闭">'+icon('x')+'</button></header><p>已绑定 API 模型的成员会依次回复群消息。</p><label>群聊名称<input name="name" required maxlength="50" placeholder="给群聊起个名字"></label><strong>选择联系人</strong><div id="epGroupMembers" class="ep-member-list"></div><p id="epGroupError" role="status"></p><footer><button type="button" data-ep-close="group">取消</button><button type="submit">保存群聊</button></footer></form>';
  document.body.append(c,g);
  c.querySelectorAll('[data-ep-close]').forEach(b=>b.onclick=()=>c.close());
  g.querySelectorAll('[data-ep-close]').forEach(b=>b.onclick=()=>g.close());
@@ -574,13 +630,30 @@ function installDialogs(){
   }).catch(err=>alert('头像处理失败：'+err.message));
   void remoteSaveContact(person,!id);id?openContactDetail(id):openContacts();
  };
- g.querySelector('form').onsubmit=e=>{
+ g.querySelector('form').onsubmit=async e=>{
   e.preventDefault();const form=e.currentTarget,name=form.elements.name.value.trim();if(!name)return;
   const members=[...form.querySelectorAll('input[name="members"]:checked')].map(x=>x.value);
   const id=g.dataset.editId;
-  if(id){const old=groups.find(x=>x.id===id);if(old)Object.assign(old,{name,members})}
-  else groups.push({id:crypto.randomUUID(),name,members});
-  if(!save(GROUPS_KEY,groups))return;g.close();const saved=groups.find(x=>x.id===(id||groups[groups.length-1]?.id));if(saved)void remoteSaveGroup(saved,!id);id?openGroupDetail(id):openMessages();
+  if(members.length>20||members.length<(id?1:2)){
+   $('#epGroupError').textContent=id?'请选择 1–20 位成员。':'请选择 2–20 位 AI 联系人。';return;
+  }
+  const existing=groups.find(group=>group.id===id);
+  const group={...existing,id:id||crypto.randomUUID(),name,members};
+  const submit=form.querySelector('[type=submit]');submit.disabled=true;
+  if(window.EmoiRelay?.enabled){
+   let synced;
+   try{synced=await remoteSaveGroup(group,!existing?.remote)}
+   finally{submit.disabled=false}
+   if(!synced){$('#epGroupError').textContent='群聊同步失败，请确认私人服务器已连接。';return}
+  }else{
+   submit.disabled=false;
+   if(existing?.remote){$('#epGroupError').textContent='请连接私人服务器后再编辑此群。';return}
+  }
+  const next=existing?groups.map(item=>item.id===id?group:item):[...groups,group];
+  if(!save(GROUPS_KEY,next)&&!group.remote)return;
+  groups=next;
+  if(g.open){g.close();openGroupConversation(group.id)}
+
  };
 }
 function init(){
