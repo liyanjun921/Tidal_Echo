@@ -33,7 +33,6 @@ body[data-ui-mode=phone] .ep-home {
 }
 body[data-ui-mode=phone] .ep-home[data-home-ink=black] {
   --ep-text-home: #111;
-  --ep-ink-shadow: 0 1px 2px #fff9, 0 0 8px #fff9;
 }
 body[data-ui-mode=phone] .ep-home-top {
   align-items: center;

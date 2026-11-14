@@ -501,7 +501,7 @@ function openMessages(){
   const query=search.value.trim().toLowerCase();
   const messageApp=window.EmoiMessageApp;
   const isPinned=thread=>Boolean(messageApp?.pinned(thread.kind,thread.id));
-  const matches=threads.filter(thread=>[thread.name,thread.last?.text].some(text=>text?.toLowerCase().includes(query)))
+  const matches=threads.filter(thread=>[thread.name,window.EmoiRich.withoutEmoji(thread.last?.text)].some(text=>text?.toLowerCase().includes(query)))
    .sort((a,b)=>Number(isPinned(b))-Number(isPinned(a))||String(b.last?.created_at||'').localeCompare(String(a.last?.created_at||'')));
   rows.replaceChildren();
   for(const thread of matches){
@@ -512,7 +512,7 @@ function openMessages(){
    const topLine=create('span','ep-thread-topline');
    topLine.append(create('strong','',thread.name));
    if(thread.last?.created_at)topLine.append(create('time','',new Date(thread.last.created_at).toLocaleDateString('zh-CN',{month:'numeric',day:'numeric'})));
-   copy.append(topLine,create('span','ep-thread-preview',thread.last?.text||(thread.kind==='group'?thread.members+' 位成员':'新会话')));
+   copy.append(topLine,create('span','ep-thread-preview',window.EmoiRich.withoutEmoji(thread.last?.text)||(thread.kind==='group'?thread.members+' 位成员':'新会话')));
    row.append(avatar,copy);row.onclick=thread.open;
    const wrap=create('div','ep-thread-row');
    const pinned=isPinned(thread);

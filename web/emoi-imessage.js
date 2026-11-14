@@ -5,6 +5,7 @@
 (()=>{
 'use strict';
 const KEY='emoi-ui-conversation-drafts-v1', PIN_KEY='emoi-message-pins-v1';
+const {withoutEmoji,filterEmojiInput}=window.EmoiRich;
 const MAX_MEDIA_BYTES=8*1024*1024;
 const mediaLabels={image:'图片',sticker:'表情包',voice:'语音消息',location:'位置'};
 const imageTypes=new Map([['image/jpeg','jpg'],['image/png','png'],['image/gif','gif'],['image/webp','webp'],['image/avif','avif']]);
@@ -134,9 +135,6 @@ function openCall(item,initialMode){
  }
  dialog.addEventListener('close',()=>{stopCamera();dialog.remove()},{once:true});
  dialog.showModal();setMode(initialMode);
-}
-function withoutEmoji(text){
- return text.replace(/[#*0-9]\uFE0F?\u20E3|\p{Regional_Indicator}|\p{Extended_Pictographic}(?:\uFE0F|\uFE0E|\p{Emoji_Modifier}|[\u{E0020}-\u{E007F}])*(?:\u200D\p{Extended_Pictographic}(?:\uFE0F|\uFE0E|\p{Emoji_Modifier})*)*|\p{Emoji_Modifier}/gu,'');
 }
 function mmss(seconds){
  const n=Number.isFinite(seconds)?Math.max(0,Math.floor(seconds)):0;
@@ -468,15 +466,9 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
  if(endpoint&&window.EmoiRelay?.enabled)void refresh();
  else{report('未连接会话服务器 · 消息保存在本机');hydrated=true}
  updateSend();
- const cleanInput=()=>{
-  const clean=withoutEmoji(input.value);
-  if(clean===input.value)return;
-  const caret=withoutEmoji(input.value.slice(0,input.selectionStart??input.value.length)).length;
-  input.value=clean;input.setSelectionRange(caret,caret);
- };
- input.addEventListener('compositionend',()=>{cleanInput();updateSend()});
+ input.addEventListener('compositionend',()=>{filterEmojiInput(input);updateSend()});
  input.addEventListener('input',event=>{
-  if(!event.isComposing)cleanInput();
+  if(!event.isComposing)filterEmojiInput(input);
   updateSend();input.style.height='32px';input.style.height=Math.min(input.scrollHeight,94)+'px';
  });
  input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&e.keyCode!==229){e.preventDefault();if(!submit.disabled)footer.requestSubmit()}});

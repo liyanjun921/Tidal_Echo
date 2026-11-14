@@ -1,6 +1,17 @@
 /* Safe, dependency-free rich text shared by every model room.
    Content becomes DOM text nodes; model HTML is never executed. */
 (()=>{'use strict';
+function withoutEmoji(text){
+ return String(text??'').replace(/[#*0-9]\uFE0F?\u20E3|\p{Regional_Indicator}|\p{Extended_Pictographic}(?:\uFE0F|\uFE0E|\p{Emoji_Modifier}|[\u{E0020}-\u{E007F}])*(?:\u200D\p{Extended_Pictographic}(?:\uFE0F|\uFE0E|\p{Emoji_Modifier})*)*|\p{Emoji_Modifier}/gu,'');
+}
+function filterEmojiInput(input){
+ const clean=withoutEmoji(input.value);
+ if(clean===input.value)return;
+ const start=withoutEmoji(input.value.slice(0,input.selectionStart)).length;
+ const end=withoutEmoji(input.value.slice(0,input.selectionEnd)).length;
+ input.value=clean;
+ input.setSelectionRange(start,end);
+}
 function inline(host,text,depth=0){
  if(depth>3){host.append(document.createTextNode(text));return}
  const token=/(`[^`\n]+`|\*\*[^*\n]+\*\*|\[[^\]\n]+\]\(https?:\/\/[^\s)]+\)|https?:\/\/[^\s<>]+(?:[^\s<>.,，。！？；：]))/g;
@@ -30,5 +41,5 @@ function render(target,text,stream=false){
   }
  }
 }
-window.LuneRich={render};
+window.EmoiRich=window.LuneRich={render,withoutEmoji,filterEmojiInput};
 })();
