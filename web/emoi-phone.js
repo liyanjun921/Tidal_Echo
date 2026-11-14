@@ -403,6 +403,81 @@ function listItem(id,title,subtitle,iconName,handler){
  const content=create('span','ep-list-copy');content.append(create('strong','',title),create('small','',subtitle));
  b.append(ava,content);const arrow=create('span','ep-row-chevron');arrow.innerHTML=icon('right');b.append(arrow);b.addEventListener('click',handler);return b;
 }
+function messageNavigation(active){
+ const nav=create('nav','ep-message-nav');nav.setAttribute('aria-label','信息导航');
+ for(const [id,label,glyph,action] of [
+  ['messages','信息','chat',openMessages],['contacts','联系人','contacts',openContacts],
+  ['moments','朋友圈','photo',openMoments]
+ ]){
+  const tab=actionButton(label,glyph,action,'ep-message-tab');
+  tab.append(create('span','',label));if(active===id)tab.setAttribute('aria-current','page');
+  nav.append(tab);
+ }
+ return nav;
+}
+const MOMENTS_KEY='emoi-moments-v1';
+function openMoments(){
+ setScreen('moments');const root=view();root.className='ep-view ep-messages ep-moments';
+ const top=create('header','ep-messages-top');
+ const list=create('div','ep-messages-list');
+ const feed=create('section','ep-moments-feed');
+ const connected=Boolean(window.EmoiRelay?.enabled);
+ const status=create('p','ep-thread-empty',connected?'正在读取动态…':'动态保存在当前设备');
+ status.setAttribute('role','status');
+ const form=create('form','ep-moment-form');form.hidden=true;
+ const text=create('textarea');text.placeholder='说点什么…';text.required=true;text.maxLength=1000;
+ text.setAttribute('aria-label','朋友圈正文');
+ const publish=create('button','ep-action-primary','发布');publish.type='submit';
+ form.append(text,publish);
+ top.append(actionButton('返回桌面','back',openHome,'ep-messages-action'),actionButton('发朋友圈','compose',()=>{
+  form.hidden=!form.hidden;if(!form.hidden)text.focus();
+ },'ep-messages-action'));
+ let posts=connected?[]:safeRead(MOMENTS_KEY), pendingId=null;
+ publish.disabled=connected;
+ function render(){
+  feed.replaceChildren();
+  if(!posts.length)feed.append(create('p','ep-thread-empty','还没有动态'));
+  for(const post of posts){
+   const card=create('article','ep-moment-card');
+   const meta=create('div','ep-moment-meta');
+   const date=create('time','',new Date(post.createdAt).toLocaleString('zh-CN'));date.dateTime=post.createdAt;
+   meta.append(create('strong','','我'),date);
+   const remove=create('button','ep-thread-pin','删除');remove.type='button';
+   remove.onclick=async()=>{
+    if(!confirm('删除这条动态？'))return;
+    remove.disabled=true;
+    try{
+     if(post.remote)await window.EmoiRelay.request('/emoi/v2/moments/'+encodeURIComponent(post.id),{method:'DELETE'});
+     const next=posts.filter(item=>item.id!==post.id);
+     if(!post.remote&&!save(MOMENTS_KEY,next.filter(item=>!item.remote)))return;
+     posts=next;render();
+    }catch(error){status.textContent=error.message}
+    finally{remove.disabled=false}
+   };
+   meta.append(remove);card.append(meta,create('p','',post.text));feed.append(card);
+  }
+ }
+ form.onsubmit=async e=>{
+  e.preventDefault();const value=text.value.trim();if(!value||publish.disabled)return;
+  publish.disabled=true;
+  try{
+   pendingId??=crypto.randomUUID();
+   const draft={id:pendingId,createdAt:new Date().toISOString(),text:value};
+   const post=connected?{...(await window.EmoiRelay.json('/emoi/v2/moments','POST',draft)).post,remote:true}:draft;
+   const next=[post,...posts.filter(item=>item.id!==post.id)];
+   if(!connected&&!save(MOMENTS_KEY,next))return;
+   posts=next;pendingId=null;text.value='';form.hidden=true;status.textContent=connected?'':'动态保存在当前设备';render();
+  }catch(error){status.textContent=error.message}
+  finally{publish.disabled=false}
+ };
+ render();list.append(create('h1','','朋友圈'),status,form,feed);
+ if(connected)void window.EmoiRelay.request('/emoi/v2/moments').then(result=>{
+  posts=[...result.posts.map(post=>({...post,remote:true})),...safeRead(MOMENTS_KEY)]
+   .sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  status.textContent='';render();
+ }).catch(error=>{status.textContent=error.message}).finally(()=>{publish.disabled=false});
+ root.append(top,list,messageNavigation('moments'));
+}
 function openMessages(){
  setScreen('messages');
  const root=view();root.className='ep-view ep-messages';
@@ -452,7 +527,7 @@ function openMessages(){
  search.addEventListener('input',renderThreads);renderThreads();
  list.append(heading,search,rows);
  const legacy=homeTextButton('原有会话',openLegacy);legacy.className='ep-messages-legacy';
- list.append(legacy);root.append(top,list);
+ list.append(legacy);root.append(top,list,messageNavigation('messages'));
 }
 
 function openMessageRecipients(){
@@ -503,7 +578,7 @@ function openContacts(){
  for(const p of contacts)list.append(listItem(p.id,p.name,p.model_route?'角色档案 · '+p.model_route:'角色档案','contacts',()=>openContactDetail(p.id)));
  content.append(list);
  content.append(create('p','ep-help','联系人首先保存在本设备；连接私人服务器后同步身份和独立命名空间。模型、OB 与欲望系统运行权限仍要分别接通和验收。'));
- root.append(content);
+ root.append(content,messageNavigation('contacts'));
 }
 function openContactConversation(id){
  const p=contacts.find(x=>x.id===id);if(!p){openMessages();return}
@@ -526,7 +601,7 @@ function openContactDetail(id){
  const status=create('div','ep-status-card');
  status.append(create('span','ep-status-dot'),create('strong','',
   ['default','gpt','claude'].includes(person.model_route)?'回复路由 · '+person.model_route:'尚未绑定 AI 服务'));
- body.append(status);
+ body.append(status,actionButton('发信息','chat',()=>openContactConversation(id),'ep-round'));
  const edit=create('button','ep-action-primary','编辑联系人');edit.type='button';edit.onclick=()=>openContactEditor(person.id);body.append(edit);
  const del=create('button','ep-danger-action','删除联系人草稿');del.type='button';del.onclick=()=>{if(!confirm('确认删除这张本机联系人草稿？已有云端数据不会修改。'))return;contacts=contacts.filter(x=>x.id!==id);save(CONTACTS_KEY,contacts);if(window.EmoiRelay?.enabled)void window.EmoiRelay.request('/emoi/v2/contacts/'+encodeURIComponent(id),{method:'DELETE'}).catch(e=>console.warn(e.message));openContacts()};body.append(del);
  root.append(body);
@@ -719,8 +794,8 @@ function openBeauty(){
  demo.append(create('span','ep-im-bubble','你好呀'));
  const reply=create('div','ep-im-row ep-im-mine');
  const bubble=create('span','ep-im-bubble','今天见 ☁️');reply.append(bubble);
- samples.append(demo,reply);sample.append(samples);body.append(sample);
- const controls=create('section','ep-beauty-settings');
+ samples.append(demo,reply);sample.append(samples);
+ const controls=create('section','ep-beauty-settings');controls.append(create('h2','ep-beauty-title','全局美化'));
  const style=create('fieldset','ep-beauty-choices');style.append(create('legend','','玻璃风格'));
  const params=create('div','ep-beauty-params');
  const persist=()=>{applyBeauty();save(BEAUTY_KEY,beauty)};
@@ -742,6 +817,8 @@ function openBeauty(){
   cap.append(value);row.append(cap,range);params.append(row);
  }
  controls.append(params);
+ const chat=create('section','ep-beauty-settings');
+ chat.append(create('h2','ep-beauty-title','聊天气泡美化'),create('p','ep-beauty-material','毛玻璃'),sample);
  const motionRow=create('label','ep-beauty-slider');motionRow.append(create('span','ep-beauty-caption','气泡动效'));
  const motion=create('select');
  for(const [id,label] of [['soft','轻柔浮现'],['spring','果冻弹入'],['fade','淡入'],['off','关闭']]){
@@ -749,7 +826,7 @@ function openBeauty(){
  }
  motion.value=document.documentElement.dataset.bubbleMotion;
  motion.onchange=()=>{beauty.motion=motion.value;persist();reply.classList.remove('ep-im-arriving');requestAnimationFrame(()=>requestAnimationFrame(()=>reply.classList.add('ep-im-arriving')))};
- motionRow.append(motion);controls.append(motionRow);body.append(controls);root.append(body);
+ motionRow.append(motion);chat.append(motionRow);body.append(controls,chat);root.append(body);
 }
 function trackPhoneViewport(){
  const root=document.documentElement, viewport=window.visualViewport;

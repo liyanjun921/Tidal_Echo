@@ -126,6 +126,22 @@ class ContactIsolationTests(unittest.TestCase):
         self.assertEqual([row["attachment"]["kind"] for row in rows], ["image", "sticker", "voice"])
         self.assertEqual(self.client.get(remote, headers=self.h).json()["messages"], [])
 
+    def test_location_and_moments_require_owner_and_validate_inputs(self):
+        url = "/emoi/v2/moments"
+        self.assertEqual(self.client.get(url).status_code, 401)
+        ident = str(uuid4())
+        self.assertEqual(self.post(url, {"id": ident, "text": "今天见"}).status_code, 200)
+        self.assertEqual(self.post(url, {"id": ident, "text": "今天见"}).status_code, 200)
+        self.assertEqual(len(self.client.get(url, headers=self.h).json()["posts"]), 1)
+        self.assertEqual(self.client.delete(url + "/" + ident, headers=self.h).status_code, 200)
+        self.assertEqual(self.client.get(url, headers=self.h).json()["posts"], [])
+        cid = self.create("甲")["conversation_id"]
+        path = f"/emoi/v2/conversations/{cid}/messages"
+        request = {"nonce": uuid4().hex, "attachment": {"kind": "location", "latitude": 31.25, "longitude": 121.5}}
+        self.assertEqual(self.post(path, request).json()["message"]["attachment"], request["attachment"])
+        request["attachment"]["latitude"] = 95
+        self.assertEqual(self.post(path, request).status_code, 422)
+
     def test_group_replies_are_ordered_isolated_and_idempotent(self):
         a = self.post("/emoi/v2/contacts", {"name":"甲","notes":"甲的私有档案","model_route":"gpt"}).json()
         b = self.post("/emoi/v2/contacts", {"name":"乙","notes":"乙的私有档案","model_route":"claude"}).json()

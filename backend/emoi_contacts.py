@@ -25,7 +25,7 @@ MEDIA_TYPES = {
               "ogg": "audio/ogg", "wav": "audio/wav"},
 }
 MEDIA_TYPES["sticker"] = MEDIA_TYPES["image"]
-MEDIA_LABELS = {"image": "图片", "sticker": "表情包", "voice": "语音消息"}
+MEDIA_LABELS = {"image": "图片", "sticker": "表情包", "voice": "语音消息", "location": "位置"}
 MODEL_ROUTES = {"default", "gpt", "claude"}
 UUID_PATTERN = re.compile(r"^[0-9a-fA-F-]{36}$")
 
@@ -86,6 +86,9 @@ def init(path):
           created_at TEXT NOT NULL, attachment TEXT,
           UNIQUE(conversation_id,nonce)
         );
+        CREATE TABLE IF NOT EXISTS emoi_v2_moments (
+          id TEXT PRIMARY KEY, text TEXT NOT NULL, created_at TEXT NOT NULL
+        );
         CREATE INDEX IF NOT EXISTS idx_emoi_v2_messages_conv ON emoi_v2_messages(conversation_id,created_at);
         """)
         if "attachment" not in {column[1] for column in db.execute("PRAGMA table_info(emoi_v2_messages)")}:
@@ -131,6 +134,12 @@ def register(app, relay):
         if not isinstance(value, dict) or not isinstance(value.get("kind"), str):
             raise HTTPException(422, "无效的聊天附件")
         kind = value["kind"]
+        if kind == "location":
+            lat, lon = value.get("latitude"), value.get("longitude")
+            if (type(lat) not in (int, float) or type(lon) not in (int, float)
+                    or not -90 <= lat <= 90 or not -180 <= lon <= 180):
+                raise HTTPException(422, "位置坐标无效")
+            return {"kind": kind, "latitude": round(lat, 6), "longitude": round(lon, 6)}
         stored = value.get("id")
         match = re.fullmatch(r"att-[A-Za-z0-9_-]{14}\.([a-z0-9]+)", stored) if isinstance(stored, str) else None
         mime = MEDIA_TYPES.get(kind, {}).get(match[1]) if match else None
@@ -149,7 +158,7 @@ def register(app, relay):
     def reply_targets(db, cid):
         return [member for member in model_members(db, cid) if member["model_route"] in MODEL_ROUTES]
 
-    async def generate_replies(cid, message_id, recipients):
+    async def generate_replies(cid, message_id, recipients, voice_reply=False):
         completed = 0
         try:
             url = relay["loop_base_url"]() + "/loop/contact-reply"
@@ -181,6 +190,14 @@ def register(app, relay):
                         text = clean_text(response.json().get("text"), 10000, True)
                     except (httpx.HTTPError, ValueError, HTTPException):
                         continue
+                    audio = None
+                    if voice_reply and len(text) <= 900 and relay.get("speech_runtime"):
+                        try:
+                            data = await asyncio.to_thread(relay["speech_runtime"]["synthesize"], {"text": text})
+                            audio = relay["save_upload_bytes"](data, "reply.mp3", "audio/mpeg")
+                            audio.update(kind="voice", transcript=text)
+                        except (HTTPException, OSError, ValueError):
+                            pass
                     with connect(path) as db:
                         db.execute("BEGIN IMMEDIATE")
                         still_member = db.execute("""
@@ -192,9 +209,10 @@ def register(app, relay):
                         if not still_member:
                             continue
                         db.execute("""
-                          INSERT INTO emoi_v2_messages(id,conversation_id,author,contact_id,text,nonce,delivery,created_at)
-                          VALUES(?,?,'contact',?,?,?,'generated',?)
-                        """, (str(uuid4()), cid, current["id"], text, "reply:"+message_id+":"+current["id"], now()))
+                          INSERT INTO emoi_v2_messages(id,conversation_id,author,contact_id,text,nonce,delivery,created_at,attachment)
+                          VALUES(?,?,'contact',?,?,?,'generated',?,?)
+                        """, (str(uuid4()), cid, current["id"], text, "reply:"+message_id+":"+current["id"], now(),
+                              json.dumps(audio, ensure_ascii=False) if audio else None))
                         completed += 1
         finally:
             state = "replied" if completed == len(recipients) else "partial" if completed else "model_failed"
@@ -348,6 +366,33 @@ def register(app, relay):
                     "model_connected": bool(relay.get("loop_base_url") and reply_targets(db, conv["id"])),
                     "replying": any(row["delivery"] == "replying" for row in msgs)}
 
+    @app.get("/emoi/v2/moments")
+    async def list_moments(request: Request):
+        auth(request)
+        with connect(path) as db:
+            rows = db.execute("SELECT id,text,created_at AS createdAt FROM emoi_v2_moments ORDER BY created_at DESC,id DESC LIMIT 200")
+            return {"posts": [dict(row) for row in rows]}
+
+    @app.post("/emoi/v2/moments")
+    async def publish_moment(request: Request):
+        auth(request)
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise HTTPException(422, "动态格式无效")
+        ident = valid_id(body.get("id"))
+        text = clean_text(body.get("text"), 1000, True)
+        with connect(path) as db:
+            db.execute("INSERT OR IGNORE INTO emoi_v2_moments VALUES(?,?,?)", (ident, text, now()))
+            row = db.execute("SELECT id,text,created_at AS createdAt FROM emoi_v2_moments WHERE id=?", (ident,)).fetchone()
+        return {"post": dict(row)}
+
+    @app.delete("/emoi/v2/moments/{moment_id}")
+    async def delete_moment(moment_id: str, request: Request):
+        auth(request)
+        with connect(path) as db:
+            db.execute("DELETE FROM emoi_v2_moments WHERE id=?", (valid_id(moment_id),))
+        return {"ok": True}
+
     @app.post("/emoi/v2/conversations/{conversation_id}/messages")
     async def v2_save_message(conversation_id:str,request:Request,background:BackgroundTasks):
         auth(request)
@@ -387,7 +432,7 @@ def register(app, relay):
                   json.dumps(attachment, ensure_ascii=False) if attachment else None))
             row=db.execute("SELECT * FROM emoi_v2_messages WHERE id=?",(mid,)).fetchone()
         if recipients:
-            background.add_task(generate_replies, conv["id"], mid, recipients)
+            background.add_task(generate_replies, conv["id"], mid, recipients, body.get("voice_reply") is True)
         return {"message":view_message(row),"model_dispatched":bool(recipients)}
 
     return {"init":lambda:init(path)}

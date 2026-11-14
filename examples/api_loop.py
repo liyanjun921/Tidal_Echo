@@ -2011,6 +2011,8 @@ async def loop_contact_reply(request: Request):
                         content += f"\n语音转写：{transcript}"
                     elif not transcript:
                         content += "\n本轮没有语音转写。"
+                elif attachment.get("kind") == "location":
+                    content += f'\n坐标：{attachment["latitude"]}, {attachment["longitude"]}'
                 elif vision_enabled():
                     parts, _ = await attachment_parts([attachment], with_images=True)
                     if parts:

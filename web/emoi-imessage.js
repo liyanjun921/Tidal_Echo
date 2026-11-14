@@ -6,7 +6,7 @@
 'use strict';
 const KEY='emoi-ui-conversation-drafts-v1', PIN_KEY='emoi-message-pins-v1';
 const MAX_MEDIA_BYTES=8*1024*1024;
-const mediaLabels={image:'图片',sticker:'表情包',voice:'语音消息'};
+const mediaLabels={image:'图片',sticker:'表情包',voice:'语音消息',location:'位置'};
 const imageTypes=new Map([['image/jpeg','jpg'],['image/png','png'],['image/gif','gif'],['image/webp','webp'],['image/avif','avif']]);
 const audioTypes=new Map([['audio/mp4','m4a'],['audio/webm','webm'],['audio/ogg','ogg'],['audio/wav','wav']]);
 const $=(s,r=document)=>r.querySelector(s);
@@ -14,6 +14,7 @@ const icons={
  plus:'<path d="M12 5v14M5 12h14"/>',
  mic:'<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2m-7 9v3m-3 0h6"/>',
  video:'<rect x="2" y="5" width="14" height="14" rx="3"/><path d="m16 10 6-4v12l-6-4"/>',
+ phone:'<path d="M7 3H4a1 1 0 0 0-1 1 17 17 0 0 0 17 17 1 1 0 0 0 1-1v-3l-5-2-2 2a13 13 0 0 1-7-7l2-2-2-5Z"/>',
  dial:'<path d="M6 5h.1M12 5h.1M18 5h.1M6 10h.1M12 10h.1M18 10h.1M6 15h.1M12 15h.1M18 15h.1M12 20h.1" stroke-width="3"/>',
  stop:'<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/>',
  pin:'<path d="m16 3 5 5-3 2-3 5-2 1-5-5 1-2 5-3 2-3ZM9 15l-6 6"/>',
@@ -69,7 +70,7 @@ function dialogFor(title,{persistent=false}={}){
  return {dialog,close};
 }
 function openDialpad(){
- const {dialog,close}=dialogFor('电话键盘');
+ const {dialog,close}=dialogFor('语音通话');
  const number=document.createElement('input');number.type='tel';number.inputMode='none';number.setAttribute('aria-label','电话号码');
  const keys=document.createElement('div');keys.className='ep-im-dial-keys';
  for(const digit of '123456789*0#'){
@@ -100,6 +101,12 @@ async function openVideo(){
  }catch{note.textContent='无法打开摄像头 · 请检查浏览器权限'}
 }
 function renderAttachment(bubble,attachment,registerURL){
+ if(attachment.kind==='location'){
+  const link=document.createElement('a');link.className='ep-im-location';link.textContent='⌖ 查看位置';
+  const coords=encodeURIComponent(attachment.latitude+','+attachment.longitude);
+  link.href='https://maps.apple.com/?ll='+coords;link.target='_blank';link.rel='noopener noreferrer';
+  bubble.append(link);return;
+ }
  const isVoice=attachment.kind==='voice';
  const media=document.createElement(isVoice?'audio':'img');
  if(isVoice){media.controls=true;media.preload='metadata';media.setAttribute('aria-label','播放语音消息')}
@@ -129,7 +136,14 @@ function messageBubble(msg,members,showName,registerURL){
  const bubble=document.createElement('div');bubble.className='ep-im-bubble';
  if(msg.attachment){
   bubble.dataset.media=msg.attachment.kind;renderAttachment(bubble,msg.attachment,registerURL);
-  if(msg.text&&msg.text!=='['+mediaLabels[msg.attachment.kind]+']')bubble.append(document.createElement('br'),msg.text);
+   if(msg.attachment.kind==='voice'){
+   const transcript=document.createElement('details');transcript.className='ep-im-transcript';
+   const label=document.createElement('summary');label.textContent='转文字';
+   const text=document.createElement('p');text.textContent=msg.attachment.transcript||'暂无转写 · 录音转写需要服务端配置';
+   transcript.append(label,text);bubble.append(transcript);
+  }
+  if(msg.text&&msg.text!==msg.attachment.transcript&&msg.text!=='['+mediaLabels[msg.attachment.kind]+']'
+      )bubble.append(document.createElement('br'),msg.text);
  }else bubble.textContent=msg.text||'';
  row.append(bubble);
  if(msg.author==='human'&&deliveryLabels[msg.delivery]){
@@ -174,7 +188,7 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
  options.append(closeOptions);root.append(options);
  person.onclick=()=>options.showModal();
  const actions=document.createElement('div');actions.className='ep-im-actions';
- actions.append(button('视频预览','video',openVideo),button('电话键盘','dial',openDialpad));
+ actions.append(button('视频预览','video',openVideo),button('语音通话','phone',openDialpad));
  header.append(back,person,actions);root.append(header);
  if(kind==='contact')void window.EmoiAvatars?.paint(avatar,item.id);
  const body=document.createElement('main');body.className='ep-im-timeline';body.setAttribute('aria-label','与'+(item.name||'联系人')+'的消息');
@@ -188,7 +202,7 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
  const notice=document.createElement('div');notice.className='ep-im-notice';notice.setAttribute('role','status');notice.hidden=true;root.append(notice);
  const footer=document.createElement('form');footer.className='ep-im-footer';footer.autocomplete='off';
  const composer=document.createElement('div');composer.className='ep-im-composer';
- const input=document.createElement('textarea');input.rows=1;input.maxLength=10000;input.placeholder='信息';input.setAttribute('aria-label','输入消息');
+ const input=document.createElement('textarea');input.rows=1;input.maxLength=10000;input.placeholder='iMessage';input.setAttribute('aria-label','输入消息');
  const submit=document.createElement('button');submit.type='submit';submit.className='ep-im-submit';submit.setAttribute('aria-label','发送消息');submit.innerHTML=icon('arrow');submit.disabled=true;
  const attach=button('添加附件','plus',()=>{picker.hidden=!picker.hidden},'ep-im-attach');
  const mic=button('录制语音','mic',recordVoice,'ep-im-attach ep-im-mic');
@@ -211,9 +225,9 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
   mediaURLs.forEach(url=>URL.revokeObjectURL(url));
  });
  removal.observe(root,{childList:true});
- for(const kind of ['image','sticker']){
+ for(const [kind,label,capture] of [['image','照片'],['image','拍照','environment'],['sticker','表情包']]){
   const pick=document.createElement('input');pick.type='file';pick.accept=[...imageTypes.keys()].join(',');pick.hidden=true;
-  const label=kind==='image'?'选照片':'选表情包';
+  if(capture)pick.setAttribute('capture',capture);
   const tile=button(label,'photo',()=>pick.click(),'ep-home-control');tile.textContent=label;
   pick.onchange=()=>{const file=pick.files?.[0];pick.value='';if(file)setAttachment(file,kind)};
   picker.append(tile,pick);
@@ -231,7 +245,18 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
   };
   emojiRow.append(tile);
  }
- picker.append(emojiRow);
+ const location=button('位置','plus',()=>{
+  if(!navigator.geolocation){report('当前浏览器无法获取位置');return}
+  navigator.geolocation.getCurrentPosition(({coords})=>{
+   if(isOpen()&&!sending&&!recording)setPending({kind:'location',latitude:coords.latitude,longitude:coords.longitude});
+  },()=>{if(isOpen())report('无法获取位置，请检查定位权限')},{timeout:10000});
+ },'ep-home-control');
+ location.textContent='位置';
+ const voiceReply=document.createElement('label');voiceReply.className='ep-im-voice-option';
+ const voiceCheck=document.createElement('input');voiceCheck.type='checkbox';
+ voiceCheck.disabled=!endpoint||!window.EmoiRelay?.enabled;
+ voiceReply.append(voiceCheck,'请用语音回复');
+ picker.append(location,voiceReply,emojiRow);
  const typing=document.createElement('div');typing.className='ep-im-typing';typing.hidden=true;typing.setAttribute('aria-label','等待 AI 回复');
  for(let i=0;i<3;i++)typing.append(document.createElement('i'));
  content.append(typing);
@@ -253,7 +278,11 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
   const mime=blob.type.split(';')[0].toLowerCase();
   const ext=(kind==='voice'?audioTypes:imageTypes).get(mime);
   if(!ext||!blob.size||blob.size>MAX_MEDIA_BYTES){report('请选择支持的格式，附件大小须在 8 MB 以内');return}
-  attachment={file:new File([blob],kind+'.'+ext,{type:mime}),kind};
+  setPending({file:new File([blob],kind+'.'+ext,{type:mime}),kind});
+ }
+ function setPending(value){
+  attachment=value;
+  const {kind}=value;
   const remove=button('移除附件','plus',()=>{attachment=null;preview.hidden=true;updateSend()},'ep-im-remove');
   remove.textContent='移除';
   preview.replaceChildren(document.createTextNode(mediaLabels[kind]+' · 待发送'),remove);
@@ -312,6 +341,8 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
     if(!entry.time){entry.time=document.createElement('time');entry.time.className='ep-im-date';entry.time.textContent=formatDate(row.created_at)}
     fragments.push(entry.time);
    }
+   if(sameSender)rendered.get(prior.id).node.classList.add('ep-im-continues');
+   entry.node.classList.remove('ep-im-continues');
    entry.node.classList.toggle('ep-im-joined',sameSender);
    fragments.push(entry.node);keep.add(row.id);prior=row;
   }
@@ -359,19 +390,20 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
  input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&e.keyCode!==229){e.preventDefault();if(!submit.disabled)footer.requestSubmit()}});
  footer.onsubmit=async e=>{
   e.preventDefault();
-  const text=input.value.trim(), media=attachment;
+  const text=input.value.trim(), media=attachment, voice=voiceCheck.checked;
   if((!text&&!media)||sending||replying||recording||starting)return;
   sending=true;updateSend();
   try{
    if(endpoint&&window.EmoiRelay?.enabled){
-    if(pendingRequest?.text!==text||pendingRequest?.media!==media)pendingRequest={text,media,nonce:crypto.randomUUID()};
-    if(media&&!pendingRequest.attachment){
+    if(pendingRequest?.text!==text||pendingRequest?.media!==media||pendingRequest?.voice!==voice)pendingRequest={text,media,voice,nonce:crypto.randomUUID()};
+    if(media?.kind==='location')pendingRequest.attachment=media;
+    if(media?.file&&!pendingRequest.attachment){
      const uploaded=await window.EmoiRelay.upload(media.file);
      pendingRequest.attachment={kind:media.kind,id:uploaded.url.split('/').pop()};
     }
     const {nonce,attachment:uploaded}=pendingRequest;
     const answer=await window.EmoiRelay.request(endpoint,{method:'POST',
-     body:JSON.stringify({text,nonce,attachment:uploaded}),timeout:media?.kind==='voice'?60000:30000});
+     body:JSON.stringify({text,nonce,attachment:uploaded,voice_reply:voice}),timeout:media?.kind==='voice'?60000:30000});
     pendingRequest=null;
     const row=answer.message;
     remoteRows=remoteRows.filter(msg=>msg.id!==row.id);
@@ -382,13 +414,13 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
     schedule();
    }else{
     const id=crypto.randomUUID(), rows=local[key]??=[];
-    if(media)await mediaStore(id,media.file);
+    if(media?.file)await mediaStore(id,media.file);
     rows.push({id,author:'human',text:text||'['+mediaLabels[media.kind]+']',
-     attachment:media?{localId:id,kind:media.kind}:null,created_at:new Date().toISOString(),delivery:'local_only'});
+     attachment:media?.file?{localId:id,kind:media.kind}:media,created_at:new Date().toISOString(),delivery:'local_only'});
     if(!save(local)){rows.pop();throw new Error('本机存储已满，消息没有保存')}
    }
    if(!isOpen())return;
-   hydrated=true;
+   hydrated=true;voiceCheck.checked=false;
    if(input.value.trim()===text){input.value='';input.style.height=''}
    if(attachment===media){attachment=null;preview.hidden=true}
    paint();if(stickToBottom)body.scrollTop=body.scrollHeight;

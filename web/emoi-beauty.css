@@ -154,30 +154,37 @@ html[data-ep-standalone] body[data-ui-mode=phone][data-phone-screen=home] .emoi-
 .ep-beauty-settings,.ep-beauty-params { display: grid; gap: 10px; }
 .ep-beauty-settings { margin-top: 14px; }
 .ep-beauty-params[hidden] { display: none; }
-.ep-beauty-choices,.ep-beauty-slider {
-  color: #152535;
-  background: var(--beauty-panel);
-  -webkit-backdrop-filter: var(--beauty-filter);
-  backdrop-filter: var(--beauty-filter);
-  border: 1px solid #fffa;
-  border-radius: 18px;
-  box-shadow: var(--beauty-rim);
-  margin: 0; min-width: 0; padding: 12px 15px;
+.ep-beauty-settings {
+  padding: 18px; border-radius: 23px;
+  background: rgb(240 247 252 / .9); color: #182c3c;
 }
-body[data-dark=true] :is(.ep-beauty-choices,.ep-beauty-slider) { color:#fff; }
-.ep-beauty-choices { display: flex; gap: 8px; }
-.ep-beauty-choices legend { font-weight: 650; color: #fff; text-shadow: 0 1px 4px #16262d; }
+body[data-dark=true] .ep-beauty-settings { background: rgb(20 32 45 / .92); color: #f2f7fa; }
+.ep-beauty-title { font-size: 19px; margin: 0; }
+.ep-beauty-material { margin: 0; font-size: 13px; opacity: .75; }
+.ep-beauty-choices { display: flex; gap: 4px; margin: 0; min-width: 0; padding: 4px; border: 0;
+  border-radius: 14px; background: rgb(71 100 124 / .13); }
+.ep-beauty-choices legend { position: absolute; clip-path: inset(50%); }
 .ep-beauty-choices label { flex: 1; cursor: pointer; position: relative; }
 .ep-beauty-choices input { position: absolute; opacity: 0; }
-.ep-beauty-choices label span { display: grid; place-items: center; border-radius: 12px; min-height: 44px; }
-.ep-beauty-choices input:checked + span { background: var(--beauty-accent); color: #fff; }
-.ep-beauty-choices input:focus-visible + span { outline: 2px solid var(--beauty-accent); outline-offset: 2px; }
-.ep-beauty-slider { display: grid; gap: 7px; }
+.ep-beauty-choices label span { display: grid; place-items: center; border-radius: 11px; min-height: 39px; font-size: 14px; }
+.ep-beauty-choices input:checked + span { background: #fff; color: #182c3c; box-shadow: 0 1px 5px #182c3c24; }
+.ep-beauty-choices input:focus-visible + span { outline: 2px solid #507c9e; }
+.ep-beauty-params { gap: 0; }
+.ep-beauty-slider { display: grid; gap: 3px; padding: 9px 0 0; border-top: 1px solid rgb(91 124 148 / .2); }
+.ep-beauty-slider:first-child { border-top: 0; }
 .ep-beauty-caption { display: flex; align-items: baseline; justify-content: space-between; font-size: 13px; font-weight: 600; }
-.ep-beauty-caption output { font-variant-numeric: tabular-nums; font-weight: 450; }
-.ep-beauty-slider input { width: 100%; min-height: 32px; appearance: auto; accent-color: var(--beauty-accent); }
-.ep-beauty-slider select { padding: 8px; border-radius: 9px; color: inherit; font: inherit; min-height: 44px; }
-
+.ep-beauty-caption output { font-variant-numeric: tabular-nums; font-weight: 450; opacity: .75; }
+.ep-beauty-slider input[type=range] {
+  width: 100%; height: 32px; margin: 0; appearance: none; -webkit-appearance: none;
+  aspect-ratio: auto; border: 0; background: transparent; cursor: pointer;
+}
+.ep-beauty-slider input[type=range]::-webkit-slider-runnable-track { height: 3px; border-radius: 10px; background: #8299ac66; }
+.ep-beauty-slider input[type=range]::-moz-range-track { height: 3px; border-radius: 10px; background: #8299ac66; }
+.ep-beauty-slider input[data-parameter=hue]::-webkit-slider-runnable-track { background: linear-gradient(90deg,#c56767,#d9b861,#81a678,#75adc0,#7972ba,#c56767); }
+.ep-beauty-slider input[data-parameter=hue]::-moz-range-track { background: linear-gradient(90deg,#c56767,#d9b861,#81a678,#75adc0,#7972ba,#c56767); }
+.ep-beauty-slider input[type=range]::-webkit-slider-thumb { appearance:none; -webkit-appearance:none; width: 15px; height: 15px; margin-top: -6px; border: 2px solid #fff; border-radius: 50%; background: #345a77; box-shadow: 0 1px 5px #152f5052; }
+.ep-beauty-slider input[type=range]::-moz-range-thumb { width: 11px; height: 11px; border: 2px solid #fff; border-radius: 50%; background: #345a77; box-shadow: 0 1px 5px #152f5052; }
+.ep-beauty-slider select { padding: 6px 9px; border-radius: 9px; color: inherit; font: inherit; min-height: 38px; }
 @media (prefers-reduced-transparency: reduce) {
   :root,:root[data-glass=frost] { --beauty-filter: none; --beauty-glass-alpha: 1; }
 }
@@ -196,12 +203,20 @@ body[data-ui-mode=phone][data-dark=true] #emoiPhoneView.ep-im-screen {
 }
 body[data-ui-mode=phone] #emoiPhoneView .ep-im-header {
   grid-template-columns: 1fr minmax(0,2fr) 1fr;
-  background: rgb(12 22 34 / .24);
-  border-color: #ffffff30;
-  -webkit-backdrop-filter: var(--beauty-filter);
-  backdrop-filter: var(--beauty-filter);
+  position: absolute; inset: 0 0 auto;
+  background: transparent; border: 0; box-shadow: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none; pointer-events: none;
 }
-.ep-im-actions { gap: 2px; }
+.ep-im-header button { pointer-events: auto; }
+.ep-im-actions { gap: 5px; }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-timeline { padding-top: calc(92px + env(safe-area-inset-top)); }
+html[data-ep-standalone] body[data-ui-mode=phone] #emoiPhoneView .ep-im-timeline { padding-top: calc(92px + max(48px, env(safe-area-inset-top))); }
+html[data-ep-keyboard] body[data-ui-mode=phone] #emoiPhoneView .ep-im-timeline { padding-top: 63px; }
+html[data-ep-keyboard] .ep-im-peer .ep-im-avatar { width: 28px; height: 28px; }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-peer-info {
+  border-radius: 20px; background: #12243445; padding: 3px 10px;
+  -webkit-backdrop-filter: blur(9px); backdrop-filter: blur(9px);
+}
 body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-back,.ep-im-more,.ep-im-attach) {
   width: 41px; height: 41px; color: #fff;
   background: rgb(24 34 46 / .28);
@@ -242,28 +257,33 @@ body[data-ui-mode=phone] #emoiPhoneView .ep-im-mic {
 body[data-ui-mode=phone] #emoiPhoneView button[hidden],
 body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-picker,.ep-im-pending,.ep-im-typing)[hidden] { display: none; }
 
-body[data-ui-mode=phone] #emoiPhoneView .ep-im-row .ep-im-bubble {
-  border: 1px solid #ffffff6b;
-  border-radius: 21px;
+/* Independent frosted chat palette, shared by the live settings sample. */
+body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-history,.ep-beauty-preview) .ep-im-row .ep-im-bubble {
+  --bubble-fill: rgb(28 49 64 / .65);
+  border: 1px solid #ecf4ff26;
+  border-radius: 20px;
   padding: 8px 13px;
   font-size: 16px;
   line-height: 1.45;
-  text-shadow: 0 1px 2px #0e1b28;
   color: white;
-  background: rgb(15 23 35 / max(.30, var(--beauty-glass-alpha)));
-  -webkit-backdrop-filter: var(--beauty-filter);
-  backdrop-filter: var(--beauty-filter);
-  box-shadow: var(--beauty-rim);
-  corner-shape: round;
+  background: var(--bubble-fill);
+  -webkit-backdrop-filter: blur(10px) saturate(124%);
+  backdrop-filter: blur(10px) saturate(124%);
+  box-shadow: 0 2px 6px #06122522;
 }
-body[data-ui-mode=phone] #emoiPhoneView .ep-im-mine .ep-im-bubble {
-  background: hsl(var(--beauty-hue, 208) var(--beauty-accent-sat, 86%) min(44%, var(--beauty-accent-light, 46%)) / clamp(.62, calc(.55 + var(--beauty-glass-alpha)), .95));
-  border-bottom-right-radius: 7px;
+body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-history,.ep-beauty-preview) .ep-im-mine .ep-im-bubble {
+  --bubble-fill: rgb(0 122 235 / .86);
 }
-body[data-ui-mode=phone] #emoiPhoneView .ep-im-theirs .ep-im-bubble { border-bottom-left-radius: 7px; }
-body[data-ui-mode=phone] #emoiPhoneView .ep-im-joined.ep-im-mine .ep-im-bubble { border-top-right-radius: 9px; }
-body[data-ui-mode=phone] #emoiPhoneView .ep-im-joined.ep-im-theirs .ep-im-bubble { border-top-left-radius: 9px; }
-body[data-ui-mode=phone] #emoiPhoneView .ep-im-bubble[data-media] { padding: 5px; }
+body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-history,.ep-beauty-preview) .ep-im-mine:not(.ep-im-continues) .ep-im-bubble { border-bottom-right-radius: 5px; }
+body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-history,.ep-beauty-preview) .ep-im-theirs:not(.ep-im-continues) .ep-im-bubble { border-bottom-left-radius: 5px; }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-history .ep-im-bubble[data-media=sticker] {
+  border: 0; background: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+.ep-im-transcript { font-size: 13px; padding: 3px 4px; }
+.ep-im-transcript summary { cursor: pointer; }
+.ep-im-transcript p { margin: 6px 0 0; }
+.ep-im-location { display:block; color:inherit; padding:5px 12px; }
+.ep-im-voice-option { font-size:13px; display:flex; align-items:center; gap:6px; min-height:36px; }
 .ep-im-bubble img { display:block; max-width: min(56vw,340px); max-height: 330px; border-radius: 15px; object-fit: contain; }
 .ep-im-bubble[data-media=sticker] img { max-width: min(37vw,146px); }
 .ep-im-bubble audio { display:block; width:min(61vw,300px); max-width:100%; }
@@ -310,9 +330,10 @@ html:not([data-bubble-motion=off]) .ep-im-typing i { animation:ep-im-dot 1.2s in
   html:not([data-bubble-motion=off]) .ep-im-typing i { animation:none; }
 }
 @media (prefers-reduced-transparency: reduce) {
-  body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-header,.ep-im-composer) { background:#121d2b; }
-  body[data-ui-mode=phone] #emoiPhoneView .ep-im-theirs .ep-im-bubble { background:#1e293a; }
-  body[data-ui-mode=phone] #emoiPhoneView .ep-im-mine .ep-im-bubble { background:#154782; }
+  body[data-ui-mode=phone] #emoiPhoneView .ep-im-composer { background:#121d2b; }
+  body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-history,.ep-beauty-preview) .ep-im-row .ep-im-bubble { background:#1e293a; backdrop-filter:none; -webkit-backdrop-filter:none; }
+  body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-history,.ep-beauty-preview) .ep-im-mine .ep-im-bubble { background:#18568f; }
+
 }
 html[data-ep-keyboard] body[data-ui-mode=phone] #emoiPhoneView .ep-im-footer { padding-bottom:7px; }
 html[data-ep-keyboard] body[data-ui-mode=phone] #emoiPhoneView .ep-im-header { min-height:56px; padding-top:7px; }
@@ -323,3 +344,24 @@ body[data-ui-mode=phone] #emoiPhoneView.ep-messages {
 body[data-ui-mode=phone][data-dark=true] #emoiPhoneView.ep-messages {
   background: linear-gradient(#141d29d9,#131e2ae6), var(--emoi-active-wallpaper,var(--wallpaper)) center / cover;
 }
+
+.ep-message-nav {
+  position: absolute; z-index: 4; left: 50%; transform: translateX(-50%);
+  bottom: max(12px, env(safe-area-inset-bottom)); width: min(calc(100% - 32px), 330px);
+  display: flex; gap: 4px; padding: 5px; border-radius: 27px; border: 1px solid #fff8;
+  background: rgb(231 241 248 / .94); color: #24445d; box-shadow: 0 5px 20px #17394e30;
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+}
+body[data-dark=true] .ep-message-nav { background: rgb(24 43 58 / .94); color: #e2edf5; }
+.ep-message-tab { flex: 1; display: grid; justify-items: center; align-content:center; gap: 3px; font-size: 11px; min-height: 47px; border-radius: 22px; }
+.ep-message-tab svg { width: 20px; height: 20px; }
+.ep-message-tab[aria-current=page] { background: #5888ad24; font-weight: 650; }
+body[data-ui-mode=phone] #emoiPhoneView:has(.ep-message-nav) :is(.ep-list-scroll,.ep-messages-list) {
+  flex: 1; padding-bottom: calc(85px + env(safe-area-inset-bottom));
+}
+html[data-ep-keyboard] .ep-message-nav { display: none; }
+.ep-moment-form,.ep-moment-card { background: var(--im-bar); padding: 14px; border-radius: 16px; margin: 12px 0; }
+.ep-moment-form textarea { width: 100%; display: block; min-height: 90px; padding: 8px; font-size: 16px; }
+.ep-moment-meta { display:flex; align-items:center; gap:10px; }
+.ep-moment-meta time { flex:1; font-size:12px; color:var(--im-muted); }
+.ep-moment-card p { white-space:pre-wrap; overflow-wrap:anywhere; }
