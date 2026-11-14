@@ -1,12 +1,12 @@
 :root {
   --wallpaper: url('assets/emoi-white-lilies.webp');
   --beauty-glass-blur: var(--beauty-blur, 2px);
-  --beauty-glass-alpha: var(--beauty-opacity, .16);
+  --beauty-glass-alpha: min(.7, calc(var(--beauty-opacity, .16) * .62));
   --beauty-accent: hsl(var(--beauty-hue, 208) var(--beauty-accent-sat, 86%) var(--beauty-accent-light, 46%));
   --beauty-tint: hsl(var(--beauty-hue, 208) 51% 94% / var(--beauty-glass-alpha));
-  --beauty-panel: hsl(var(--beauty-hue, 208) 33% 94% / max(.68, var(--beauty-glass-alpha)));
+  --beauty-panel: rgb(26 55 71 / .19);
   --beauty-rim: inset 1.5px 1.5px 1px -1px #fff, inset -1.5px -1.5px 1px -1px #fff9,
-    inset 0 0 0 .5px #fff5, 0 0 0 .5px #0002, 0 4px 16px #0002;
+    inset 0 0 0 .5px #fff7, inset 0 4px 7px -5px #fff9, inset 0 -4px 9px -6px #b5eaff7a, 0 0 0 .5px #0d263933, 0 4px 16px #0002;
   --beauty-filter: blur(var(--beauty-glass-blur)) saturate(var(--beauty-saturation, 165%))
     brightness(var(--beauty-brightness, 104%));
 }
@@ -23,7 +23,7 @@ body[data-page-glass=frost] {
 }
 body[data-dark=true] {
   --beauty-tint: rgb(20 26 34 / var(--beauty-glass-alpha));
-  --beauty-panel: rgb(20 26 34 / max(.72, var(--beauty-glass-alpha)));
+  --beauty-panel: rgb(20 26 34 / .33);
 }
 body[data-ui-mode=phone] .emoi-phone-host::before,
 html[data-emoi-home] {
@@ -260,26 +260,24 @@ body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-picker,.ep-im-pending,.ep-im-
 
 /* Independent frosted chat palette, shared by the live settings sample. */
 body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-history,.ep-beauty-preview) .ep-im-row .ep-im-bubble {
-  --bubble-fill: rgb(28 49 64 / .65);
-  border: 1px solid #ecf4ff26;
+  --bubble-fill: rgb(232 243 253 / .19);
+  border: 1px solid #ecf4ff75;
   border-radius: 20px;
   padding: 8px 13px;
   font-size: 16px;
   line-height: 1.45;
   color: white;
+  text-shadow:0 1px 3px #17212c;
   background: var(--bubble-fill);
   -webkit-backdrop-filter: blur(10px) saturate(124%);
   backdrop-filter: blur(10px) saturate(124%);
   box-shadow: 0 2px 6px #06122522;
 }
 body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-history,.ep-beauty-preview) .ep-im-mine .ep-im-bubble {
-  --bubble-fill: rgb(0 122 235 / .86);
+  --bubble-fill: rgb(160 185 209 / .22);
 }
 body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-history,.ep-beauty-preview) .ep-im-mine:not(.ep-im-continues) .ep-im-bubble { border-bottom-right-radius: 5px; }
 body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-history,.ep-beauty-preview) .ep-im-theirs:not(.ep-im-continues) .ep-im-bubble { border-bottom-left-radius: 5px; }
-body[data-ui-mode=phone] #emoiPhoneView .ep-im-history .ep-im-bubble[data-media=sticker] {
-  border: 0; background: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none;
-}
 .ep-im-transcript { font-size: 13px; padding: 3px 4px; }
 .ep-im-transcript summary { cursor: pointer; }
 .ep-im-transcript p { margin: 6px 0 0; }
@@ -340,10 +338,10 @@ html[data-ep-keyboard] body[data-ui-mode=phone] #emoiPhoneView .ep-im-footer { p
 html[data-ep-keyboard] body[data-ui-mode=phone] #emoiPhoneView .ep-im-header { min-height:56px; padding-top:7px; }
 
 body[data-ui-mode=phone] #emoiPhoneView.ep-messages {
-  background: linear-gradient(#f4f7fbe0,#eff3f5e8), var(--emoi-active-wallpaper,var(--wallpaper)) center / cover;
+  background: linear-gradient(#f4f7fb46,#eaf1f46b), var(--emoi-active-wallpaper,var(--wallpaper)) center / cover;
 }
 body[data-ui-mode=phone][data-dark=true] #emoiPhoneView.ep-messages {
-  background: linear-gradient(#141d29d9,#131e2ae6), var(--emoi-active-wallpaper,var(--wallpaper)) center / cover;
+  background: linear-gradient(#141d2959,#131e2a8a), var(--emoi-active-wallpaper,var(--wallpaper)) center / cover;
 }
 
 .ep-message-nav {
@@ -386,7 +384,7 @@ body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-history,.ep-beauty-preview) .
   }
 }
 body[data-ui-mode=phone] .sheet.page-sheet[open] {
-  background: linear-gradient(#57737c32,#17324379), var(--emoi-active-wallpaper, var(--wallpaper)) center / cover;
+  background: linear-gradient(#18324417,#17324348), var(--emoi-active-wallpaper, var(--wallpaper)) center / cover;
 }
 body[data-ui-mode=phone] .sheet.page-sheet[open] :is(.sheet-head,.page-toolbar,.page-foot) { color: #fff; }
 body[data-ui-mode=phone] [data-page=calendar] :is(.calendar-month-card,.calendar-detail) {
@@ -416,7 +414,7 @@ body[data-ui-mode=phone] #emoiPhoneView .ep-im-picker {
   position: absolute; z-index: 8; inset: auto auto max(65px,calc(env(safe-area-inset-bottom) + 59px)) max(12px,calc((100% - 956px) / 2));
   display: flex; flex-direction: column; align-items: stretch; gap: 0; margin: 0; padding: 8px;
   width: min(calc(100% - 28px), 320px); max-height: 65%; overflow: auto;
-  color: #152331; background: rgb(245 249 252 / .86); border: 1px solid #fff8;
+  color: #142632; background: rgb(229 240 248 / .63); border: 1px solid #fffc;
   border-radius: 28px; box-shadow: 0 10px 44px #101b3840;
   -webkit-backdrop-filter: blur(23px); backdrop-filter: blur(23px);
 }
@@ -440,8 +438,8 @@ body[data-ui-mode=phone] #emoiPhoneView :is(.ep-record-bar,.ep-im-composer,.ep-i
 .ep-voice-play { display:grid; place-items:center; border-radius:50%; padding: 0; width:31px;height:31px; flex:none; color:inherit; background:#ffffff30; }
 .ep-voice-play svg,.ep-im-remove svg { width:17px;height:17px; }
 .ep-im-bubble[data-media=voice] .ep-voice-player { width: min(61vw,260px); }
-body[data-ui-mode=phone] #emoiPhoneView .ep-im-mine .ep-im-bubble[data-media=voice] { background:#086eccbd; }
-.ep-record-bar,.ep-voice-capsule { flex:1; padding:8px 12px; border:1px solid #f5fbff82; border-radius:30px; background:#eef6fbd9; color:#193249; }
+
+.ep-record-bar,.ep-voice-capsule { flex:1; padding:8px 12px; border:1px solid #f5fbff82; border-radius:30px; background:#eaf5ffad; color:#193249; -webkit-backdrop-filter:blur(12px) saturate(132%); backdrop-filter:blur(12px) saturate(132%); }
 .ep-record-bar { color:#be303d; }
 .ep-record-bar .ep-voice-wave { animation:ep-recording-pulse .95s ease-in-out infinite alternate; }
 @keyframes ep-recording-pulse { from { opacity:.38; } to { opacity:1; } }
@@ -471,3 +469,34 @@ body[data-ui-mode=phone] #emoiPhoneView .ep-im-mine .ep-im-bubble[data-media=voi
 .ep-im-call[data-mode=video] .ep-call-controls {justify-self:end;flex-direction:column;gap:12px}
 .ep-im-call[data-mode=video] .ep-call-heading {text-align:left}
 .ep-im-call[data-mode=video] .ep-call-heading strong {font-size:22px}
+
+:root { --emoi-song: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif; }
+body[data-ui-mode=phone], body[data-ui-mode=phone] :is(.emoi-phone-host,.sheet,.ep-im-peer-info,.ep-im-avatar) { font-family: var(--emoi-song); }
+body[data-ui-mode=phone] :is(h1,h2,h3,h4,button,input,select,textarea,.entry-card,.ep-desktop-clock) { font-family: var(--emoi-song); }
+body[data-ui-mode=phone] :is(.ep-header-button,.sheet-head button[data-close]) { width:32px;height:32px; }
+body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-back,.ep-messages-top .ep-messages-action:first-child) { width:34px;height:34px; }
+body[data-ui-mode=phone] :is(.ep-header-button,.ep-im-back,.sheet-head button[data-close]) svg {width:15px;height:15px}
+.ep-home-ink-toggle svg {width:20px;height:20px;fill:currentColor;stroke:currentColor}
+.ep-home-ink-toggle[aria-pressed=true] svg {fill:none}
+body[data-ui-mode=phone] .ep-page-optic { position:relative; isolation:isolate; }
+body[data-ui-mode=phone] .ep-page-optic > :not(.ep-optical-canvas) { position:relative;z-index:2; }
+body[data-ui-mode=phone] .ep-page-optic .ep-optical-canvas { z-index:0; border-radius:inherit; }
+body[data-ui-mode=phone] .ep-page-optic[data-ep-optics-ready="1"] {
+  -webkit-backdrop-filter:none; backdrop-filter:none;
+}
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-composer {
+  position:relative;isolation:isolate;background:transparent;
+  -webkit-backdrop-filter:none;backdrop-filter:none;
+}
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-composer::before {
+  content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;
+  background:#182c3c64;-webkit-backdrop-filter:blur(9px) saturate(132%);backdrop-filter:blur(9px) saturate(132%);
+}
+body[data-ui-mode=phone][data-dark=true] #emoiPhoneView .ep-im-picker { background:#263744b8;color:#fff; }
+@media (prefers-reduced-transparency:reduce) {
+  body[data-ui-mode=phone] #emoiPhoneView .ep-im-picker { background:#eff5fa; }
+  body[data-ui-mode=phone][data-dark=true] #emoiPhoneView .ep-im-picker,
+  body[data-ui-mode=phone] #emoiPhoneView .ep-im-composer::before { background:#182b3d; }
+  body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-picker,.ep-record-bar,.ep-voice-capsule),
+  body[data-ui-mode=phone] #emoiPhoneView .ep-im-composer::before { -webkit-backdrop-filter:none;backdrop-filter:none; }
+}

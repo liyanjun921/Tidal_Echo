@@ -135,6 +135,9 @@ function openCall(item,initialMode){
  dialog.addEventListener('close',()=>{stopCamera();dialog.remove()},{once:true});
  dialog.showModal();setMode(initialMode);
 }
+function withoutEmoji(text){
+ return text.replace(/[#*0-9]\uFE0F?\u20E3|\p{Regional_Indicator}|\p{Extended_Pictographic}(?:\uFE0F|\uFE0E|\p{Emoji_Modifier}|[\u{E0020}-\u{E007F}])*(?:\u200D\p{Extended_Pictographic}(?:\uFE0F|\uFE0E|\p{Emoji_Modifier})*)*|\p{Emoji_Modifier}/gu,'');
+}
 function mmss(seconds){
  const n=Number.isFinite(seconds)?Math.max(0,Math.floor(seconds)):0;
  return Math.floor(n/60)+':'+String(n%60).padStart(2,'0');
@@ -160,7 +163,7 @@ function voicePlayer(source,duration){
 }
 function renderAttachment(bubble,attachment,registerURL){
  if(attachment.kind==='location'){
-  const link=document.createElement('a');link.className='ep-im-location';link.textContent='⌖ 查看位置';
+  const link=document.createElement('a');link.className='ep-im-location';link.textContent='查看位置';
   const coords=encodeURIComponent(attachment.latitude+','+attachment.longitude);
   link.href='https://maps.apple.com/?ll='+coords;link.target='_blank';link.rel='noopener noreferrer';
   bubble.append(link);return;
@@ -262,7 +265,7 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
  const input=document.createElement('textarea');input.rows=1;input.maxLength=10000;input.placeholder='iMessage';input.setAttribute('aria-label','输入消息');
  const submit=document.createElement('button');submit.type='submit';submit.className='ep-im-submit';submit.setAttribute('aria-label','发送消息');submit.innerHTML=icon('arrow');submit.disabled=true;
  const attach=button('添加附件','plus',()=>{input.blur();setPicker(picker.hidden)},'ep-im-attach');
- function setPicker(open){picker.hidden=!open;attach.setAttribute('aria-expanded',String(open));if(open)emojiRow.hidden=true}
+ function setPicker(open){picker.hidden=!open;attach.setAttribute('aria-expanded',String(open));}
  attach.setAttribute('aria-expanded','false');
  attach.setAttribute('aria-controls','ep-im-picker');
  const mic=button('录制语音','wave',recordVoice,'ep-im-attach ep-im-mic');
@@ -309,23 +312,9 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
   return pick;
  }
  const photos=filePicker('image'),stickers=filePicker('sticker');
- const emojiRow=document.createElement('div');emojiRow.className='ep-im-emoji';emojiRow.hidden=true;
  picker.append(pickerButton('照片','photo',()=>photos.click(),'photo'),photos,
-  pickerButton('贴纸','sticker',()=>{emojiRow.hidden=!emojiRow.hidden},'sticker'),stickers,
+  pickerButton('贴纸','sticker',()=>stickers.click(),'sticker'),stickers,
   pickerButton('音频','wave',recordVoice,'audio'));
- emojiRow.append(pickerButton('导入表情包','plus',()=>stickers.click(),'sticker'));
- for(const emoji of ['🤍','🫧','🥺','🫶','🌙','✨']){
-  const tile=document.createElement('button');tile.type='button';tile.textContent=emoji;
-  tile.setAttribute('aria-label','表情包 '+emoji);
-  tile.onclick=()=>{
-   const canvas=document.createElement('canvas');canvas.width=160;canvas.height=160;
-   const ctx=canvas.getContext('2d');if(!ctx)return;
-   ctx.font='112px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
-   ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(emoji,80,84);
-   canvas.toBlob(blob=>{if(blob&&isOpen())setAttachment(blob,'sticker')},'image/png');
-  };
-  emojiRow.append(tile);
- }
  const location=pickerButton('位置','location',()=>{
   if(!navigator.geolocation){report('当前浏览器无法获取位置');return}
   navigator.geolocation.getCurrentPosition(({coords})=>{
@@ -336,7 +325,7 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
  const voiceCheck=document.createElement('input');voiceCheck.type='checkbox';
  voiceCheck.disabled=!endpoint||!window.EmoiRelay?.enabled;
  voiceReply.append(voiceCheck,'请用语音回复');
- picker.querySelector('[data-tone=sticker]').after(emojiRow);picker.append(location,voiceReply);
+ picker.append(location,voiceReply);
  const typing=document.createElement('div');typing.className='ep-im-typing';typing.hidden=true;typing.setAttribute('aria-label','等待 AI 回复');
  for(let i=0;i<3;i++)typing.append(document.createElement('i'));
  content.append(typing);
@@ -349,7 +338,7 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
  observer?.observe(body);
  const report=text=>{notice.textContent=text;notice.hidden=!text};
  const updateSend=()=>{
-  const ready=Boolean(input.value.trim()||attachment);
+  const ready=Boolean(withoutEmoji(input.value).trim()||attachment);
   submit.disabled=!ready||sending||replying||Boolean(recording)||starting;
   const voiceMode=attachment?.kind==='voice';
   submit.hidden=!ready;mic.hidden=ready;
@@ -479,13 +468,21 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
  if(endpoint&&window.EmoiRelay?.enabled)void refresh();
  else{report('未连接会话服务器 · 消息保存在本机');hydrated=true}
  updateSend();
- input.addEventListener('input',()=>{
+ const cleanInput=()=>{
+  const clean=withoutEmoji(input.value);
+  if(clean===input.value)return;
+  const caret=withoutEmoji(input.value.slice(0,input.selectionStart??input.value.length)).length;
+  input.value=clean;input.setSelectionRange(caret,caret);
+ };
+ input.addEventListener('compositionend',()=>{cleanInput();updateSend()});
+ input.addEventListener('input',event=>{
+  if(!event.isComposing)cleanInput();
   updateSend();input.style.height='32px';input.style.height=Math.min(input.scrollHeight,94)+'px';
  });
  input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&e.keyCode!==229){e.preventDefault();if(!submit.disabled)footer.requestSubmit()}});
  footer.onsubmit=async e=>{
   e.preventDefault();
-  const text=input.value.trim(), media=attachment, voice=voiceCheck.checked;
+  const text=withoutEmoji(input.value).trim(), media=attachment, voice=voiceCheck.checked;
   if((!text&&!media)||sending||replying||recording||starting)return;
   sending=true;updateSend();
   try{

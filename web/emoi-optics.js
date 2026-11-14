@@ -1,9 +1,10 @@
-/* One wallpaper texture and one WebGL context for all home-screen lenses.
+/* One wallpaper texture and one WebGL context for visible liquid-glass surfaces.
    Draw only when the wallpaper, layout or scroll position changes. */
 (() => {
   'use strict';
   const phone = document.getElementById('emoiPhone');
-  if (!phone || matchMedia('(hover: none) and (pointer: coarse)').matches) return;
+  if (!phone) return;
+  const mobile = matchMedia('(pointer: coarse)');
   const forced = matchMedia('(forced-colors: active)');
   const reduced = matchMedia('(prefers-reduced-transparency: reduce)');
   const targets = new Map();
@@ -35,11 +36,16 @@
       vec2 n = vec2(roundBox(p + vec2(0.5, 0.0), halfSize, r) - d,
                     roundBox(p + vec2(0.0, 0.5), halfSize, r) - d);
       n = normalize(n + vec2(0.0001));
-      float bevel = smoothstep(-r * 0.75, -0.8, d);
+      float edgeWidth = min(38.0, min(size.x, size.y) / 3.5);
+      float bevel = clamp(1.0 + d / edgeWidth, 0.0, 1.0);
       float wave = sin(uv.y * 12.0 + uv.x * 3.0) * cos(uv.x * 8.0);
-      vec2 shift = -n * bevel * bevel * depth
+      vec2 shift = -n * pow(bevel, 2.6) * depth
                    + (uv - 0.5) * 0.55 + vec2(wave, -wave) * (0.12 + 0.4 * bevel);
-      vec3 c = texture2D(wallpaper, crop.xy + (uv + shift / size) * crop.zw).rgb;
+      vec2 uvShift = shift / size * crop.zw;
+      vec2 base = crop.xy + uv * crop.zw;
+      vec3 c = vec3(texture2D(wallpaper, base + uvShift * 1.09).r,
+                    texture2D(wallpaper, base + uvShift).g,
+                    texture2D(wallpaper, base + uvShift * 0.94).b);
       float light = dot(n, normalize(vec2(-0.65, -1.0)));
       float rim = (d + 1.1) / 0.72;
       float shoulder = (d + 3.3) / 1.65;
@@ -47,7 +53,7 @@
       float inner = exp(-shoulder * shoulder);
       c = mix(c * (1.0 - inner * 0.12), vec3(1.0),
         glint * (0.13 + 0.47 * max(light, 0.0) + 0.16 * max(-light, 0.0)));
-      float opacity = (0.19 + 0.52 * bevel) * (1.0 - smoothstep(-1.2, 0.25, d));
+      float opacity = (0.04 + 0.83 * bevel) * (1.0 - smoothstep(-1.2, 0.25, d));
       gl_FragColor = vec4(c, opacity);
     }`;
 
@@ -116,15 +122,24 @@
   }
 
   function render() {
-    if (forced.matches || reduced.matches || document.documentElement.dataset.glass === 'frost' || document.body.dataset.uiMode !== 'phone' || document.body.dataset.phoneScreen !== 'home') {
+    const page = [...document.querySelectorAll('.page-sheet[open], #wrenRoom[open]')].at(-1);
+    const home = document.body.dataset.phoneScreen === 'home';
+    const override = document.body.dataset.pageGlass;
+    const material = override || document.documentElement.dataset.glass;
+    if (forced.matches || reduced.matches || material === 'frost' || document.body.dataset.uiMode !== 'phone' || (!page && !home)) {
       clearLenses();
       return;
     }
-    const css = getComputedStyle(phone, '::before').backgroundImage;
-    if (source !== css) loadWallpaper(css);
-    const box = phone.getBoundingClientRect();
+    const sceneRoot = page || phone;
+    const style = getComputedStyle(sceneRoot, page ? null : '::before');
+    const imageLayer = [...style.backgroundImage.matchAll(/url\((?:"[^"]*"|'[^']*'|[^)]*)\)/g)].at(-1)?.[0];
+    if (!imageLayer) { clearLenses(); return; }
+    if (source !== imageLayer) loadWallpaper(imageLayer);
+    const box = sceneRoot.getBoundingClientRect();
     if (!box.width || !box.height) return;
-    const nodes = [...phone.querySelectorAll('[data-ep-optics]')];
+    const nodes = [...sceneRoot.querySelectorAll(page
+      ? '.calendar-month-card, .calendar-detail, .entry-card, .sheet-head'
+      : '[data-ep-optics]')];
     if (!image) return;
     const scene = layout(box);
     if (engine === undefined) engine = createRenderer();
@@ -145,7 +160,8 @@
       engine.uploaded = image;
     }
     const active = nodes.map(node => ({node, rect: node.getBoundingClientRect()}))
-      .filter(({rect}) => rect.width > 1 && rect.height > 1 && rect.bottom > box.top && rect.top < box.bottom);
+      .filter(({rect}) => rect.width >= 32 && rect.height >= 32 && rect.bottom > box.top && rect.top < box.bottom);
+    if (mobile.matches && page) active.splice(6);
     for (const [node, layer] of targets) {
       if (!active.some(item => item.node === node)) {
         layer.remove();
@@ -154,7 +170,7 @@
       }
     }
     if (!active.length) return;
-    const scale = Math.min(devicePixelRatio || 1, 1.5);
+    const scale = Math.min(devicePixelRatio || 1, mobile.matches ? 1 : 1.5);
     const width = Math.max(...active.map(({rect}) => Math.ceil(rect.width * scale)));
     const height = Math.max(...active.map(({rect}) => Math.ceil(rect.height * scale)));
     if (canvas.width !== width) canvas.width = width;
@@ -163,6 +179,7 @@
       const w = Math.ceil(rect.width * scale), h = Math.ceil(rect.height * scale);
       let layer = targets.get(node);
       if (!layer) {
+        if (page) node.classList.add('ep-page-optic');
         layer = document.createElement('canvas');
         layer.className = 'ep-optical-canvas';
         layer.setAttribute('aria-hidden', 'true');
@@ -177,7 +194,7 @@
         (rect.top - box.top - scene.top) / scene.height, rect.width / scene.width, rect.height / scene.height);
       gl.uniform2f(uniforms.size, rect.width, rect.height);
       gl.uniform1f(uniforms.radius, parseFloat(getComputedStyle(node).borderTopLeftRadius) || 0);
-      gl.uniform1f(uniforms.depth, Math.min(13, Math.min(rect.width, rect.height) * 0.16));
+      gl.uniform1f(uniforms.depth, Math.min(41, Math.min(rect.width, rect.height) * 0.30));
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       const ctx = layer.getContext('2d');
       ctx.clearRect(0, 0, w, h);
@@ -195,13 +212,13 @@
     if (mutations.some(record => record.type === 'attributes' ||
       [...record.addedNodes, ...record.removedNodes].some(node => node.nodeName !== 'CANVAS'))) schedule();
   });
-  observer.observe(phone, {childList: true, subtree: true});
-  observer.observe(document.body, {attributes: true, attributeFilter: ['data-ui-mode', 'data-phone-screen', 'data-emoi-wall', 'class']});
+  observer.observe(document.body, {childList: true, subtree: true, attributes:true, attributeFilter:['open']});
+  observer.observe(document.body, {attributes: true, attributeFilter: ['data-ui-mode', 'data-phone-screen', 'data-emoi-wall', 'class', 'data-page-glass', 'data-dark']});
   observer.observe(document.documentElement, {attributes: true, attributeFilter: ['style', 'data-theme', 'data-glass']});
   if (window.ResizeObserver) new ResizeObserver(schedule).observe(phone);
   reduced.addEventListener('change', schedule);
   window.addEventListener('resize', schedule, {passive: true});
-  phone.addEventListener('scroll', schedule, {passive: true, capture: true});
+  document.addEventListener('scroll', schedule, {passive: true, capture: true});
   document.addEventListener('visibilitychange', schedule);
   forced.addEventListener?.('change', schedule);
   schedule();

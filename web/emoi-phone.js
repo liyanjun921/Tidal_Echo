@@ -7,11 +7,11 @@
 const MODE_KEY='emoi-ui-mode-v1';
 const CONTACTS_KEY='emoi-ui-contacts-v1';
 const GROUPS_KEY='emoi-ui-groups-v1';
-const HOME_INK_KEY='emoi-home-ink-v1';
 const phone=document.getElementById('emoiPhone');
 if(!phone)return;
 const $=(s,r=document)=>r.querySelector(s);
 const icoPaths={
+ apps:'<path d="M4 4h6v6H4zm10 0h6v6h-6zM4 14h6v6H4zm10 0h6v6h-6z"/>',
   compose:'<path d="M12 4H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-7M10 14l1-4 7-7 3 3-7 7-4 1Z"/>',
   chat:'<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 9 9 0 0 1-4-.95L3 21l1.95-5a9 9 0 1 1 16.05-4.5Z"/>',
   contacts:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
@@ -39,6 +39,7 @@ const icoPaths={
 };
 const icon=name=>'<svg viewBox="0 0 24 24" role="presentation" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(icoPaths[name]||icoPaths.more)+'</svg>';
 const launcherGlyphs={
+ apps:'<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>',
  chat:'<path d="M12 3.5c-5.1 0-9.2 3.4-9.2 7.9 0 2.4 1.2 4.5 3.3 5.9l-.7 3.1 3.9-1.8c.9.3 1.8.4 2.7.4 5.1 0 9.2-3.4 9.2-7.6 0-4.5-4.1-7.9-9.2-7.9Z"/>',
  contacts:'<circle cx="12" cy="7.4" r="4"/><path d="M4.1 19.5c0-4 3.4-6.8 7.9-6.8s7.9 2.8 7.9 6.8c0 .8-.5 1.2-1.4 1.2h-13c-.9 0-1.4-.4-1.4-1.2Z"/>',
  reading:'<path d="M2.8 5.4c3.3-1 6.4-.5 8.4 1v13.3c-2.5-1.6-5.4-2-8.4-1.1Zm18.4 0c-3.3-1-6.4-.5-8.4 1v13.3c2.5-1.6 5.4-2 8.4-1.1Z"/>',
@@ -59,7 +60,7 @@ const apps=[
  {id:'cinema',label:'影院',icon:'cinema',tone:'night'},
  {id:'room',label:'Room',icon:'room',tone:'ocean'},
  {id:'checklist',label:'清单',icon:'checklist',tone:'warm'},
- {id:'more',label:'更多',icon:'more',tone:'silver'},
+ {id:'more',label:'应用',icon:'apps',tone:'silver'},
  {id:'settings',label:'设置',icon:'settings',tone:'blue'}
 ];
 const dockIds=['chat','room','calendar','settings'];
@@ -192,15 +193,14 @@ const homeWidgets={
  room:{label:'Room', icon:'room', markup:'<strong>自主空间</strong><span>打开 Room</span>'}
 };
 const widgetId=id=>'widget:'+id;
-const homeApps=apps.filter(app=>!['more','settings','contacts','checklist'].includes(app.id));
+const homeApps=apps.filter(app=>!['settings','contacts','checklist'].includes(app.id));
 const initialHomeLayout=[
  {id:widgetId('calendar'),wide:false},{id:widgetId('reading'),wide:false},
  ...homeApps.map(({id})=>({id,wide:false}))
 ];
 let homeLayout=readHomeLayout();
 let homeEditing=false, homeSelection=null;
-let darkHomeInk=false;
-try{darkHomeInk=localStorage.getItem(HOME_INK_KEY)==='black'}catch{}
+
 
 
 function readHomeLayout(){
@@ -313,24 +313,24 @@ function openHome(){
  const previousScroll=phone.querySelector('.ep-home-scroll')?.scrollTop||0;
  const root=view();root.className='ep-view ep-home';
  root.toggleAttribute('data-home-editing',homeEditing);
- root.dataset.homeInk=darkHomeInk?'black':'white';
  const top=create('header','ep-home-top');
  const clock=create('time','ep-desktop-clock');clock.setAttribute('data-ep-clock','');
  const actions=create('div','ep-home-actions');
  const wallpaper=actionButton('更换桌面壁纸','photo',()=>window.EmoiWallpapers?.open(),'ep-home-control ep-home-square');
  wallpaper.setAttribute('data-ep-optics','');
  const ink=homeTextButton('',()=>{
-  darkHomeInk=!darkHomeInk;
-  try{localStorage.setItem(HOME_INK_KEY,darkHomeInk?'black':'white')}catch{}
-  root.dataset.homeInk=darkHomeInk?'black':'white';
+  window.EmoiApp?.setDark(document.body.dataset.dark!=='true');
   updateInkControl();
  });
  function updateInkControl(){
-  ink.textContent=darkHomeInk?'白字':'黑字';
-  ink.setAttribute('aria-label',darkHomeInk?'切换为白色图标和文字':'切换为黑色图标和文字');
+  const dark=document.body.dataset.dark==='true';
+  root.dataset.homeInk=dark?'white':'black';
+  ink.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /></svg>';
+  ink.setAttribute('aria-label',dark?'切换浅色模式':'切换深色模式');
+  ink.setAttribute('aria-pressed',String(dark));
  }
  updateInkControl();
- ink.classList.add('ep-home-ink-toggle');
+ ink.classList.add('ep-home-ink-toggle','ep-home-square');
  ink.setAttribute('data-ep-optics','');
  actions.append(wallpaper,ink);
  if(homeEditing)actions.append(homeTextButton('添加小组件',openWidgetPicker));
@@ -383,9 +383,6 @@ function openHome(){
  scroll.append(grid);root.append(scroll);
  scroll.scrollTop=previousScroll;
  const bottom=create('div','ep-home-bottom');
- const search=actionButton('搜索联系人','search',openContacts,'ep-home-control ep-home-search');
- search.innerHTML='<span>'+icon('search')+'搜索</span>';
- search.setAttribute('data-ep-optics','');
  const dock=create('nav','ep-dock');dock.setAttribute('aria-label','常用应用');
  for(const id of dockIds){
   const app=apps.find(item=>item.id===id);
@@ -394,7 +391,7 @@ function openHome(){
   dock.append(button);
  }
  dock.setAttribute('data-ep-optics','');
- bottom.append(search,dock);root.append(bottom);
+ bottom.append(dock);root.append(bottom);
  updateClock();
 }
 function listItem(id,title,subtitle,iconName,handler){
@@ -682,14 +679,15 @@ function openSettings(){
 }
 function openMore(){
  setScreen('more');const root=view();root.className='ep-view ep-list-screen';root.append(header('全部应用',openHome));
- const body=create('div','ep-list-scroll');const title=create('div','ep-list-intro');title.append(create('small','','ÉMOI APPS'),create('h2','','更多空间'));body.append(title);
+ const body=create('div','ep-list-scroll');
  const groups=[
+ ['常用应用',apps.filter(app=>!['more','contacts','checklist'].includes(app.id)).map(app=>[app.id,app.label,app.icon])],
  ['私人生活',[['whisper','悄悄话','journal'],['report','日报','reading'],['health','健康记录','memory'],['todo','待办清单','checklist']]],
  ['系统',[['repo','仓库','bookcase'],['appearance','美化','settings'],['connection','模型连接','connect'],['legacy','旧版聊天','chat']]]
  ];
  for(const [section,items] of groups){
  const s=create('section','ep-app-section');s.append(create('h3','',section));
- for(const [id,label,iconName] of items)s.append(listItem(id,label,'打开应用',iconName,()=>id==='connection'?openConnection():id==='legacy'?openLegacy():launchPage(id)));
+ for(const [id,label,iconName] of items)s.append(listItem(id,label,'',iconName,()=>id==='connection'?openConnection():id==='legacy'?openLegacy():openApp(id)));
  body.append(s);
  }
  root.append(body);
@@ -793,7 +791,7 @@ function openBeauty(){
  const demo=create('div','ep-im-row ep-im-theirs');
  demo.append(create('span','ep-im-bubble','你好呀'));
  const reply=create('div','ep-im-row ep-im-mine');
- const bubble=create('span','ep-im-bubble','今天见 ☁️');reply.append(bubble);
+ const bubble=create('span','ep-im-bubble','今天见');reply.append(bubble);
  samples.append(demo,reply);sample.append(samples);
  const controls=create('section','ep-beauty-settings');controls.append(create('h2','ep-beauty-title','全局美化'));
  const style=create('fieldset','ep-beauty-choices');style.append(create('legend','','玻璃风格'));
