@@ -16,7 +16,7 @@ async function request(path,opts={}){
  if(preview)throw new Error('界面预览未连接服务器，请勿在此填写密钥');
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),opts.timeout||30000),abort=()=>controller.abort();if(opts.signal?.aborted)controller.abort();else opts.signal?.addEventListener('abort',abort,{once:true});
  try{const r=await fetch(apiUrl(path),{...opts,signal:controller.signal,headers:{Authorization:'Bearer '+secret,...(opts.body&&typeof opts.body==='string'?{'Content-Type':'application/json'}:{}),...opts.headers}});
- if(!r.ok){let message='请求失败 HTTP '+r.status;try{const d=await r.json();message=typeof d.detail==='string'?d.detail:typeof d.error==='string'?d.error:message}catch{};throw new Error(message)}
+ if(!r.ok){let message='请求失败 HTTP '+r.status;try{const d=await r.json();message=typeof d.detail==='string'?d.detail:typeof d.error==='string'?d.error:message}catch{};const error=new Error(message);error.status=r.status;throw error}
  return opts.blob?await r.blob():await r.json();
  }finally{clearTimeout(timer);opts.signal?.removeEventListener('abort',abort)}
 }
@@ -121,6 +121,7 @@ function wirePlan(){for(const name of ['gpt','claude']){$('#agent-'+name).elemen
 async function settings(){
  emit('settings-open',{});
  const dialog=$('#connectionDialog');$('#relayBase').value=config.base;$('#relaySecret').value='';$('#rememberConnection').checked=!!config.remember;if(!dialog.open)dialog.showModal();
+ void window.EmoiModelConnections?.open();
  if(preview){$('#settingsStatus').textContent='当前为私人界面预览。模型、通知、MiniMax / ElevenLabs 朗读和 MCP 需部署正式服务后连接；请勿在这里填写密钥。生活页的本机保存可以实际使用。';document.querySelectorAll('#connectionForm input,#connectionForm button,#agent-gpt input,#agent-gpt textarea,#agent-gpt button:not([data-plan-open]),#agent-claude input,#agent-claude textarea,#agent-claude button:not([data-plan-open]),#mcpForm input,#mcpForm button,#contextForm input,#contextForm select,#contextForm button,#speechForm input,#speechForm button').forEach(e=>e.disabled=true);return}
  if(!secret)return;
  try{await speechSettings()}catch(e){$('#speechConfigStatus').textContent=e.message}

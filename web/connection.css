@@ -9,3 +9,15 @@
 .ombre-sheet{width:min(100vw,1100px);max-width:100vw}#ombreDashboard{width:100%;height:78dvh;min-height:520px;border:1px solid rgba(116,145,165,.2);border-radius:22px;background:#edf3f6}.ombre-sheet .sheet-body{overflow-x:hidden}
 
 #openDuet{margin:8px 12px;font-size:12px}#duetDialog textarea{width:100%;min-height:130px}.duet-body{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8}#duetRounds .entry-card{padding:18px}#continuityThreads p{overflow-wrap:anywhere}
+
+.model-settings-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.model-settings-title h3{margin:0;font-size:16px}
+.model-connection-list{display:grid;gap:8px}
+.model-connection-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.model-connection-row>div{flex:1;min-width:0;overflow-wrap:anywhere}
+.model-connection-row strong,.model-connection-row small{display:block}
+.model-connection-row small{margin-top:4px;color:var(--muted)}
+.model-connection-row .soft-button{flex-shrink:0;padding-inline:10px}
+#modelConnectionForm{padding-top:16px;border-top:1px solid var(--line)}
+#modelConnectionForm [role=status],#modelConnections [role=status],#modelConnectionStatus{margin:0}
+#modelConnectionForm[hidden],#modelCatalog[hidden],#modelConnectionForm [role=status]:empty,#modelConnections [role=status]:empty,#modelConnectionStatus:empty{display:none}

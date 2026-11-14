@@ -26,7 +26,8 @@ MEDIA_TYPES = {
 }
 MEDIA_TYPES["sticker"] = MEDIA_TYPES["image"]
 MEDIA_LABELS = {"image": "图片", "sticker": "表情包", "voice": "语音消息", "location": "位置"}
-MODEL_ROUTES = {"default", "gpt", "claude"}
+MODEL_ROUTES = {"default", "gpt", "claude", "chatgpt-plan"}
+API_CONNECTION_ROUTE = re.compile(r"api:[0-9a-f]{32}")
 UUID_PATTERN = re.compile(r"^[0-9a-fA-F-]{36}$")
 
 
@@ -160,7 +161,7 @@ def register(app, relay):
         """, (cid,)).fetchall()
 
     def reply_targets(db, cid):
-        return [member for member in model_members(db, cid) if member["model_route"] in MODEL_ROUTES]
+        return [member for member in model_members(db, cid) if member["model_route"] in MODEL_ROUTES or API_CONNECTION_ROUTE.fullmatch(member["model_route"])]
 
     async def generate_replies(cid, message_id, recipients, voice_reply=False):
         completed = 0

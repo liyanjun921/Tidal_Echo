@@ -142,6 +142,27 @@ class ContactIsolationTests(unittest.TestCase):
         request["attachment"]["latitude"] = 95
         self.assertEqual(self.post(path, request).status_code, 422)
 
+    def test_contact_can_switch_between_named_api_and_subscription(self):
+        named = "api:" + uuid4().hex
+        new = self.post("/emoi/v2/contacts", {"name": "测试", "model_route": named}).json()
+        path = "/emoi/v2/contacts/" + new["contact"]["id"]
+        chat = "/emoi/v2/conversations/" + new["conversation_id"] + "/messages"
+        bindings = []
+        real_client = httpx.AsyncClient
+
+        def reply(request):
+            import json
+            bindings.append(json.loads(request.content)["route"])
+            return httpx.Response(200, json={"text": "你好"})
+
+        with patch("backend.emoi_contacts.httpx.AsyncClient", side_effect=lambda **kwargs:
+                   real_client(transport=httpx.MockTransport(reply), **kwargs)):
+            self.assertTrue(self.post(chat, {"text": "第一次", "nonce": uuid4().hex}).json()["model_dispatched"])
+            update = self.client.patch(path, headers=self.h, json={"model_route": "chatgpt-plan"})
+            self.assertEqual(update.json()["contact"]["model_route"], "chatgpt-plan")
+            self.assertTrue(self.post(chat, {"text": "第二次", "nonce": uuid4().hex}).json()["model_dispatched"])
+        self.assertEqual(bindings, [named, "chatgpt-plan"])
+
     def test_group_replies_are_ordered_isolated_and_idempotent(self):
         a = self.post("/emoi/v2/contacts", {"name":"甲","notes":"甲的私有档案","model_route":"gpt"}).json()
         b = self.post("/emoi/v2/contacts", {"name":"乙","notes":"乙的私有档案","model_route":"claude"}).json()

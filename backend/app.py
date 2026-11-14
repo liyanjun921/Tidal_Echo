@@ -1116,6 +1116,13 @@ async def loop_proxy_get(request: Request, path: str):
     return loop_json("/loop/" + path)
 
 
+@app.post("/app/loop/model-connections/models")
+async def loop_model_catalog(request: Request):
+    check_auth(request)
+    body = await request.json()
+    return await asyncio.to_thread(loop_json, "/loop/model-connections/models", method="POST", body=body)
+
+
 @app.post("/app/loop/{path:path}")
 async def loop_proxy_post(request: Request, path: str):
     check_auth(request)

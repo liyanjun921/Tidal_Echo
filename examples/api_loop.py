@@ -45,9 +45,11 @@ from contextvars import ContextVar
 from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 import uvicorn
+from anyio import fail_after
 from fastapi import FastAPI, HTTPException, Request
 
 try:  # MCP is optional: without the SDK the loop still chats, just without tools.
@@ -74,6 +76,7 @@ def load_dotenv(path: Path) -> None:
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "backend"))
 from emoi import memory_context
+from emoi_contacts import API_CONNECTION_ROUTE, MODEL_ROUTES
 from emoi_memory import LatentEngine, RULES as MEMORY_RULES
 from emoi_native import NativeEngine, NATIVE_TOOLS
 from workspace import whisper_context
@@ -1973,18 +1976,157 @@ def _atts_from(body: dict[str, Any], msg_id: int | None) -> list[dict[str, Any]]
     return relay_message_attachments(msg_id)
 
 
+def connection_fields(body, existing, *, for_catalog=False):
+    if not isinstance(body, dict):
+        raise HTTPException(422, "连接配置格式无效")
+    url = str(body.get("url") or "").strip().rstrip("/")
+    protocol = body.get("protocol", "openai")
+    try:
+        parts = urlsplit(url)
+        if (len(url) > 1000 or any(c.isspace() or c == chr(92) for c in url) or not parts.hostname
+            or parts.username is not None or parts.password is not None or parts.query or parts.fragment
+            or not (parts.scheme == "https" or parts.scheme == "http" and parts.hostname in {"localhost", "127.0.0.1"})):
+            raise ValueError
+        parts.port  # Reject malformed ports before use.
+    except ValueError:
+        raise HTTPException(422, "请填写 HTTPS API Base URL，地址中不能包含账号、密钥或查询参数") from None
+    if protocol not in ("openai", "anthropic"):
+        raise HTTPException(422, "接口格式无效")
+    key = str(body.get("key") or "").strip()
+    if not key and url == existing.get("url") and protocol == existing.get("protocol"):
+        key = existing.get("key", "")
+    if not key or len(key) > 4096 or not key.isascii() or any(ord(c) < 33 or ord(c) == 127 for c in key):
+        raise HTTPException(422, "请填写此连接的 API Key；更换地址或接口格式时需重新输入")
+    route = {"url": url, "protocol": protocol, "key": key}
+    if not for_catalog:
+        route.update(name=str(body.get("name") or "").strip(), model=str(body.get("model") or "").strip())
+        if not 1 <= len(route["name"]) <= 80 or not 1 <= len(route["model"]) <= 256:
+            raise HTTPException(422, "请填写连接名称与模型 ID")
+    return route
+
+
+def model_connection_view(cfg):
+    saved = cfg.get("model_connections", {})
+    gpt = cfg.get("agents", {}).get("gpt", {})
+    return {
+        "subscription_model": cfg.get("contact_subscription_model", gpt.get("subscription_model", "")),
+        "connections": [{"id": ident, "name": row["name"], "url": row["url"], "protocol": row["protocol"],
+                         "model": row["model"], "key_set": bool(row["key"])} for ident, row in saved.items()],
+    }
+
+
+@app.get("/loop/model-connections")
+async def list_model_connections():
+    return model_connection_view(load_config())
+
+
+@app.post("/loop/model-connections")
+async def save_model_connection(request: Request):
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(422, "连接配置格式无效")
+    cfg = load_config()
+    rows = cfg.setdefault("model_connections", {})
+    ident = body.get("id")
+    if ident is None:
+        ident = "api:" + uuid.uuid4().hex
+    elif not isinstance(ident, str) or ident not in rows:
+        raise HTTPException(404, "此 API 连接已不存在")
+    rows[ident] = connection_fields(body, rows.get(ident, {}))
+    save_config(cfg)
+    return model_connection_view(cfg)
+
+
+@app.delete("/loop/model-connections/{ident}")
+async def delete_model_connection(ident: str):
+    cfg = load_config()
+    rows = cfg.get("model_connections", {})
+    if ident not in rows:
+        raise HTTPException(404, "此 API 连接已不存在")
+    del rows[ident]
+    save_config(cfg)
+    return model_connection_view(cfg)
+
+
+@app.post("/loop/model-connections/subscription")
+async def save_contact_subscription(request: Request):
+    body = await request.json()
+    model = body.get("model") if isinstance(body, dict) else None
+    if not isinstance(model, str) or not 1 <= len(model.strip()) <= 160:
+        raise HTTPException(422, "请先选择订阅模型")
+    cfg = load_config()
+    cfg["contact_subscription_model"] = model.strip()
+    save_config(cfg)
+    return model_connection_view(cfg)
+
+
+@app.post("/loop/model-connections/models")
+async def list_connection_models(request: Request):
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(422, "连接配置格式无效")
+    ident = body.get("id")
+    saved = load_config().get("model_connections", {})
+    if ident is not None and (not isinstance(ident, str) or ident not in saved):
+        raise HTTPException(404, "此 API 连接已不存在")
+    route = connection_fields(body, saved.get(ident, {}), for_catalog=True)
+    anthropic = route["protocol"] == "anthropic"
+    base = route["url"]
+    endpoint = base + ("/v1/models" if anthropic and not base.endswith("/v1") else "/models")
+    headers = ({"x-api-key": route["key"], "anthropic-version": "2023-06-01"} if anthropic
+               else {"Authorization": "Bearer " + route["key"]})
+    models = {}
+    params = {}
+    seen_cursors = set()
+    try:
+        with fail_after(20):
+            async with httpx.AsyncClient(timeout=12, follow_redirects=False) as client:
+                while True:
+                    response = await client.get(endpoint, headers=headers, params=params)
+                    if response.status_code in (401, 403):
+                        raise HTTPException(response.status_code, "模型列表鉴权失败，请核对 API Key")
+                    if response.status_code in (404, 405, 501):
+                        raise HTTPException(422, "此地址未提供模型列表，请核对 Base URL 或手填模型 ID")
+                    response.raise_for_status()
+                    result = response.json()
+                    if not isinstance(result, dict) or not isinstance(result.get("data"), list):
+                        raise ValueError
+                    for item in result["data"]:
+                        model_id = item.get("id") if isinstance(item, dict) else None
+                        if isinstance(model_id, str) and 1 <= len(model_id) <= 256:
+                            label = item.get("display_name")
+                            models[model_id] = label[:150] if isinstance(label, str) and label else model_id
+                    if not anthropic or result.get("has_more") is not True:
+                        break
+                    cursor = result.get("last_id")
+                    if not isinstance(cursor, str) or not cursor or cursor in seen_cursors or len(seen_cursors) >= 30:
+                        raise ValueError
+                    seen_cursors.add(cursor)
+                    params["after_id"] = cursor
+    except (TimeoutError, httpx.TimeoutException):
+        raise HTTPException(504, "拉取模型超时，可稍后重试或手填模型 ID") from None
+    except (httpx.HTTPError, ValueError):
+        raise HTTPException(502, "无法读取模型列表，请核对 Base URL，或手填模型 ID") from None
+    return {"models": [{"id": model_id, "name": name} for model_id, name in sorted(models.items())]}
+
+
 @app.post("/loop/contact-reply")
 async def loop_contact_reply(request: Request):
     """Generate one in-app reply using a contact profile and the supplied chat."""
     body = await request.json()
-    if not isinstance(body, dict) or body.get("route") not in ("default", "gpt", "claude"):
+    binding = body.get("route") if isinstance(body, dict) else None
+    if not isinstance(binding, str) or (binding not in MODEL_ROUTES and not API_CONNECTION_ROUTE.fullmatch(binding)):
         raise HTTPException(422, "invalid contact model route")
-    agent = body["route"]
-    if agent == "default":
+    cfg = load_config()
+    if binding == "default":
         route = next(iter(main_chain()), {})
+    elif binding.startswith("api:"):
+        route = cfg.get("model_connections", {}).get(binding)
+        if route is None:
+            raise HTTPException(404, "此联系人绑定的 API 已删除，请重新选择")
     else:
-        route = load_config().get("agents", {}).get(agent, {})
-    uses_chatgpt_plan = agent == "gpt" and route.get("connection_mode") == "chatgpt_plan"
+        route = cfg.get("agents", {}).get("gpt" if binding == "chatgpt-plan" else binding, {})
+    uses_chatgpt_plan = binding == "chatgpt-plan" or (binding == "gpt" and route.get("connection_mode") == "chatgpt_plan")
     if not uses_chatgpt_plan and (
         route.get("connection_mode", "api") != "api"
         or route.get("protocol") not in (None, "", "openai", "anthropic")
@@ -2025,7 +2167,10 @@ async def loop_contact_reply(request: Request):
             messages.append({"role": "user", "content": content})
     try:
         if uses_chatgpt_plan:
-            plan_route = {"model": route.get("subscription_model", "")}
+            model = route.get("subscription_model", "")
+            if binding == "chatgpt-plan":
+                model = cfg.get("contact_subscription_model", model)
+            plan_route = {"model": model}
             result = await asyncio.wait_for(plan_chat(plan_route, messages, None), timeout=85)
         else:
             result = await asyncio.wait_for(complete_chat(route, messages, None), timeout=26)

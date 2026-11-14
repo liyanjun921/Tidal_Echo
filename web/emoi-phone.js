@@ -70,16 +70,28 @@ function safeRead(key){
 let contacts=safeRead(CONTACTS_KEY).filter(x=>x&&typeof x.id==='string'&&typeof x.name==='string');
 let groups=safeRead(GROUPS_KEY).filter(x=>x&&typeof x.id==='string'&&typeof x.name==='string');
 const remote={direct:new Map(),latest:new Map()};
+const builtinModelRoutes=[
+ ['', '不绑定'],['chatgpt-plan','GPT Work 订阅直连'],
+ ['default','默认 API 模型（原有）'],['gpt','GPT（原有房间）'],['claude','Claude API（原有房间）']
+];
+let modelConnections=new Map();
+function modelRouteLabel(route){
+ return modelConnections.get(route)?.name||builtinModelRoutes.find(([id])=>id===route)?.[1]||'连接不可用';
+}
+window.addEventListener('emoi-model-connections',event=>{
+ modelConnections=new Map(event.detail.map(connection=>[connection.id,connection]));
+ if(contactDialog?.open)paintContactRoutes(contactDialog.querySelector('[name="model_route"]'));
+ if(screen==='contacts')openContacts();
+ if(screen==='contact-detail')openContactDetail(detail);
+});
+
 async function remoteSaveContact(person,isNew){
  if(!window.EmoiRelay?.enabled)return;
- try{
-   const path=isNew?'/emoi/v2/contacts':'/emoi/v2/contacts/'+encodeURIComponent(person.id);
-   const payload={id:person.id,name:person.name,notes:person.notes||'',model_route:person.model_route||''};
-   const data=await window.EmoiRelay.json(path,isNew?'POST':'PATCH',payload);
-   if(data.contact)Object.assign(person,{memory_namespace:data.contact.memory_namespace,desire_namespace:data.contact.desire_namespace});
-   if(data.conversation_id)remote.direct.set(person.id,data.conversation_id);
-   save(CONTACTS_KEY,contacts);
- }catch(e){console.warn('Émoi 联系人同步未完成：',e.message)}
+ const path=isNew?'/emoi/v2/contacts':'/emoi/v2/contacts/'+encodeURIComponent(person.id);
+ const payload={id:person.id,name:person.name,notes:person.notes||'',model_route:person.model_route||''};
+ const data=await window.EmoiRelay.json(path,isNew?'POST':'PATCH',payload);
+ if(data.contact)Object.assign(person,{memory_namespace:data.contact.memory_namespace,desire_namespace:data.contact.desire_namespace});
+ if(data.conversation_id)remote.direct.set(person.id,data.conversation_id);
 }
 async function remoteSaveGroup(group,isNew){
  if(!window.EmoiRelay?.enabled)return;
@@ -96,14 +108,21 @@ async function syncRemote(){
     window.EmoiRelay.request('/emoi/v2/contacts'),window.EmoiRelay.request('/emoi/v2/conversations')
   ]);
   const onServer=new Map((people.contacts||[]).map(x=>[x.id,x]));
+  const pushed=new Set();
   // Keep any local work, including unsynced files. Never replace by name.
   for(const c of contacts){
-    if(!onServer.has(c.id))await remoteSaveContact(c,true);
+   if(!onServer.has(c.id)||c.pendingSync){
+    try{await remoteSaveContact(c,!onServer.has(c.id));c.pendingSync=false;pushed.add(c.id)}
+    catch(error){console.warn('Émoi 联系人同步未完成：',error.message)}
+   }
   }
   for(const item of (people.contacts||[])){
    const local=contacts.find(c=>c.id===item.id);
-   if(local)Object.assign(local,{memory_namespace:item.memory_namespace,desire_namespace:item.desire_namespace});
-   else contacts.push({id:item.id,name:item.name,notes:item.notes||'',model_route:item.model_route||'',memory_namespace:item.memory_namespace,desire_namespace:item.desire_namespace});
+   const profile={id:item.id,name:item.name,notes:item.notes||'',model_route:item.model_route||'',memory_namespace:item.memory_namespace,desire_namespace:item.desire_namespace};
+   if(!local)contacts.push(profile);
+   else if(!local.pendingSync&&!pushed.has(local.id))Object.assign(local,{
+    model_route:profile.model_route,memory_namespace:profile.memory_namespace,desire_namespace:profile.desire_namespace
+   });
   }
   save(CONTACTS_KEY,contacts);
   for(const conv of rooms.conversations||[]){
@@ -575,7 +594,7 @@ function openContacts(){
  toolbar.append(add,upload,file);intro.append(toolbar);content.append(intro);
  const list=create('div','ep-list-panel');
  if(!contacts.length)list.append(create('p','ep-inline-empty','尚未添加联系人。姓名、头像与个人档案都由你决定。'));
- for(const p of contacts)list.append(listItem(p.id,p.name,p.model_route?'角色档案 · '+p.model_route:'角色档案','contacts',()=>openContactDetail(p.id)));
+ for(const p of contacts)list.append(listItem(p.id,p.name,p.model_route?'回复连接 · '+modelRouteLabel(p.model_route):'角色档案','contacts',()=>openContactDetail(p.id)));
  content.append(list);
  content.append(create('p','ep-help','联系人首先保存在本设备；连接私人服务器后同步身份和独立命名空间。模型、OB 与欲望系统运行权限仍要分别接通和验收。'));
  root.append(content,messageNavigation('contacts'));
@@ -600,7 +619,7 @@ function openContactDetail(id){
  body.append(avatar,create('h2','',person.name),create('p','ep-subtitle',person.notes||'还没有填写人物简介'));
  const status=create('div','ep-status-card');
  status.append(create('span','ep-status-dot'),create('strong','',
-  ['default','gpt','claude'].includes(person.model_route)?'回复路由 · '+person.model_route:'尚未绑定 AI 服务'));
+  person.model_route?'回复连接 · '+modelRouteLabel(person.model_route):'尚未绑定 AI 服务'));
  body.append(status,actionButton('发信息','chat',()=>openContactConversation(id),'ep-round'));
  const edit=create('button','ep-action-primary','编辑联系人');edit.type='button';edit.onclick=()=>openContactEditor(person.id);body.append(edit);
  const del=create('button','ep-danger-action','删除联系人草稿');del.type='button';del.onclick=()=>{if(!confirm('确认删除这张本机联系人草稿？已有云端数据不会修改。'))return;contacts=contacts.filter(x=>x.id!==id);save(CONTACTS_KEY,contacts);if(window.EmoiRelay?.enabled)void window.EmoiRelay.request('/emoi/v2/contacts/'+encodeURIComponent(id),{method:'DELETE'}).catch(e=>console.warn(e.message));openContacts()};body.append(del);
@@ -624,18 +643,33 @@ function openGroupDetail(id){
  };body.append(del);root.append(body);
 }
 let contactDialog=null;
+function paintContactRoutes(select,value=select.value){
+ const add=(parent,id,label)=>{const option=create('option','',label);option.value=id;parent.append(option)};
+ select.replaceChildren();
+ for(const [id,label] of builtinModelRoutes.slice(0,2))add(select,id,label);
+ if(modelConnections.size){
+  const named=create('optgroup');named.label='自定义 API';
+  for(const connection of modelConnections.values())add(named,connection.id,connection.name+' · '+connection.model);
+  select.append(named);
+ }
+ const legacy=create('optgroup');legacy.label='原有连接';
+ for(const [id,label] of builtinModelRoutes.slice(2))add(legacy,id,label);
+ select.append(legacy);
+ if(value&&![...select.options].some(option=>option.value===value))add(select,value,'当前连接（未读取或已移除）');
+ select.value=value;
+}
+
 function openContactEditor(id=null,prefill=null){
  const p=contacts.find(x=>x.id===id);
  if(contactDialog?.open)contactDialog.close();
  contactDialog=$('#epContactDialog');const form=$('#epContactForm');
  form.reset();form.elements.name.value=p?.name||prefill?.name||'';form.elements.notes.value=p?.notes||prefill?.notes||'';const route=form.elements.model_route;
- for(const option of [...route.options])if(option.dataset.legacy)option.remove();
- if(p?.model_route && ![...route.options].some(option=>option.value===p.model_route)){
-  const option=create('option','',p.model_route+'（旧别名）');option.value=p.model_route;option.dataset.legacy='';route.append(option);
- }
- route.value=p?.model_route||'';
+ paintContactRoutes(route,p?.model_route||'');
+ const hint=$('#epContactModelStatus');
+ hint.textContent=window.EmoiRelay?.enabled?'':'连接服务器后可读取自定义 API。';
+ if(window.EmoiRelay?.enabled)void window.EmoiModelConnections?.load().catch(error=>{hint.textContent='读取模型连接失败：'+error.message});
  $('#epContactHeading').textContent=p?'编辑联系人':'添加联系人';
- contactDialog.dataset.editId=p?.id||'';
+ contactDialog.dataset.editId=p?.id||'';delete contactDialog.dataset.newId;
  contactDialog.showModal();
 }
 function openGroupEditor(id=null){
@@ -675,7 +709,7 @@ function openSettings(){
   void window.EmoiWallpapers?.activate('page:home');window.EmoiWallpapers?.open();
  }));
  rows.append(listItem('appearance','美化','玻璃风格与气泡动效','settings',openBeauty));
- rows.append(listItem('connect','连接与模型','连接旧版服务，新的多 AI 独立身份后续实现','connect',()=>openConnection()));
+ rows.append(listItem('connect','API 管理','GPT Work 订阅与自定义 API','connect',()=>openConnection()));
  body.append(rows);
  const priv=create('div','ep-privacy-note');priv.innerHTML=icon('shield')+'<p>界面模式与联系人草稿保存在当前浏览器，不会清空 Émoi 原有聊天或记忆。切换模式不重建服务。</p>';
  body.append(priv);root.append(body);
@@ -686,7 +720,7 @@ function openMore(){
  const groups=[
  ['常用应用',apps.filter(app=>!['more','contacts','checklist'].includes(app.id)).map(app=>[app.id,app.label,app.icon])],
  ['私人生活',[['whisper','悄悄话','journal'],['report','日报','reading'],['health','健康记录','memory'],['todo','待办清单','checklist']]],
- ['系统',[['repo','仓库','bookcase'],['appearance','美化','settings'],['connection','模型连接','connect'],['legacy','旧版聊天','chat']]]
+ ['系统',[['repo','仓库','bookcase'],['appearance','美化','settings'],['connection','API 管理','connect'],['legacy','旧版聊天','chat']]]
  ];
  for(const [section,items] of groups){
  const s=create('section','ep-app-section');s.append(create('h3','',section));
@@ -722,22 +756,36 @@ function openApp(id){
  return launchPage(id);
 }
 function installDialogs(){
- const c=document.createElement('dialog');c.id='epContactDialog';c.className='ep-edit-dialog';c.innerHTML='<form id="epContactForm"><header><strong id="epContactHeading">添加联系人</strong><button type="button" data-ep-close="contact" aria-label="关闭" autofocus>'+icon('x')+'</button></header><p>每位 AI 都拥有永久独立身份、记忆及欲望命名空间。请先在设置里配置模型，再为联系人选择回复模型。</p><label>联系人姓名<input name="name" type="text" required maxlength="50" autocomplete="off" placeholder="自定义名字"></label><label>角色档案 / 人物简介<textarea name="notes" maxlength="5000" rows="4" placeholder="可以导入人物档案或手动填写"></textarea></label><label>头像（仅存当前设备）<input name="avatar" type="file" accept="image/jpeg,image/png,image/webp"></label><label>回复模型<select name="model_route"><option value="">不绑定</option><option value="default">默认 API 模型</option><option value="gpt">GPT（使用设置中的连接方式）</option><option value="claude">Claude API</option></select></label><footer><button type="button" data-ep-close="contact">取消</button><button type="submit">保存联系人</button></footer></form>';
+ const c=document.createElement('dialog');c.id='epContactDialog';c.className='ep-edit-dialog';c.innerHTML='<form id="epContactForm"><header><strong id="epContactHeading">添加联系人</strong><button type="button" data-ep-close="contact" aria-label="关闭" autofocus>'+icon('x')+'</button></header><p>每位 AI 都拥有永久独立身份、记忆及欲望命名空间。请先在设置里配置模型，再为联系人选择回复模型。</p><label>联系人姓名<input name="name" type="text" required maxlength="50" autocomplete="off" placeholder="自定义名字"></label><label>角色档案 / 人物简介<textarea name="notes" maxlength="5000" rows="4" placeholder="可以导入人物档案或手动填写"></textarea></label><label>头像（仅存当前设备）<input name="avatar" type="file" accept="image/jpeg,image/png,image/webp"></label><label>回复连接<select name="model_route"><option value="">不绑定</option></select></label><p role="status" id="epContactModelStatus"></p><footer><button type="button" data-ep-close="contact">取消</button><button type="submit">保存联系人</button></footer></form>';
  const g=document.createElement('dialog');g.id='epGroupDialog';g.className='ep-edit-dialog';g.innerHTML='<form id="epGroupForm"><header><strong id="epGroupHeading">创建群聊</strong><button type="button" data-ep-close="group" aria-label="关闭" autofocus>'+icon('x')+'</button></header><p>已绑定回复模型的成员会依次回复群消息。</p><label>群聊名称<input name="name" required maxlength="50" placeholder="给群聊起个名字"></label><strong>选择联系人</strong><div id="epGroupMembers" class="ep-member-list"></div><p id="epGroupError" role="status"></p><footer><button type="button" data-ep-close="group">取消</button><button type="submit">保存群聊</button></footer></form>';
  document.body.append(c,g);
  c.querySelectorAll('[data-ep-close]').forEach(b=>b.onclick=()=>c.close());
  g.querySelectorAll('[data-ep-close]').forEach(b=>b.onclick=()=>g.close());
- c.querySelector('form').onsubmit=e=>{
+ c.querySelector('form').onsubmit=async e=>{
   e.preventDefault();const form=e.currentTarget,name=form.elements.name.value.trim(),notes=form.elements.notes.value.trim(),model_route=form.elements.model_route.value.trim();if(!name)return;
-  const id=c.dataset.editId;let person;
-  if(id){person=contacts.find(x=>x.id===id);if(person)Object.assign(person,{name,notes,model_route})}
-  else {const cid=crypto.randomUUID();person={id:cid,name,notes,model_route,memory_namespace:'contact:'+cid,desire_namespace:'desire:contact:'+cid,createdAt:new Date().toISOString()};contacts.push(person)}
-  if(!save(CONTACTS_KEY,contacts))return;
-  const avatarFile=form.elements.avatar.files?.[0];c.close();
-  if(avatarFile)void window.EmoiAvatars?.save(person.id,avatarFile).then(()=>{
-   if(screen==='contact-detail')openContactDetail(person.id);else if(screen==='contacts')openContacts();
-  }).catch(err=>alert('头像处理失败：'+err.message));
-  void remoteSaveContact(person,!id);id?openContactDetail(id):openContacts();
+  const id=c.dataset.editId;
+  const old=contacts.find(x=>x.id===id);
+  const cid=id||(c.dataset.newId||=crypto.randomUUID());
+  const person={memory_namespace:'contact:'+cid,desire_namespace:'desire:contact:'+cid,
+   createdAt:new Date().toISOString(),...old,id:cid,name,notes,model_route,pendingSync:true};
+  const submit=form.querySelector('[type=submit]');
+  const avatarFile=form.elements.avatar.files?.[0];
+  submit.disabled=true;
+  try{
+   if(window.EmoiRelay?.enabled&&navigator.onLine!==false){
+    try{await remoteSaveContact(person,false)}
+    catch(error){if(error.status!==404)throw error;await remoteSaveContact(person,true)}
+    person.pendingSync=false;
+   }
+   if(old)Object.assign(old,person);else contacts.push(person);
+   if(!save(CONTACTS_KEY,contacts))return;
+   c.close();
+   if(avatarFile)void window.EmoiAvatars?.save(person.id,avatarFile).then(()=>{
+    if(screen==='contact-detail')openContactDetail(person.id);else if(screen==='contacts')openContacts();
+   }).catch(err=>alert('头像处理失败：'+err.message));
+   id?openContactDetail(id):openContacts();
+  }catch(error){$('#epContactModelStatus').textContent='未保存：'+error.message}
+  finally{submit.disabled=false}
  };
  g.querySelector('form').onsubmit=async e=>{
   e.preventDefault();const form=e.currentTarget,name=form.elements.name.value.trim();if(!name)return;
@@ -869,8 +917,13 @@ function init(){
  document.getElementById(dlg)?.addEventListener('close',()=>{if(mode==='phone'&&screen==='home')window.EmoiWallpapers?.activate('page:home')});
  }
  window.addEventListener('emoi-ui-mode',e=>setMode(e.detail?.mode));
- window.addEventListener('emoi-connected',()=>void syncRemote());
- if(window.EmoiRelay?.enabled)void syncRemote();
+ const refreshRegistry=()=>{
+  void syncRemote();
+  void window.EmoiModelConnections?.load().catch(()=>{});
+ };
+ window.addEventListener('emoi-connected',refreshRegistry);
+ window.addEventListener('online',refreshRegistry);
+ if(window.EmoiRelay?.enabled)refreshRegistry();
 }
 window.EmoiUiMode={openBeauty(){if(mode!=='phone')setMode('phone');const workspace=$('#workspaceDialog');if(workspace.open)workspace.close();openBeauty()},setMode,getMode:()=>mode,openHome,openApp};
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();

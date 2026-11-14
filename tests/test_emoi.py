@@ -9,6 +9,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import httpx
+
 FIXTURE = tempfile.TemporaryDirectory(prefix="emoi-tests-")
 os.environ.update(RELAY_SECRET="test-owner-secret-only", RELAY_DB=FIXTURE.name + "/relay.db",
                   RELAY_UPLOAD_DIR=FIXTURE.name + "/uploads", LOOP_CONFIG=FIXTURE.name + "/config.json",
@@ -32,6 +34,115 @@ class BrainRouteTests(unittest.TestCase):
                 self.assertEqual(relay.brain_target(), "desktop")
                 target.write_text("loop", encoding="utf-8")
                 self.assertEqual(relay.brain_target(), "loop")
+
+
+class ModelConnectionTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        config = patch.object(loop, "LOOP_CONFIG", Path(self.temp.name) / "config.json")
+        config.start()
+        self.addCleanup(config.stop)
+        self.client = TestClient(loop.app)
+        self.addCleanup(self.client.close)
+        self.root = "/loop/model-connections"
+        self.first = {"name": "聚梦", "url": "https://relay.example.invalid/v1", "key": "private-example-key",
+                      "model": "provider/first", "protocol": "openai"}
+
+    def test_model_catalog_relay_requires_owner(self):
+        path = "/app/loop/model-connections/models"
+        with TestClient(relay.app) as client, patch.object(relay, "loop_json", return_value={"models": []}) as proxy:
+            self.assertEqual(client.post(path, json=self.first).status_code, 401)
+            proxy.assert_not_called()
+            authenticated = client.post(path, json=self.first, headers={"Authorization": "Bearer test-owner-secret-only"})
+            self.assertEqual(authenticated.json(), {"models": []})
+            proxy.assert_called_once_with("/loop/model-connections/models", method="POST", body=self.first)
+
+    def test_manage_named_connections_and_route_replies(self):
+        saved = self.client.post(self.root, json=self.first)
+        self.assertEqual(saved.status_code, 200, saved.text)
+        first, = saved.json()["connections"]
+        self.assertTrue(first["key_set"])
+        self.assertNotIn(self.first["key"], saved.text)
+        second = {**self.first, "name": "备用", "key": "other-key", "model": "provider/second"}
+        rows = self.client.post(self.root, json=second).json()["connections"]
+        self.assertNotEqual(rows[0]["id"], rows[1]["id"])
+        update = {**self.first, "id": first["id"], "name": "新名字", "key": ""}
+        self.assertEqual(self.client.post(self.root, json=update).json()["connections"][0]["id"], first["id"])
+        self.assertEqual(self.client.post(self.root, json={**update, "url":"https://other.example.invalid/v1"}).status_code, 422)
+
+        message = {"contact_id": "contact-one", "name": "测试", "history": [{"author": "human", "text": "你好"}]}
+        with patch.object(loop, "complete_chat", return_value={"text": "reply"}) as send:
+            for row, key in zip(rows, (self.first["key"], second["key"])):
+                result = self.client.post("/loop/contact-reply", json={**message, "route": row["id"]})
+                self.assertEqual(result.json(), {"text": "reply"})
+                self.assertEqual(send.await_args.args[0]["model"], row["model"])
+                self.assertEqual(send.await_args.args[0]["key"], key)
+            self.assertEqual(self.client.delete(self.root + "/" + first["id"]).status_code, 200)
+            self.assertEqual(self.client.post("/loop/contact-reply", json={**message, "route": first["id"]}).status_code, 404)
+            self.assertEqual(send.await_count, 2)
+
+    def test_fetch_models_uses_saved_key_only_for_matching_address(self):
+        first, = self.client.post(self.root, json=self.first).json()["connections"]
+        payload = {**self.first, "id": first["id"], "key": ""}
+        real_client = httpx.AsyncClient
+        requests = []
+
+        def catalog(request):
+            requests.append(request)
+            return httpx.Response(200, json={"data": [{"id": "second"}, {"id": "first"}, {"id": "first"}, {}]})
+
+        with patch.object(loop.httpx, "AsyncClient", side_effect=lambda **kwargs:
+                          real_client(transport=httpx.MockTransport(catalog), **kwargs)):
+            result = self.client.post(self.root + "/models", json=payload)
+            self.assertEqual(result.status_code, 200, result.text)
+            self.assertEqual([row["id"] for row in result.json()["models"]], ["first", "second"])
+            self.assertEqual(str(requests[0].url), self.first["url"] + "/models")
+            self.assertEqual(requests[0].headers["Authorization"], "Bearer " + self.first["key"])
+            changed = self.client.post(self.root + "/models", json={**payload, "url":"https://other.example.invalid/v1"})
+            self.assertEqual(changed.status_code, 422)
+            self.assertEqual(len(requests), 1)
+
+    def test_anthropic_model_catalog_uses_service_cursor(self):
+        real_client = httpx.AsyncClient
+        requests = []
+
+        def catalog(request):
+            requests.append(request)
+            if request.url.params.get("after_id") == "provider/first":
+                return httpx.Response(200, json={"data": [{"id": "provider/second"}], "has_more": False})
+            return httpx.Response(200, json={
+                "data": [{"id": "provider/first", "display_name": "First"}],
+                "has_more": True, "last_id": "provider/first",
+            })
+
+        payload = {**self.first, "url": "https://claude.example.invalid", "protocol": "anthropic"}
+        with patch.object(loop.httpx, "AsyncClient", side_effect=lambda **kwargs:
+                          real_client(transport=httpx.MockTransport(catalog), **kwargs)):
+            result = self.client.post(self.root + "/models", json=payload)
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(result.json()["models"], [
+            {"id": "provider/first", "name": "First"},
+            {"id": "provider/second", "name": "provider/second"},
+        ])
+        self.assertEqual(requests[0].url.path, "/v1/models")
+        self.assertEqual(requests[0].headers["x-api-key"], payload["key"])
+
+    def test_contact_subscription_does_not_change_legacy_gpt_configuration(self):
+        loop.save_config({"agents": {"gpt": {**self.first, "connection_mode": "api", "subscription_model": "old-plan"}}})
+        self.assertEqual(self.client.get(self.root).json()["subscription_model"], "old-plan")
+        self.assertEqual(self.client.post(self.root + "/subscription", json={"model": "new-plan"}).status_code, 200)
+        message = {"contact_id": "contact-one", "name": "测试", "history": [{"author": "human", "text": "你好"}]}
+        with patch.object(loop, "plan_chat", return_value={"text": "plan reply"}) as plan, patch.object(
+            loop, "complete_chat", return_value={"text":"API reply"}
+        ) as api:
+            self.assertEqual(self.client.post("/loop/contact-reply", json={**message, "route":"chatgpt-plan"}).json(),
+                             {"text": "plan reply"})
+            self.assertEqual(plan.await_args.args[0], {"model": "new-plan"})
+            self.assertEqual(self.client.post("/loop/contact-reply", json={**message, "route":"gpt"}).json(),
+                             {"text": "API reply"})
+            self.assertEqual(api.await_args.args[0]["model"], self.first["model"])
+        self.assertEqual(loop.load_config()["agents"]["gpt"]["subscription_model"], "old-plan")
 
 
 class OwnerDataTests(unittest.TestCase):
