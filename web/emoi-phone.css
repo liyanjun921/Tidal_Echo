@@ -309,25 +309,6 @@ body[data-ui-mode=phone] #workspaceDialog .page-foot{font-size:9px}
 .ep-recipients-head .ep-round { flex: none; }
 .ep-message-recipients .ep-help { color:#526b81;text-shadow:none; }
 @media (max-width: 599px) {
- body[data-ui-mode=phone] .ep-edit-dialog[open] {
-  --ep-sheet-safe-top: max(12px, env(safe-area-inset-top));
-  position: fixed;
-  inset: var(--ep-visual-top, 0px) 0 auto;
-  width: 100%;
-  height: auto;
-  max-height: calc(var(--ep-visual-height, 100dvh) - var(--ep-sheet-safe-top) - 12px);
-  margin: var(--ep-sheet-safe-top) 0 0;
-  border-radius: 24px;
-  padding-bottom: max(8px, env(safe-area-inset-bottom));
-  overscroll-behavior: contain;
- }
- html[data-ep-standalone] body[data-ui-mode=phone] .ep-edit-dialog[open] {
-  --ep-sheet-safe-top: max(56px, calc(env(safe-area-inset-top) + 8px));
- }
- html[data-ep-keyboard] body[data-ui-mode=phone] .ep-edit-dialog[open] {
-  --ep-sheet-safe-top: 8px;
-  padding-bottom: 8px;
- }
  body[data-ui-mode=phone] .ep-message-recipients[open] { padding: 16px 18px; }
  body[data-ui-mode=phone] .ep-edit-dialog :is(input, textarea, select) { font-size: 16px; }
 }

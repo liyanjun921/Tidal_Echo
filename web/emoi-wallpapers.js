@@ -247,7 +247,7 @@
     const workspace = document.getElementById('workspaceDialog');
     if (workspace) workspace.addEventListener('close', () => {
       const {uiMode, phoneScreen} = document.body.dataset;
-      void activate(uiMode === 'phone' && ['home', 'settings'].includes(phoneScreen) ? 'page:home' : lastChat);
+      void activate(uiMode === 'phone' && /^[a-z]+$/.test(phoneScreen) && !['legacy','imessage'].includes(phoneScreen) ? 'page:'+phoneScreen : lastChat);
     });
     void activate(activeContext);
   }

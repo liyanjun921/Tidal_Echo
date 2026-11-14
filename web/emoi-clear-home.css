@@ -255,22 +255,3 @@ body[data-ui-mode=phone] .ep-home .ep-dock-app { height: auto; }
     padding-bottom: max(18px, calc(env(safe-area-inset-bottom) + 6px));
   }
 }
-
-/* The installed iOS app keeps its shell in normal flow. Some WebKit
-   versions clip fixed containers to the smaller cold-start viewport. */
-@media (pointer: coarse) {
-  html[data-ep-standalone] body[data-ui-mode=phone] {
-    height: 100vh;
-  }
-  html[data-ep-standalone] body[data-ui-mode=phone] .emoi-phone-host,
-  html[data-ep-standalone] body[data-ui-mode=phone][data-phone-screen=legacy] #app {
-    position: relative;
-    inset: auto;
-    width: 100%;
-    height: 100vh;
-  }
-  html[data-ep-standalone][data-ep-keyboard] body[data-ui-mode=phone][data-phone-screen=imessage] .emoi-phone-host {
-    top: var(--ep-visual-top, 0px);
-    height: var(--ep-visual-height, 100dvh);
-  }
-}
