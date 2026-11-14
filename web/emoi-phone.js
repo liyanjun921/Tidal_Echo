@@ -318,17 +318,20 @@ function openHome(){
  const actions=create('div','ep-home-actions');
  const wallpaper=actionButton('更换桌面壁纸','photo',()=>window.EmoiWallpapers?.open(),'ep-home-control ep-home-square');
  wallpaper.setAttribute('data-ep-optics','');
+ const inkKey='emoi-home-ink-v1';
+ let blackInk=false;
+ try{blackInk=localStorage.getItem(inkKey)==='black'}catch{}
  const ink=homeTextButton('',()=>{
-  window.EmoiApp?.setDark(document.body.dataset.dark!=='true');
+  blackInk=!blackInk;
+  try{localStorage.setItem(inkKey,blackInk?'black':'white')}catch{}
   updateInkControl();
  });
  function updateInkControl(){
-  const dark=document.body.dataset.dark==='true';
-  root.dataset.homeInk=dark?'white':'black';
-  ink.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /></svg>';
-  ink.setAttribute('aria-label',dark?'切换浅色模式':'切换深色模式');
-  ink.setAttribute('aria-pressed',String(dark));
+  root.dataset.homeInk=blackInk?'black':'white';
+  ink.setAttribute('aria-label',blackInk?'切换首页白字':'切换首页黑字');
+  ink.setAttribute('aria-pressed',String(blackInk));
  }
+ ink.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /></svg>';
  updateInkControl();
  ink.classList.add('ep-home-ink-toggle','ep-home-square');
  ink.setAttribute('data-ep-optics','');

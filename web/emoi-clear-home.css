@@ -27,11 +27,12 @@ body[data-ui-mode=phone] .ep-home {
   --ep-gutter: clamp(17px, 5vw, 36px);
   --ep-icon-size: clamp(44px, 15.2vw, 66px);
   --ep-ink-home: #fff;
+  --ep-text-home: var(--ep-ink-home);
   --ep-ink-shadow: 0 1px 3px #001815aa, 0 0 10px #00181577;
   color: var(--ep-ink-home);
 }
 body[data-ui-mode=phone] .ep-home[data-home-ink=black] {
-  --ep-ink-home: #111;
+  --ep-text-home: #111;
   --ep-ink-shadow: 0 1px 2px #fff9, 0 0 8px #fff9;
 }
 body[data-ui-mode=phone] .ep-home-top {
@@ -45,7 +46,7 @@ body[data-ui-mode=phone] .ep-home-top {
   .ep-desktop-clock { visibility: hidden; }
 }
 .ep-desktop-clock {
-  color: var(--ep-ink-home);
+  color: var(--ep-text-home);
   text-shadow: var(--ep-ink-shadow);
   font-size: 16px;
   font-weight: 640;
@@ -149,7 +150,7 @@ body[data-ui-mode=phone] .ep-home :is(.ep-app-icon, .ep-dock-icon) svg {
   filter: drop-shadow(0 1px 1px #00241b4d);
 }
 body[data-ui-mode=phone] .ep-home .ep-app-label {
-  color: var(--ep-ink-home);
+  color: var(--ep-text-home);
   text-shadow: var(--ep-ink-shadow);
   font-size: 11px;
   font-weight: 610;
@@ -254,4 +255,8 @@ body[data-ui-mode=phone] .ep-home .ep-dock-app { height: auto; }
   html[data-ep-standalone] body[data-ui-mode=phone] .ep-home-bottom {
     padding-bottom: max(18px, calc(env(safe-area-inset-bottom) + 6px));
   }
+}
+
+body[data-ui-mode=phone] .ep-home :is(.ep-widget-copy,.ep-home-edit,.ep-home-editbar,.ep-home-actions button:not(:has(svg))) {
+  color:var(--ep-text-home);text-shadow:var(--ep-ink-shadow);
 }

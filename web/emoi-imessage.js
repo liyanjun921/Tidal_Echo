@@ -199,12 +199,12 @@ function messageBubble(msg,members,showName,registerURL){
    if(msg.attachment.kind==='voice'){
    const transcript=document.createElement('details');transcript.className='ep-im-transcript';
    const label=document.createElement('summary');label.textContent='转文字';
-   const text=document.createElement('p');text.textContent=msg.attachment.transcript||'暂无转写 · 录音转写需要服务端配置';
+   const text=document.createElement('p');text.textContent=withoutEmoji(msg.attachment.transcript||'')||'暂无转写 · 录音转写需要服务端配置';
    transcript.append(label,text);bubble.append(transcript);
   }
   if(msg.text&&msg.text!==msg.attachment.transcript&&msg.text!=='['+mediaLabels[msg.attachment.kind]+']'
-      )bubble.append(document.createElement('br'),msg.text);
- }else bubble.textContent=msg.text||'';
+      )bubble.append(document.createElement('br'),withoutEmoji(msg.text));
+ }else bubble.textContent=withoutEmoji(msg.text||'');
  row.append(bubble);
  if(msg.author==='human'&&deliveryLabels[msg.delivery]){
   const status=document.createElement('small');status.className='ep-im-delivery';status.textContent=deliveryLabels[msg.delivery];row.append(status);

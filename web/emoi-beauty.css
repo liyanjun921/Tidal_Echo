@@ -477,7 +477,6 @@ body[data-ui-mode=phone] :is(.ep-header-button,.sheet-head button[data-close]) {
 body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-back,.ep-messages-top .ep-messages-action:first-child) { width:34px;height:34px; }
 body[data-ui-mode=phone] :is(.ep-header-button,.ep-im-back,.sheet-head button[data-close]) svg {width:15px;height:15px}
 .ep-home-ink-toggle svg {width:20px;height:20px;fill:currentColor;stroke:currentColor}
-.ep-home-ink-toggle[aria-pressed=true] svg {fill:none}
 body[data-ui-mode=phone] .ep-page-optic { position:relative; isolation:isolate; }
 body[data-ui-mode=phone] .ep-page-optic > :not(.ep-optical-canvas) { position:relative;z-index:2; }
 body[data-ui-mode=phone] .ep-page-optic .ep-optical-canvas { z-index:0; border-radius:inherit; }
