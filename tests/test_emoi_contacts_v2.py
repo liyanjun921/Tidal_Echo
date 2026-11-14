@@ -15,11 +15,13 @@ class ContactIsolationTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         path = str(Path(self.tmp.name) / "emoi-v2-test.db")
+        self.uploads = Path(self.tmp.name) / "uploads"
+        self.uploads.mkdir()
         app = FastAPI()
         def check_auth(request):
             if request.headers.get("authorization") != "Bearer test-only-owner":
                 raise HTTPException(401, "unauthorized")
-        runtime = register(app, {"DB_PATH":path,"check_auth":check_auth,"loop_base_url":lambda:"http://loop.test"})
+        runtime = register(app, {"DB_PATH":path,"UPLOAD_DIR":self.uploads,"check_auth":check_auth,"loop_base_url":lambda:"http://loop.test"})
         runtime["init"]()
         self.client=TestClient(app)
         self.h={"Authorization":"Bearer test-only-owner"}
@@ -98,6 +100,31 @@ class ContactIsolationTests(unittest.TestCase):
         self.assertEqual(a.json()["message"]["author"],"human")
         self.assertEqual(a.json()["message"]["delivery"],"stored_not_delivered")
         self.assertEqual(len(self.client.get(url,headers=self.h).json()["messages"]),1)
+
+    def test_media_messages_round_trip_and_preserve_conversation_isolation(self):
+        direct = self.create("甲")
+        other = self.create("乙")
+        url = "/emoi/v2/conversations/" + direct["conversation_id"] + "/messages"
+        remote = "/emoi/v2/conversations/" + other["conversation_id"] + "/messages"
+        for kind, suffix, mime in [
+            ("image", "jpg", "image/jpeg"), ("sticker", "gif", "image/gif"),
+            ("voice", "m4a", "audio/mp4"),
+        ]:
+            stored = "att-" + uuid4().hex[:14] + "." + suffix
+            (self.uploads / stored).write_bytes(b"test media bytes")
+            body = {"attachment": {"id": stored, "kind": kind, "url": "https://invalid.example"},
+                    "nonce": uuid4().hex}
+            response = self.post(url, body)
+            self.assertEqual(response.status_code, 200, response.text)
+            attachment = response.json()["message"]["attachment"]
+            self.assertEqual((attachment["kind"], attachment["mime"]), (kind, mime))
+            self.assertEqual(attachment["url"], "/uploads/" + stored)
+            self.assertTrue(self.post(url, body).json()["already_saved"])
+        invalid = {"attachment": {"id": stored, "kind": "image"}, "nonce": uuid4().hex}
+        self.assertEqual(self.post(url, invalid).status_code, 422)
+        rows = self.client.get(url, headers=self.h).json()["messages"]
+        self.assertEqual([row["attachment"]["kind"] for row in rows], ["image", "sticker", "voice"])
+        self.assertEqual(self.client.get(remote, headers=self.h).json()["messages"], [])
 
     def test_group_replies_are_ordered_isolated_and_idempotent(self):
         a = self.post("/emoi/v2/contacts", {"name":"甲","notes":"甲的私有档案","model_route":"gpt"}).json()

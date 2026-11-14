@@ -2002,7 +2002,20 @@ async def loop_contact_reply(request: Request):
             messages.append({"role": "assistant", "content": text})
         else:
             speaker = str(row.get("name") or "用户")[:60]
-            messages.append({"role": "user", "content": f"{speaker}：{text}"})
+            content = f"{speaker}：{text}"
+            attachment = row.get("attachment")
+            if isinstance(attachment, dict):
+                if attachment.get("kind") == "voice":
+                    transcript = str(attachment.get("transcript") or "")[:3000]
+                    if transcript and transcript != text:
+                        content += f"\n语音转写：{transcript}"
+                    elif not transcript:
+                        content += "\n本轮没有语音转写。"
+                elif vision_enabled():
+                    parts, _ = await attachment_parts([attachment], with_images=True)
+                    if parts:
+                        content = [{"type": "text", "text": content}, *parts]
+            messages.append({"role": "user", "content": content})
     try:
         result = await asyncio.wait_for(complete_chat(route, messages, None), timeout=26)
     except (ModelError, httpx.HTTPError, TimeoutError, ValueError):

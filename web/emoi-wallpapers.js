@@ -10,30 +10,16 @@
   const IMAGES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/heic', 'image/heif']);
 
   const PRESETS = [
-    {id:'inherit', name:'跟随全局', caption:'沿用外观设置', value:null},
-    {id:'green-bokeh', name:'夏日流光', caption:'绿意 · 阳光 · 光斑', value:"url('assets/emoi-wallpaper-1.webp')"},
-    {id:'green-window', name:'藤蔓书房', caption:'窗边 · 绿荫 · 午后', value:"url('assets/emoi-wallpaper-2.webp')"},
-    {id:'garden-tram', name:'森系列车', caption:'绿意 · 花影 · 电车', value:"url('assets/emoi-wallpaper-3.webp')"},
-    {id:'aura', name:'珍珠蓝光', caption:'液态玻璃 · 雾白蓝', value:"url('assets/emoi-phone-aura.svg')"},
-    {id:'archive', name:'植物档案', caption:'雾蓝 · 纸张 · 红线', value:"url('assets/emoi-archive-botanical.svg')"},
-    {id:'nocturne', name:'星轨夜色', caption:'深蓝 · 轨道 · 微光', value:"url('assets/emoi-archive-nocturne.svg')"},
-    {id:'water', name:'流动水光', caption:'清透的蓝色', value:"url('assets/water-light.webp')"},
-    {id:'lily', name:'百合晨雾', caption:'柔软的白与蓝', value:"url('assets/lily-water.webp')"},
-    {id:'paper', name:'空白画纸', caption:'自由留白', value:'linear-gradient(135deg,#e3e9ec,#f4f4f1 52%,#d8e1e9)'}
+    {id:'white-lilies', name:'白百合', caption:'系统内置壁纸', value:"url('assets/emoi-white-lilies.webp')"}
   ];
+  const LEGACY_PRESETS = new Set(['inherit','green-bokeh','green-window','garden-tram','aura','archive','nocturne','water','lily','paper']);
 
   const LABELS = {
-    home:'小手机桌面', messages:'信息', contacts:'通讯录', memory:'记忆档案', todo:'定时清单', calendar:'日历',
+    beauty:'美化', settings:'设置', room:'Room', home:'小手机桌面', messages:'信息', contacts:'通讯录', memory:'记忆档案', todo:'定时清单', calendar:'日历',
     journal:'生活日记', whisper:'悄悄话', reading:'共读书房',
     cinema:'双人影院', report:'日报', health:'健康记录',
     repo:'仓库', appearance:'外观', search:'搜索', capacity:'上下文',
     gpt:'GPT 私聊', claude:'Claude 私聊', group:'三人聊天室'
-  };
-  const DEFAULTS = {
-    'page:home':'green-window', 'page:contacts':'green-window', 'page:messages':'green-window',
-    'page:memory':'green-window', 'page:reading':'green-window', 'page:journal':'green-window',
-    'page:cinema':'green-window', 'page:report':'green-window', 'page:whisper':'green-window',
-    'page:health':'green-window', 'page:calendar':'green-window', 'page:todo':'green-window'
   };
   const safeRead = (name, fallback) => {
     try {
@@ -56,14 +42,10 @@
     return (LABELS[parts[1]] || parts[1] || '当前页面') + ' · 专属壁纸';
   }
   function selected(key) {
-    if (Object.prototype.hasOwnProperty.call(settings, key)) {
-      const choice = settings[key];
-      return choice === 'custom' || PRESETS.some(item=>item.id===choice) ? choice : 'inherit';
-    }
-    // Respect the older appearance setting when it was changed deliberately.
-    const oldTheme = safeRead('emoi-v05-preferences', {}).theme;
-    if (oldTheme && oldTheme !== 'water') return 'inherit';
-    return DEFAULTS[key] || 'green-window';
+    const choice = settings[key];
+    if (choice === 'custom') return choice;
+    if (!choice && safeRead('emoi-v05-preferences', {}).theme === 'custom') return 'global-custom';
+    return 'white-lilies';
   }
   function saveSettings() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); return true; }
@@ -119,7 +101,7 @@
       const blob = await fileOperation('wallpaper-page:' + key);
       if (turn !== revision) return;
       if (!(blob instanceof Blob)) {
-        setBackground(null, 'inherit');
+        setBackground(null, 'white-lilies');
         return;
       }
       const url = URL.createObjectURL(blob);
@@ -127,10 +109,11 @@
       activeObjectURL = url;
       setBackground('url("' + url + '")', 'custom');
     } catch (_) {
-      if (turn === revision) setBackground(null, 'inherit');
+      if (turn === revision) setBackground(null, 'white-lilies');
     }
   }
   function choose(id) {
+    if (LEGACY_PRESETS.has(id)) id = 'white-lilies';
     if (id !== 'custom' && !PRESETS.some(item=>item.id===id)) return;
     settings[activeContext] = id;
     if (!saveSettings()) { inform('本机存储不可用，当前选择只在本次打开时有效。'); }
@@ -153,8 +136,7 @@
       button.dataset.wall = option.id;
       const sample = document.createElement('span');
       sample.className = 'emoi-wall-option-sample';
-      if (option.value) sample.style.backgroundImage = option.value;
-      else sample.classList.add('emoi-wall-option-inherit');
+      sample.style.backgroundImage = option.value;
       const title = document.createElement('strong');
       title.textContent = option.name;
       const desc = document.createElement('small');

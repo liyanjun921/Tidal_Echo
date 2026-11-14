@@ -5,6 +5,7 @@
   const phone = document.getElementById('emoiPhone');
   if (!phone || matchMedia('(hover: none) and (pointer: coarse)').matches) return;
   const forced = matchMedia('(forced-colors: active)');
+  const reduced = matchMedia('(prefers-reduced-transparency: reduce)');
   const targets = new Map();
   let image, source, engine, frame = 0;
 
@@ -115,7 +116,7 @@
   }
 
   function render() {
-    if (forced.matches || document.body.dataset.uiMode !== 'phone' || document.body.dataset.phoneScreen !== 'home') {
+    if (forced.matches || reduced.matches || document.documentElement.dataset.glass === 'frost' || document.body.dataset.uiMode !== 'phone' || document.body.dataset.phoneScreen !== 'home') {
       clearLenses();
       return;
     }
@@ -196,8 +197,9 @@
   });
   observer.observe(phone, {childList: true, subtree: true});
   observer.observe(document.body, {attributes: true, attributeFilter: ['data-ui-mode', 'data-phone-screen', 'data-emoi-wall', 'class']});
-  observer.observe(document.documentElement, {attributes: true, attributeFilter: ['style', 'data-theme']});
+  observer.observe(document.documentElement, {attributes: true, attributeFilter: ['style', 'data-theme', 'data-glass']});
   if (window.ResizeObserver) new ResizeObserver(schedule).observe(phone);
+  reduced.addEventListener('change', schedule);
   window.addEventListener('resize', schedule, {passive: true});
   phone.addEventListener('scroll', schedule, {passive: true, capture: true});
   document.addEventListener('visibilitychange', schedule);

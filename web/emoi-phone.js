@@ -174,7 +174,7 @@ function setScreen(next){
  if(app.inert)app.setAttribute('aria-hidden','true');else app.removeAttribute('aria-hidden');
  if(mode!=='phone')return;
  if(next==='home')window.EmoiWallpapers?.activate('page:home');
- else if(['contacts','messages'].includes(next))window.EmoiWallpapers?.activate('page:'+next);
+ else if(next!=='imessage'&&next!=='legacy')window.EmoiWallpapers?.activate('page:'+next.replace(/-detail$/, ''));
  updateClock();
 }
 function header(title,onBack){
@@ -421,10 +421,13 @@ function openMessages(){
   const saved=remote.latest.get(thread.remoteId);
   const local=window.EmoiMessageApp?.latest(thread.kind,thread.id);
   return {...thread,last:local && (!saved || local.created_at>=saved.created_at)?local:saved};
- }).sort((a,b)=>String(b.last?.created_at||'').localeCompare(String(a.last?.created_at||'')));
+ });
  function renderThreads(){
   const query=search.value.trim().toLowerCase();
-  const matches=threads.filter(thread=>[thread.name,thread.last?.text].some(text=>text?.toLowerCase().includes(query)));
+  const messageApp=window.EmoiMessageApp;
+  const isPinned=thread=>Boolean(messageApp?.pinned(thread.kind,thread.id));
+  const matches=threads.filter(thread=>[thread.name,thread.last?.text].some(text=>text?.toLowerCase().includes(query)))
+   .sort((a,b)=>Number(isPinned(b))-Number(isPinned(a))||String(b.last?.created_at||'').localeCompare(String(a.last?.created_at||'')));
   rows.replaceChildren();
   for(const thread of matches){
    const row=create('button','ep-message-thread');row.type='button';row.dataset.entry=thread.id;
@@ -435,7 +438,14 @@ function openMessages(){
    topLine.append(create('strong','',thread.name));
    if(thread.last?.created_at)topLine.append(create('time','',new Date(thread.last.created_at).toLocaleDateString('zh-CN',{month:'numeric',day:'numeric'})));
    copy.append(topLine,create('span','ep-thread-preview',thread.last?.text||(thread.kind==='group'?thread.members+' 位成员':'新会话')));
-   row.append(avatar,copy);row.onclick=thread.open;rows.append(row);
+   row.append(avatar,copy);row.onclick=thread.open;
+   const wrap=create('div','ep-thread-row');
+   const pinned=isPinned(thread);
+   const pin=create('button','ep-thread-pin',pinned?'取消置顶':'置顶');pin.type='button';pin.dataset.pin=thread.kind+':'+thread.id;
+   pin.setAttribute('aria-label',(pinned?'取消置顶 ':'置顶 ')+thread.name);
+   pin.setAttribute('aria-pressed',String(pinned));
+   pin.onclick=()=>{try{messageApp.togglePin(thread.kind,thread.id);renderThreads();rows.querySelector('[data-pin="'+CSS.escape(thread.kind+':'+thread.id)+'"]')?.focus()}catch{alert('无法保存置顶状态')}};
+   wrap.append(row,pin);rows.append(wrap);
   }
   if(!matches.length)rows.append(create('p','ep-thread-empty',query?'没有匹配的会话':'还没有会话。点右上角写新信息。'));
  }
@@ -586,8 +596,10 @@ function openSettings(){
  modeCard.append(create('p','ep-help','艺术模式暂时沿用已有界面，之后单独重新设计；它不会影响小手机模式的数据。'));
  body.append(modeCard);
  const rows=create('div','ep-settings-panel');
- rows.append(listItem('wall','桌面壁纸','为小手机首页更换背景','photo',()=>window.EmoiWallpapers?.open()));
- rows.append(listItem('appearance','全局配色','玻璃透明度、浅色与深色','settings',()=>launchPage('appearance')));
+ rows.append(listItem('wall','桌面壁纸','为小手机首页更换背景','photo',()=>{
+  void window.EmoiWallpapers?.activate('page:home');window.EmoiWallpapers?.open();
+ }));
+ rows.append(listItem('appearance','美化','玻璃风格与气泡动效','settings',openBeauty));
  rows.append(listItem('connect','连接与模型','连接旧版服务，新的多 AI 独立身份后续实现','connect',()=>openConnection()));
  body.append(rows);
  const priv=create('div','ep-privacy-note');priv.innerHTML=icon('shield')+'<p>界面模式与联系人草稿保存在当前浏览器，不会清空 Émoi 原有聊天或记忆。切换模式不重建服务。</p>';
@@ -598,7 +610,7 @@ function openMore(){
  const body=create('div','ep-list-scroll');const title=create('div','ep-list-intro');title.append(create('small','','ÉMOI APPS'),create('h2','','更多空间'));body.append(title);
  const groups=[
  ['私人生活',[['whisper','悄悄话','journal'],['report','日报','reading'],['health','健康记录','memory'],['todo','待办清单','checklist']]],
- ['系统',[['repo','仓库','bookcase'],['appearance','外观','settings'],['connection','模型连接','connect'],['legacy','旧版聊天','chat']]]
+ ['系统',[['repo','仓库','bookcase'],['appearance','美化','settings'],['connection','模型连接','connect'],['legacy','旧版聊天','chat']]]
  ];
  for(const [section,items] of groups){
  const s=create('section','ep-app-section');s.append(create('h3','',section));
@@ -617,7 +629,9 @@ function openLegacy(){
  window.EmoiWallpapers?.activate('chat:gpt');
 }
 function launchPage(name){
+ if(name==='appearance')return openBeauty();
  if(name==='room'){
+ void window.EmoiWallpapers?.activate('page:room');
  const opener=$('#openWrenRoom');if(opener)opener.click();else alert('Room 当前还未加载。');return;
  }
  window.EmoiApp?.openPage(name);
@@ -675,35 +689,91 @@ function installDialogs(){
 
  };
 }
-function trackPhoneViewport(){
+const BEAUTY_KEY='emoi-beauty-v1';
+const beautyDefaults={style:'clear',motion:'soft',blur:2,opacity:.16,hue:208,saturation:165,brightness:104};
+const beautyControls=[
+ ['blur','玻璃模糊',0,60,1,'px'],['opacity','卡片底色不透明度',0,.85,.01,''],
+ ['hue','主题色相',0,360,1,'°'],['saturation','主题饱和度',0,220,1,'%'],
+ ['brightness','主题明度',55,155,1,'%']
+];
+const beauty={...beautyDefaults};
+try{Object.assign(beauty,JSON.parse(localStorage.getItem(BEAUTY_KEY)))}catch{}
+function applyBeauty(){
  const root=document.documentElement;
- const viewport=window.visualViewport;
- const touch=matchMedia('(pointer: coarse)');
- root.toggleAttribute('data-ep-standalone',navigator.standalone===true||matchMedia('(display-mode: standalone)').matches);
+ root.dataset.glass=beauty.style==='frost'?'frost':'clear';
+ root.dataset.bubbleMotion=['soft','spring','fade','off'].includes(beauty.motion)?beauty.motion:'soft';
+ for(const [key,,min,max,,unit] of beautyControls){
+  const value=Number(beauty[key]??beautyDefaults[key]);
+  root.style.setProperty('--beauty-'+key,Math.min(max,Math.max(min,Number.isFinite(value)?value:beautyDefaults[key]))+unit);
+ }
+ root.style.setProperty('--beauty-accent-light',Math.min(60,Math.max(33,46*(Number.isFinite(beauty.brightness)?beauty.brightness:104)/104))+'%');
+ root.style.setProperty('--beauty-accent-sat',Math.min(94,Math.max(0,(Number.isFinite(beauty.saturation)?beauty.saturation:165)*.52))+'%');
+}
+function openBeauty(){
+ setScreen('beauty');const root=view();root.className='ep-view ep-settings ep-beauty';
+ root.append(header('美化',openSettings));
+ const body=create('div','ep-list-scroll');
+ const sample=create('div','ep-beauty-preview');
+ const samples=create('div','ep-beauty-samples');
+ const demo=create('div','ep-im-row ep-im-theirs');
+ demo.append(create('span','ep-im-bubble','你好呀'));
+ const reply=create('div','ep-im-row ep-im-mine');
+ const bubble=create('span','ep-im-bubble','今天见 ☁️');reply.append(bubble);
+ samples.append(demo,reply);sample.append(samples);body.append(sample);
+ const controls=create('section','ep-beauty-settings');
+ const style=create('fieldset','ep-beauty-choices');style.append(create('legend','','玻璃风格'));
+ const params=create('div','ep-beauty-params');
+ const persist=()=>{applyBeauty();save(BEAUTY_KEY,beauty)};
+ for(const [id,label] of [['clear','清透玻璃'],['frost','毛玻璃']]){
+  const option=create('label');
+  const radio=create('input');radio.type='radio';radio.name='glass-style';radio.value=id;
+  radio.checked=document.documentElement.dataset.glass===id;
+  radio.onchange=()=>{beauty.style=id;params.hidden=id!=='clear';persist()};
+  option.append(radio,create('span','',label));style.append(option);
+ }
+ controls.append(style);
+ params.hidden=document.documentElement.dataset.glass!=='clear';
+ for(const [key,label,min,max,step,unit] of beautyControls){
+  const row=create('label','ep-beauty-slider'), cap=create('span','ep-beauty-caption',label);
+  const value=create('output'), range=create('input');
+  range.type='range';range.min=min;range.max=max;range.step=step;range.value=beauty[key]??beautyDefaults[key];
+  range.setAttribute('aria-label',label);range.dataset.parameter=key;value.textContent=range.value+unit;
+  range.oninput=()=>{beauty[key]=Number(range.value);value.textContent=range.value+unit;persist()};
+  cap.append(value);row.append(cap,range);params.append(row);
+ }
+ controls.append(params);
+ const motionRow=create('label','ep-beauty-slider');motionRow.append(create('span','ep-beauty-caption','气泡动效'));
+ const motion=create('select');
+ for(const [id,label] of [['soft','轻柔浮现'],['spring','果冻弹入'],['fade','淡入'],['off','关闭']]){
+  const option=create('option','',label);option.value=id;motion.append(option);
+ }
+ motion.value=document.documentElement.dataset.bubbleMotion;
+ motion.onchange=()=>{beauty.motion=motion.value;persist();reply.classList.remove('ep-im-arriving');requestAnimationFrame(()=>requestAnimationFrame(()=>reply.classList.add('ep-im-arriving')))};
+ motionRow.append(motion);controls.append(motionRow);body.append(controls);root.append(body);
+}
+function trackPhoneViewport(){
+ const root=document.documentElement, viewport=window.visualViewport;
+ const standalone=navigator.standalone===true||matchMedia('(display-mode: standalone)').matches;
+ root.toggleAttribute('data-ep-standalone',standalone);
  if(!viewport)return;
- let frame=0;
- let unoccludedHeight=0;
- let width=0;
+ let frame=0, restingHeight=0, width=0, keyboard=false;
  function update(){
   frame=0;
-  const followsKeyboard=touch.matches&&Math.abs(viewport.scale-1)<.02;
-  const top=followsKeyboard?Math.max(0,viewport.offsetTop):0;
-  root.style.setProperty('--ep-visual-top',top+'px');
-  if(followsKeyboard)root.style.setProperty('--ep-visual-height',viewport.height+'px');
-  else root.style.removeProperty('--ep-visual-height');
-  if(!followsKeyboard){root.removeAttribute('data-ep-keyboard');return}
-  const editing=document.activeElement?.matches('textarea, input, [contenteditable="true"]');
-  if(width!==viewport.width||!editing){
-   width=viewport.width;
-   unoccludedHeight=viewport.height;
-  }
-  const layoutHeight=Math.max(unoccludedHeight,root.clientHeight);
-  root.toggleAttribute('data-ep-keyboard',layoutHeight-viewport.height>100);
+  if(Math.abs(viewport.scale-1)>.03)return;
+  const height=viewport.height;
+  const editing=document.activeElement?.matches('textarea,input:not([type]),input:is([type=text],[type=search],[type=email],[type=url],[type=password],[type=number],[type=tel]),[contenteditable=true]');
+  if(Math.abs(width-viewport.width)>2){width=viewport.width;restingHeight=height;keyboard=false}
+  const layoutHeight=Math.max(restingHeight,root.clientHeight);
+  keyboard=(editing||keyboard)&&layoutHeight-height>100;
+  if(!editing&&!keyboard)restingHeight=height;
+  root.toggleAttribute('data-ep-keyboard',keyboard);
+  root.style.setProperty('--ep-visual-height',Math.round(height)+'px');
+  root.style.setProperty('--ep-visual-top',(keyboard?Math.max(0,viewport.offsetTop):0)+'px');
  }
  function schedule(){if(!frame)frame=requestAnimationFrame(update)}
  viewport.addEventListener('resize',schedule,{passive:true});
  viewport.addEventListener('scroll',schedule,{passive:true});
- window.addEventListener('pageshow',schedule);
+ for(const event of ['pageshow','resize','orientationchange'])window.addEventListener(event,schedule);
  document.addEventListener('focusin',schedule);
  document.addEventListener('focusout',schedule);
  update();
@@ -714,7 +784,7 @@ function init(){
  const back=document.createElement('button');back.id='epLegacyHome';back.type='button';back.setAttribute('aria-label','返回小手机桌面');
  back.innerHTML=icon('back');back.addEventListener('click',openHome);
  document.querySelector('#app .topbar')?.prepend(back);
- trackPhoneViewport();installDialogs();setMode(mode);
+ applyBeauty();trackPhoneViewport();installDialogs();setMode(mode);
  updateClock();setInterval(updateClock,60000);
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)updateClock()});
  for(const dlg of ['workspaceDialog','wrenRoom']){
@@ -724,6 +794,6 @@ function init(){
  window.addEventListener('emoi-connected',()=>void syncRemote());
  if(window.EmoiRelay?.enabled)void syncRemote();
 }
-window.EmoiUiMode={setMode,getMode:()=>mode,openHome,openApp};
+window.EmoiUiMode={openBeauty(){if(mode!=='phone')setMode('phone');const workspace=$('#workspaceDialog');if(workspace.open)workspace.close();openBeauty()},setMode,getMode:()=>mode,openHome,openApp};
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();

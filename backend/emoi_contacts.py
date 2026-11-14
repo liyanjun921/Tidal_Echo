@@ -6,6 +6,7 @@ Replies use explicit API bindings and the history of this conversation only.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import sqlite3
@@ -17,6 +18,14 @@ from fastapi import BackgroundTasks, HTTPException, Request
 
 MAX_CONTACTS = 120
 MAX_MEMBERS = 20
+MEDIA_TYPES = {
+    "image": {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+              "gif": "image/gif", "webp": "image/webp", "avif": "image/avif"},
+    "voice": {"m4a": "audio/mp4", "mp4": "audio/mp4", "webm": "audio/webm",
+              "ogg": "audio/ogg", "wav": "audio/wav"},
+}
+MEDIA_TYPES["sticker"] = MEDIA_TYPES["image"]
+MEDIA_LABELS = {"image": "图片", "sticker": "表情包", "voice": "语音消息"}
 MODEL_ROUTES = {"default", "gpt", "claude"}
 UUID_PATTERN = re.compile(r"^[0-9a-fA-F-]{36}$")
 
@@ -74,11 +83,13 @@ def init(path):
           author TEXT NOT NULL CHECK(author IN ('human','contact')),
           contact_id TEXT REFERENCES emoi_v2_contacts(id),
           text TEXT NOT NULL, nonce TEXT NOT NULL, delivery TEXT NOT NULL DEFAULT 'stored_not_delivered',
-          created_at TEXT NOT NULL,
+          created_at TEXT NOT NULL, attachment TEXT,
           UNIQUE(conversation_id,nonce)
         );
         CREATE INDEX IF NOT EXISTS idx_emoi_v2_messages_conv ON emoi_v2_messages(conversation_id,created_at);
         """)
+        if "attachment" not in {column[1] for column in db.execute("PRAGMA table_info(emoi_v2_messages)")}:
+            db.execute("ALTER TABLE emoi_v2_messages ADD COLUMN attachment TEXT")
         db.execute("UPDATE emoi_v2_messages SET delivery='interrupted' WHERE delivery='replying'")
 
 
@@ -109,6 +120,26 @@ def register(app, relay):
             "memory_connected": False, "desire_connected": False,
         }
 
+    def view_message(row):
+        result = dict(row)
+        result["attachment"] = json.loads(result["attachment"]) if result["attachment"] else None
+        return result
+
+    def message_attachment(value):
+        if value is None:
+            return None
+        if not isinstance(value, dict) or not isinstance(value.get("kind"), str):
+            raise HTTPException(422, "无效的聊天附件")
+        kind = value["kind"]
+        stored = value.get("id")
+        match = re.fullmatch(r"att-[A-Za-z0-9_-]{14}\.([a-z0-9]+)", stored) if isinstance(stored, str) else None
+        mime = MEDIA_TYPES.get(kind, {}).get(match[1]) if match else None
+        path = relay.get("UPLOAD_DIR")
+        if not mime or path is None or not (path / stored).is_file():
+            raise HTTPException(422, "聊天附件不存在或格式不支持")
+        return {"kind": kind, "url": "/uploads/" + stored, "mime": mime,
+                "size": (path / stored).stat().st_size, "name": MEDIA_LABELS[kind]}
+
     def model_members(db, cid):
         return db.execute("""
           SELECT c.* FROM emoi_v2_members m JOIN emoi_v2_contacts c ON c.id=m.contact_id
@@ -132,11 +163,15 @@ def register(app, relay):
                         if not current or current["model_route"] != recipient["model_route"]:
                             continue
                         rows = db.execute("""
-                          SELECT m.author, m.contact_id, m.text, c.name
+                          SELECT m.id, m.author, m.contact_id, m.text, m.attachment, c.name
                           FROM emoi_v2_messages m LEFT JOIN emoi_v2_contacts c ON c.id=m.contact_id
                           WHERE m.conversation_id=? ORDER BY m.rowid DESC LIMIT 40
                         """, (cid,)).fetchall()
                     history = [dict(row) for row in reversed(rows)]
+                    for entry in history:
+                        attachment = entry.pop("attachment")
+                        if attachment and entry["id"] == message_id:
+                            entry["attachment"] = json.loads(attachment)
                     try:
                         response = await client.post(url, json={
                             "route": current["model_route"], "contact_id": current["id"],
@@ -309,7 +344,7 @@ def register(app, relay):
         with connect(path) as db:
             conv=conversation(db,conversation_id)
             msgs=db.execute("SELECT * FROM emoi_v2_messages WHERE conversation_id=? ORDER BY created_at DESC,id DESC LIMIT ?",(conv["id"],limit)).fetchall()
-            return {"messages":[dict(row) for row in reversed(msgs)],
+            return {"messages":[view_message(row) for row in reversed(msgs)],
                     "model_connected": bool(relay.get("loop_base_url") and reply_targets(db, conv["id"])),
                     "replying": any(row["delivery"] == "replying" for row in msgs)}
 
@@ -318,27 +353,41 @@ def register(app, relay):
         auth(request)
         body=await request.json()
         if not isinstance(body,dict):raise HTTPException(422,"invalid message")
-        text=clean_text(body.get("text"),10000,True)
+        attachment=message_attachment(body.get("attachment"))
+        text=clean_text(body.get("text", ""),10000,not attachment)
         nonce=clean_text(body.get("nonce"),100,True)
         if not re.fullmatch(r"[A-Za-z0-9_-]{12,100}",nonce):
             raise HTTPException(422,"invalid nonce")
+        with connect(path) as db:
+            conv=conversation(db,conversation_id)
+            old=db.execute("SELECT * FROM emoi_v2_messages WHERE conversation_id=? AND nonce=?",(conv["id"],nonce)).fetchone()
+            if old:
+                return {"message":view_message(old),"already_saved":True}
+        if attachment and attachment["kind"] == "voice" and relay.get("VOICE_TRANSCRIBE_CMD"):
+            audio = relay["UPLOAD_DIR"] / attachment["url"].split("/")[-1]
+            transcript = await asyncio.to_thread(relay["transcribe_with_command"], audio, attachment["mime"])
+            if transcript:
+                attachment["transcript"] = transcript[:3000]
+        if not text:
+            text = attachment.get("transcript") or "[" + MEDIA_LABELS[attachment["kind"]] + "]"
         with connect(path) as db:
             db.execute("BEGIN IMMEDIATE")
             conv=conversation(db,conversation_id)
             old=db.execute("SELECT * FROM emoi_v2_messages WHERE conversation_id=? AND nonce=?",(conv["id"],nonce)).fetchone()
             if old:
-                return {"message":dict(old),"already_saved":True}
+                return {"message":view_message(old),"already_saved":True}
             if db.execute("SELECT 1 FROM emoi_v2_messages WHERE conversation_id=? AND delivery='replying'", (conv["id"],)).fetchone():
                 raise HTTPException(409, "请等这轮 AI 回复结束")
             recipients = reply_targets(db, conv["id"]) if relay.get("loop_base_url") else []
             mid=str(uuid4())
             db.execute("""
-              INSERT INTO emoi_v2_messages(id,conversation_id,author,contact_id,text,nonce,delivery,created_at)
-              VALUES(?,?,'human',NULL,?,?,?,?)
-            """, (mid,conv["id"],text,nonce,"replying" if recipients else "stored_not_delivered",now()))
+              INSERT INTO emoi_v2_messages(id,conversation_id,author,contact_id,text,nonce,delivery,created_at,attachment)
+              VALUES(?,?,'human',NULL,?,?,?,?,?)
+            """, (mid,conv["id"],text,nonce,"replying" if recipients else "stored_not_delivered",now(),
+                  json.dumps(attachment, ensure_ascii=False) if attachment else None))
             row=db.execute("SELECT * FROM emoi_v2_messages WHERE id=?",(mid,)).fetchone()
         if recipients:
             background.add_task(generate_replies, conv["id"], mid, recipients)
-        return {"message":dict(row),"model_dispatched":bool(recipients)}
+        return {"message":view_message(row),"model_dispatched":bool(recipients)}
 
     return {"init":lambda:init(path)}

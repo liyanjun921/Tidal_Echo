@@ -75,7 +75,8 @@ function clearPending(nonce){localStorage.setItem('emoi-outbox-'+owner,JSON.stri
 async function media(att){
  const path=String(att.url||'');if(!/^\/[\w/-]*uploads\/[^/]+$/.test(path)||/[?#]/.test(path))throw new Error('附件来源无效');
  if(blobUrls.has(path))return blobUrls.get(path);
- const file=await request('/uploads/'+encodeURIComponent(path.split('/').pop()),{blob:true});const u=URL.createObjectURL(file);blobUrls.set(path,u);return u;
+ const file=await request('/uploads/'+encodeURIComponent(path.split('/').pop()),{blob:true});const blob=att.kind==='voice'&&att.mime?file.slice(0,file.size,att.mime):file;
+ const u=URL.createObjectURL(blob);blobUrls.set(path,u);return u;
 }
 function stopSpeech(){speechEpoch++;speechController?.abort();speechController=null;const audio=$('#speechAudio');audio.pause();audio.removeAttribute('src');audio.load();if(speechUrl)URL.revokeObjectURL(speechUrl);speechUrl=null;$('#speechPlayback').hidden=true;$('#speechAudio').hidden=true;window.EmoiRelay.audio=null}
 async function tts(text){

@@ -1,0 +1,325 @@
+:root {
+  --wallpaper: url('assets/emoi-white-lilies.webp');
+  --beauty-glass-blur: var(--beauty-blur, 2px);
+  --beauty-glass-alpha: var(--beauty-opacity, .16);
+  --beauty-accent: hsl(var(--beauty-hue, 208) var(--beauty-accent-sat, 86%) var(--beauty-accent-light, 46%));
+  --beauty-tint: hsl(var(--beauty-hue, 208) 51% 94% / var(--beauty-glass-alpha));
+  --beauty-panel: hsl(var(--beauty-hue, 208) 33% 94% / max(.68, var(--beauty-glass-alpha)));
+  --beauty-rim: inset 1.5px 1.5px 1px -1px #fff, inset -1.5px -1.5px 1px -1px #fff9,
+    inset 0 0 0 .5px #fff5, 0 0 0 .5px #0002, 0 4px 16px #0002;
+  --beauty-filter: blur(var(--beauty-glass-blur)) saturate(var(--beauty-saturation, 165%))
+    brightness(var(--beauty-brightness, 104%));
+}
+:root[data-glass=frost] {
+  --beauty-glass-blur: 24px;
+  --beauty-glass-alpha: .49;
+  --beauty-hue: 209 !important;
+  --beauty-accent-sat: 48% !important;
+  --beauty-accent-light: 42% !important;
+  --beauty-accent: #386b9e;
+  --beauty-filter: blur(24px) saturate(118%) brightness(104%);
+  --beauty-rim: inset 0 1px 0 #fffc, 0 3px 12px #20354421;
+}
+body[data-dark=true] {
+  --beauty-tint: rgb(20 26 34 / var(--beauty-glass-alpha));
+  --beauty-panel: rgb(20 26 34 / max(.72, var(--beauty-glass-alpha)));
+}
+body[data-ui-mode=phone] .emoi-phone-host::before,
+html[data-emoi-home] {
+  background-image: var(--emoi-active-wallpaper, var(--wallpaper));
+}
+body[data-ui-mode=phone] .wall {
+  background: #313d41 var(--emoi-active-wallpaper, var(--wallpaper)) center / cover no-repeat;
+}
+body[data-ui-mode=phone] .ep-home [data-ep-optics],
+body[data-ui-mode=phone] :is(.ep-settings-panel,.ep-list-panel,.ep-status-card,.ep-app-section) {
+  background: var(--beauty-tint);
+  -webkit-backdrop-filter: var(--beauty-filter);
+  backdrop-filter: var(--beauty-filter);
+  box-shadow: var(--beauty-rim);
+  corner-shape: round;
+}
+html[data-glass=frost] body[data-ui-mode=phone] .ep-home [data-ep-optics]::before,
+html[data-glass=frost] body[data-ui-mode=phone] .ep-home [data-ep-optics]::after {
+  background-image: none;
+}
+body[data-ui-mode=phone] .ep-home [data-ep-optics] .ep-optical-canvas {
+  opacity: .82;
+}
+
+/* The outer canvas fills the viewport. Only long page content scrolls. */
+body[data-ui-mode=phone] :is(dialog.page-sheet, dialog.settings-sheet, #nativeMemoryDialog, #ombreMemoryDialog)[open] {
+  position: fixed;
+  inset: var(--ep-visual-top, 0px) 0 auto;
+  width: 100%;
+  height: var(--ep-visual-height, 100dvh);
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: linear-gradient(var(--beauty-panel), var(--beauty-panel)),
+    var(--emoi-active-wallpaper, var(--wallpaper)) center / cover no-repeat;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+body[data-ui-mode=phone] :is(dialog.page-sheet, dialog.settings-sheet, #nativeMemoryDialog, #ombreMemoryDialog)[open]::before {
+  display: none;
+}
+body[data-ui-mode=phone] :is(dialog.page-sheet, dialog.settings-sheet, #nativeMemoryDialog, #ombreMemoryDialog) .sheet-head {
+  width: 100%;
+  padding-top: max(12px, env(safe-area-inset-top));
+  flex: none;
+  background: var(--beauty-tint);
+  -webkit-backdrop-filter: var(--beauty-filter);
+  backdrop-filter: var(--beauty-filter);
+}
+body[data-ui-mode=phone] :is(dialog.page-sheet, dialog.settings-sheet, #nativeMemoryDialog, #ombreMemoryDialog) .sheet-body {
+  width: min(100%, 1160px);
+  min-height: 0;
+  flex: 1 1 auto;
+  margin-inline: auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+}
+body[data-ui-mode=phone] :is(dialog.page-sheet, dialog.settings-sheet) :is(.entry-card,.settings-card,.wren-clock-summary) {
+  background: var(--beauty-tint);
+  -webkit-backdrop-filter: var(--beauty-filter);
+  backdrop-filter: var(--beauty-filter);
+  box-shadow: var(--beauty-rim);
+  corner-shape: round;
+}
+body[data-ui-mode=phone] #workspaceDialog.page-sheet[data-page=cinema] .sheet-body { width: 100%; }
+
+body[data-ui-mode=phone] .emoi-phone-host,
+body[data-ui-mode=phone][data-phone-screen=home] .emoi-phone-host,
+body[data-ui-mode=phone][data-phone-screen=legacy] #app {
+  position: fixed;
+  inset: var(--ep-visual-top, 0px) 0 auto;
+  height: var(--ep-visual-height, 100dvh);
+  max-height: none;
+  overscroll-behavior: none;
+}
+html[data-ep-standalone] body[data-ui-mode=phone][data-phone-screen=home] .emoi-phone-host {
+  position: relative;
+  inset: auto;
+  height: max(var(--ep-visual-height, 100dvh), 100lvh);
+}
+@media (max-width: 700px) {
+  html[data-ep-standalone] body[data-ui-mode=phone] :is(dialog.page-sheet, dialog.settings-sheet) .sheet-head {
+    padding-top: max(52px, env(safe-area-inset-top));
+  }
+  body[data-ui-mode=phone] .ep-edit-dialog[open] {
+    --ep-dialog-margin: max(12px, env(safe-area-inset-top));
+    position: fixed;
+    inset: auto 0 calc(max(0px, 100dvh - var(--ep-visual-height, 100dvh) - var(--ep-visual-top, 0px))) 0;
+    width: 100%;
+    max-width: none;
+    height: auto;
+    max-height: calc(var(--ep-visual-height, 100dvh) - var(--ep-dialog-margin));
+    margin: 0;
+    border-radius: 25px 25px 0 0;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+  html[data-ep-standalone] body[data-ui-mode=phone] .ep-edit-dialog[open] {
+    --ep-dialog-margin: max(55px, env(safe-area-inset-top));
+  }
+  html[data-ep-keyboard] body[data-ui-mode=phone] .ep-edit-dialog[open] { padding-bottom: 8px; }
+}
+
+.ep-thread-row { display: flex; align-items: center; gap: 10px; }
+.ep-thread-pin {
+  flex: none; min-height: 44px; padding-inline: 6px;
+  color: var(--beauty-accent); font-size: 12px;
+}
+.ep-thread-pin[aria-pressed=true] { font-weight: 700; }
+
+.ep-beauty .ep-list-scroll { padding-top: 14px; }
+.ep-beauty-preview {
+  border-radius: 26px;
+  min-height: 200px;
+  padding: 21px 19px;
+  display: flex;
+  align-items: flex-end;
+  background: linear-gradient(#16262d36,#16262d68), var(--emoi-active-wallpaper, var(--wallpaper)) center 43% / cover;
+  box-shadow: var(--beauty-rim);
+}
+.ep-beauty-samples { width: 100%; display: grid; gap: 10px; }
+.ep-beauty-settings,.ep-beauty-params { display: grid; gap: 10px; }
+.ep-beauty-settings { margin-top: 14px; }
+.ep-beauty-params[hidden] { display: none; }
+.ep-beauty-choices,.ep-beauty-slider {
+  color: #152535;
+  background: var(--beauty-panel);
+  -webkit-backdrop-filter: var(--beauty-filter);
+  backdrop-filter: var(--beauty-filter);
+  border: 1px solid #fffa;
+  border-radius: 18px;
+  box-shadow: var(--beauty-rim);
+  margin: 0; min-width: 0; padding: 12px 15px;
+}
+body[data-dark=true] :is(.ep-beauty-choices,.ep-beauty-slider) { color:#fff; }
+.ep-beauty-choices { display: flex; gap: 8px; }
+.ep-beauty-choices legend { font-weight: 650; color: #fff; text-shadow: 0 1px 4px #16262d; }
+.ep-beauty-choices label { flex: 1; cursor: pointer; position: relative; }
+.ep-beauty-choices input { position: absolute; opacity: 0; }
+.ep-beauty-choices label span { display: grid; place-items: center; border-radius: 12px; min-height: 44px; }
+.ep-beauty-choices input:checked + span { background: var(--beauty-accent); color: #fff; }
+.ep-beauty-choices input:focus-visible + span { outline: 2px solid var(--beauty-accent); outline-offset: 2px; }
+.ep-beauty-slider { display: grid; gap: 7px; }
+.ep-beauty-caption { display: flex; align-items: baseline; justify-content: space-between; font-size: 13px; font-weight: 600; }
+.ep-beauty-caption output { font-variant-numeric: tabular-nums; font-weight: 450; }
+.ep-beauty-slider input { width: 100%; min-height: 32px; appearance: auto; accent-color: var(--beauty-accent); }
+.ep-beauty-slider select { padding: 8px; border-radius: 9px; color: inherit; font: inherit; min-height: 44px; }
+
+@media (prefers-reduced-transparency: reduce) {
+  :root,:root[data-glass=frost] { --beauty-filter: none; --beauty-glass-alpha: 1; }
+}
+@media (forced-colors: active) {
+  :root,:root[data-glass=frost] { --beauty-tint: Canvas; --beauty-panel: Canvas; --beauty-accent: LinkText; --beauty-rim: none; }
+}
+
+/* iMessage-style toolbar and composer over the current conversation wallpaper. */
+body[data-ui-mode=phone] #emoiPhoneView.ep-im-screen,
+body[data-ui-mode=phone][data-dark=true] #emoiPhoneView.ep-im-screen {
+  --im-ink: #fff;
+  --im-muted: #eef3f9;
+  --im-blue: #d9efff;
+  color: var(--im-ink);
+  background: linear-gradient(#101b2b6b,#0b142192), var(--emoi-active-wallpaper, var(--wallpaper)) center / cover no-repeat;
+}
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-header {
+  grid-template-columns: 1fr minmax(0,2fr) 1fr;
+  background: rgb(12 22 34 / .24);
+  border-color: #ffffff30;
+  -webkit-backdrop-filter: var(--beauty-filter);
+  backdrop-filter: var(--beauty-filter);
+}
+.ep-im-actions { gap: 2px; }
+body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-back,.ep-im-more,.ep-im-attach) {
+  width: 41px; height: 41px; color: #fff;
+  background: rgb(24 34 46 / .28);
+  border: 1px solid #ffffff42; border-radius: 50%;
+  box-shadow: var(--beauty-rim);
+}
+.ep-im-peer { background: none; border: 0; }
+.ep-im-peer .ep-im-avatar { width: 43px; height: 43px; }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-peer-info strong { font-size: 14px; text-shadow: 0 1px 3px #000; }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-content { justify-content: flex-end; }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-conversation-start { margin: auto; }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-history { gap: 9px; }
+.ep-im-joined { margin-top: -5px; }
+.ep-im-date,.ep-im-sender,.ep-im-delivery,.ep-im-notice { text-shadow: 0 1px 4px #000; }
+body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-delivery,.ep-im-notice) { text-shadow: 0 1px 4px #000; }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-footer {
+  background: linear-gradient(transparent, #101a29a8);
+  padding-inline: max(13px, env(safe-area-inset-left)) max(13px, env(safe-area-inset-right));
+  flex: none;
+}
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-composer {
+  min-height: 43px;
+  background: rgb(14 24 35 / .48);
+  border: 1px solid #fff7;
+  box-shadow: var(--beauty-rim);
+  -webkit-backdrop-filter: var(--beauty-filter);
+  backdrop-filter: var(--beauty-filter);
+}
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-composer textarea {
+  height: 32px; min-height: 32px; max-height: 94px;
+  font-size: 16px; line-height: 22px; padding: 5px 0;
+  color: white; touch-action: manipulation;
+}
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-composer textarea::placeholder { color:#edf3fa; }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-mic {
+  width: 33px; height: 33px; border: 0; box-shadow: none; background: transparent;
+}
+body[data-ui-mode=phone] #emoiPhoneView button[hidden],
+body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-picker,.ep-im-pending,.ep-im-typing)[hidden] { display: none; }
+
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-row .ep-im-bubble {
+  border: 1px solid #ffffff6b;
+  border-radius: 21px;
+  padding: 8px 13px;
+  font-size: 16px;
+  line-height: 1.45;
+  text-shadow: 0 1px 2px #0e1b28;
+  color: white;
+  background: rgb(15 23 35 / max(.30, var(--beauty-glass-alpha)));
+  -webkit-backdrop-filter: var(--beauty-filter);
+  backdrop-filter: var(--beauty-filter);
+  box-shadow: var(--beauty-rim);
+  corner-shape: round;
+}
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-mine .ep-im-bubble {
+  background: hsl(var(--beauty-hue, 208) var(--beauty-accent-sat, 86%) min(44%, var(--beauty-accent-light, 46%)) / clamp(.62, calc(.55 + var(--beauty-glass-alpha)), .95));
+  border-bottom-right-radius: 7px;
+}
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-theirs .ep-im-bubble { border-bottom-left-radius: 7px; }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-joined.ep-im-mine .ep-im-bubble { border-top-right-radius: 9px; }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-joined.ep-im-theirs .ep-im-bubble { border-top-left-radius: 9px; }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-bubble[data-media] { padding: 5px; }
+.ep-im-bubble img { display:block; max-width: min(56vw,340px); max-height: 330px; border-radius: 15px; object-fit: contain; }
+.ep-im-bubble[data-media=sticker] img { max-width: min(37vw,146px); }
+.ep-im-bubble audio { display:block; width:min(61vw,300px); max-width:100%; }
+.ep-im-typing { display:flex; gap:5px; align-items:center; min-height:22px; padding:6px 8px; }
+.ep-im-typing i { width:5px; height:5px; background:#fff; border-radius:50%; opacity:.6; }
+.ep-im-picker,.ep-im-pending { width:min(calc(100% - 26px),580px); margin:0 auto 4px; padding:8px; border-radius:15px;
+  display:flex; align-items:center; flex-wrap:wrap; gap:8px;
+  background:#182536c9; border:1px solid #ffffff60; color:#fff; }
+.ep-im-pending { justify-content:space-between; font-size:13px; }
+.ep-im-picker .ep-home-control,.ep-im-remove { color:#fff; border-radius:10px; background:#ffffff25; min-height:36px; padding:6px 11px; }
+.ep-im-emoji { display:flex; flex-wrap:wrap; }
+.ep-im-emoji button { width:36px; height:36px; font-size:22px; }
+.ep-im-tool { padding:18px !important; }
+.ep-im-tool h2 { margin:0 0 12px; font-size:19px; }
+.ep-im-tool p { font-size:13px; line-height:1.5; }
+.ep-im-tool .ep-home-control { color:#1e3a51; background:#ffffff9e; display:inline-flex; margin:4px; text-decoration:none; }
+.ep-im-tool .ep-home-control[hidden],.ep-im-tool video[hidden] { display:none; }
+.ep-im-tool input[type=tel] { width:100%; padding:9px; border:1px solid #8dabc5; border-radius:12px; color:#19314b; font-size:18px; }
+.ep-im-tool video { display:block; border-radius:12px; width:100%; max-height:45vh; margin-bottom:8px; background:#182536; }
+body[data-ui-mode=phone] .ep-im-tool:has(video) { max-height:var(--ep-visual-height,100dvh); }
+.ep-im-dial-keys { display:grid; grid-template-columns:repeat(3,1fr); margin:12px 0; gap:7px; }
+.ep-im-dial-keys button { min-height:42px; border-radius:14px; background:#fff; color:#254058; font-size:20px; }
+
+.ep-beauty-preview .ep-im-bubble { color:#fff; background:#172334b3; border:1px solid #fff8; box-shadow:var(--beauty-rim);
+  -webkit-backdrop-filter:var(--beauty-filter); backdrop-filter:var(--beauty-filter); }
+.ep-beauty-preview .ep-im-mine .ep-im-bubble { background:var(--beauty-accent); }
+@keyframes ep-im-soft { from { opacity:0; transform:translateY(19px) scale(.94); } to { opacity:1; transform:none; } }
+@keyframes ep-im-spring {
+  0% { opacity:0; transform:translateY(22px) scale(.69,.75); }
+  65% { opacity:1; transform:scale(1.025,.98); }
+  82% { transform:scale(.992,1.015); }
+  100% { transform:none; }
+}
+@keyframes ep-im-fade { from { opacity:0; } to { opacity:1; } }
+@keyframes ep-im-dot { 0%,80%,100% { opacity:.3; } 40% { opacity:1; } }
+html[data-bubble-motion=soft] .ep-im-arriving { animation:ep-im-soft 420ms cubic-bezier(.22,1,.36,1); }
+html[data-bubble-motion=spring] .ep-im-arriving { animation:ep-im-spring 460ms cubic-bezier(.22,1,.36,1); }
+html[data-bubble-motion=fade] .ep-im-arriving { animation:ep-im-fade 240ms ease-out; }
+html:not([data-bubble-motion=off]) .ep-im-typing i { animation:ep-im-dot 1.2s infinite ease; }
+.ep-im-typing i:nth-child(2) { animation-delay:.12s !important; }
+.ep-im-typing i:nth-child(3) { animation-delay:.24s !important; }
+@media (prefers-reduced-motion: reduce) {
+  html:is([data-bubble-motion=soft],[data-bubble-motion=spring]) .ep-im-arriving { animation:ep-im-fade 150ms ease-out; }
+  html:not([data-bubble-motion=off]) .ep-im-typing i { animation:none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-header,.ep-im-composer) { background:#121d2b; }
+  body[data-ui-mode=phone] #emoiPhoneView .ep-im-theirs .ep-im-bubble { background:#1e293a; }
+  body[data-ui-mode=phone] #emoiPhoneView .ep-im-mine .ep-im-bubble { background:#154782; }
+}
+html[data-ep-keyboard] body[data-ui-mode=phone] #emoiPhoneView .ep-im-footer { padding-bottom:7px; }
+html[data-ep-keyboard] body[data-ui-mode=phone] #emoiPhoneView .ep-im-header { min-height:56px; padding-top:7px; }
+
+body[data-ui-mode=phone] #emoiPhoneView.ep-messages {
+  background: linear-gradient(#f4f7fbe0,#eff3f5e8), var(--emoi-active-wallpaper,var(--wallpaper)) center / cover;
+}
+body[data-ui-mode=phone][data-dark=true] #emoiPhoneView.ep-messages {
+  background: linear-gradient(#141d29d9,#131e2ae6), var(--emoi-active-wallpaper,var(--wallpaper)) center / cover;
+}
