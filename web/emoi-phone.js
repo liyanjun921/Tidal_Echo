@@ -62,7 +62,7 @@ const apps=[
  {id:'more',label:'更多',icon:'more',tone:'silver'},
  {id:'settings',label:'设置',icon:'settings',tone:'blue'}
 ];
-const dockIds=['chat','contacts','more','settings'];
+const dockIds=['chat','room','calendar','settings'];
 function safeRead(key){
  try{const value=JSON.parse(localStorage.getItem(key));return Array.isArray(value)?value:[];}catch{return [];}
 }
@@ -192,7 +192,7 @@ const homeWidgets={
  room:{label:'Room', icon:'room', markup:'<strong>自主空间</strong><span>打开 Room</span>'}
 };
 const widgetId=id=>'widget:'+id;
-const homeApps=apps.filter(app=>!['more','settings'].includes(app.id));
+const homeApps=apps.filter(app=>!['more','settings','contacts','checklist'].includes(app.id));
 const initialHomeLayout=[
  {id:widgetId('calendar'),wide:false},{id:widgetId('reading'),wide:false},
  ...homeApps.map(({id})=>({id,wide:false}))
@@ -716,7 +716,7 @@ function openApp(id){
  if(id==='contacts')return openContacts();
  if(id==='settings')return openSettings();
  if(id==='more')return openMore();
- if(id==='checklist')return launchPage('todo');
+ if(id==='checklist')return launchPage('calendar');
  if(id==='room')return launchPage('room');
  return launchPage(id);
 }

@@ -146,8 +146,12 @@ def register(app, relay):
         path = relay.get("UPLOAD_DIR")
         if not mime or path is None or not (path / stored).is_file():
             raise HTTPException(422, "聊天附件不存在或格式不支持")
-        return {"kind": kind, "url": "/uploads/" + stored, "mime": mime,
+        attachment = {"kind": kind, "url": "/uploads/" + stored, "mime": mime,
                 "size": (path / stored).stat().st_size, "name": MEDIA_LABELS[kind]}
+        duration = value.get("duration")
+        if kind == "voice" and type(duration) in (int, float) and 0 <= duration <= 120:
+            attachment["duration"] = round(duration, 2)
+        return attachment
 
     def model_members(db, cid):
         return db.execute("""

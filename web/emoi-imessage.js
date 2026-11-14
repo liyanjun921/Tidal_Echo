@@ -11,6 +11,12 @@ const imageTypes=new Map([['image/jpeg','jpg'],['image/png','png'],['image/gif',
 const audioTypes=new Map([['audio/mp4','m4a'],['audio/webm','webm'],['audio/ogg','ogg'],['audio/wav','wav']]);
 const $=(s,r=document)=>r.querySelector(s);
 const icons={
+ close:'<path d="m6 6 12 12M18 6 6 18"/>',
+ play:'<path d="m8 4 12 8-12 8Z" fill="currentColor"/>',
+ pause:'<path d="M9 5v14m6-14v14"/>',
+ wave:'<path d="M3 10v4m4-7v10m5-14v18m5-14v10m4-7v4"/>',
+ sticker:'<path d="M5 3h14a2 2 0 0 1 2 2v8l-8 8H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm8 18v-6a2 2 0 0 1 2-2h6"/>',
+ location:'<path d="M20 10c0 6-8 11-8 11S4 16 4 10a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>',
  plus:'<path d="M12 5v14M5 12h14"/>',
  mic:'<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2m-7 9v3m-3 0h6"/>',
  video:'<rect x="2" y="5" width="14" height="14" rx="3"/><path d="m16 10 6-4v12l-6-4"/>',
@@ -87,18 +93,70 @@ function openDialpad(){
  };
  dialog.append(number,keys,erase,call,close);dialog.showModal();
 }
-async function openVideo(){
- const {dialog,close}=dialogFor('视频预览');
- const video=document.createElement('video');video.autoplay=true;video.muted=true;video.playsInline=true;video.hidden=true;
- const note=document.createElement('p');note.textContent='本机摄像头预览 · 此会话尚未接入视频通话';
- let stream;
- dialog.addEventListener('close',()=>stream?.getTracks().forEach(track=>track.stop()),{once:true});
- dialog.append(note,video,close);dialog.showModal();
- try{
-  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false});
-  if(!dialog.open){stream.getTracks().forEach(track=>track.stop());return}
-  video.srcObject=stream;video.hidden=false;
- }catch{note.textContent='无法打开摄像头 · 请检查浏览器权限'}
+function openCall(item,initialMode){
+ const dialog=document.createElement('dialog');dialog.className='ep-im-call';
+ dialog.setAttribute('aria-label','通话');
+ const heading=document.createElement('div');heading.className='ep-call-heading';
+ const name=document.createElement('strong');name.textContent=item.name||'联系人';
+ const status=document.createElement('p');status.setAttribute('role','status');heading.append(status,name);
+ const camera=document.createElement('div');camera.className='ep-call-camera';
+ const video=document.createElement('video');video.autoplay=true;video.playsInline=true;video.muted=true;
+ const flip=button('翻转摄像头','video',()=>{facing=facing==='user'?'environment':'user';void startCamera()},'ep-call-flip');
+ flip.textContent='翻转';
+ camera.append(video,flip);
+ const controls=document.createElement('div');controls.className='ep-call-controls';
+ const videoToggle=button('切换视频','video',()=>setMode(mode==='video'?'voice':'video'),'ep-call-control');
+ const phone=button('系统拨号','dial',openDialpad,'ep-call-control');
+ const end=button('结束','close',()=>dialog.close(),'ep-call-control ep-call-end');
+ controls.append(phone,videoToggle,end);
+ dialog.append(heading,camera,controls);document.body.append(dialog);
+ let facing='user',mode,stream,ticket=0;
+ function stopCamera(){
+  ticket++;stream?.getTracks().forEach(track=>track.stop());stream=null;video.srcObject=null;
+ }
+ async function startCamera(){
+  stopCamera();const request=ticket;
+  status.textContent='正在打开本机摄像头…';
+  try{
+   const next=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:facing}},audio:false});
+   if(ticket!==request||!dialog.open){next.getTracks().forEach(track=>track.stop());return}
+   stream=next;video.srcObject=stream;
+   status.textContent='本机视频预览 · 未连接对方';
+  }catch{
+   if(ticket===request)status.textContent='无法打开摄像头，请检查权限';
+  }
+ }
+ function setMode(next){
+  mode=next;dialog.dataset.mode=mode;camera.hidden=mode!=='video';
+  videoToggle.setAttribute('aria-pressed',String(mode==='video'));
+  if(mode==='video')void startCamera();
+  else{stopCamera();status.textContent='语音通话 · 联系人未接入通话服务'}
+ }
+ dialog.addEventListener('close',()=>{stopCamera();dialog.remove()},{once:true});
+ dialog.showModal();setMode(initialMode);
+}
+function mmss(seconds){
+ const n=Number.isFinite(seconds)?Math.max(0,Math.floor(seconds)):0;
+ return Math.floor(n/60)+':'+String(n%60).padStart(2,'0');
+}
+function voicePlayer(source,duration){
+ const shell=document.createElement('div');shell.className='ep-voice-player';
+ const audio=document.createElement('audio');audio.preload='metadata';audio.src=source;
+ const time=document.createElement('span');time.className='ep-voice-time';time.textContent=mmss(duration);
+ const wave=document.createElement('span');wave.className='ep-voice-wave';wave.setAttribute('aria-hidden','true');
+ const play=button('播放语音','play',async()=>{
+  if(!audio.paused){audio.pause();return}
+  try{await audio.play()}catch{time.textContent='无法播放'}
+ },'ep-voice-play');
+ function paint(){
+  play.innerHTML=icon(audio.paused?'play':'pause');
+  play.setAttribute('aria-label',audio.paused?'播放语音':'暂停语音');
+  const total=Number.isFinite(audio.duration)?audio.duration:duration;
+  time.textContent=mmss(audio.paused||!total?total:total-audio.currentTime);
+  wave.style.setProperty('--played',(total?100*audio.currentTime/total:0)+'%');
+ }
+ for(const event of ['loadedmetadata','play','pause','ended','timeupdate'])audio.addEventListener(event,paint);
+ shell.append(play,wave,time,audio);return shell;
 }
 function renderAttachment(bubble,attachment,registerURL){
  if(attachment.kind==='location'){
@@ -108,16 +166,15 @@ function renderAttachment(bubble,attachment,registerURL){
   bubble.append(link);return;
  }
  const isVoice=attachment.kind==='voice';
- const media=document.createElement(isVoice?'audio':'img');
- if(isVoice){media.controls=true;media.preload='metadata';media.setAttribute('aria-label','播放语音消息')}
- else{media.alt=mediaLabels[attachment.kind]||'聊天图片';media.decoding='async';media.loading='lazy'}
+ const media=isVoice?null:document.createElement('img');
+ if(media){media.alt=mediaLabels[attachment.kind]||'聊天图片';media.decoding='async';media.loading='lazy'}
  const status=document.createElement('span');status.textContent='正在载入'+mediaLabels[attachment.kind]+'…';
  bubble.append(status);
  const load=attachment.localId?mediaStore(attachment.localId).then(blob=>{
   if(!blob)throw new Error('找不到本机附件');
   return registerURL(attachment.localId,blob);
  }):window.EmoiRelay?.enabled?window.EmoiRelay.media(attachment):Promise.reject();
- load.then(url=>{if(bubble.isConnected&&url){media.src=url;status.replaceWith(media)}})
+ load.then(url=>{if(bubble.isConnected&&url){if(isVoice)status.replaceWith(voicePlayer(url,attachment.duration));else{media.src=url;status.replaceWith(media)}}})
   .catch(()=>{status.textContent=mediaLabels[attachment.kind]+'暂不可用'});
 }
 const formatDate=iso=>new Date(iso).toLocaleString('zh-CN',{month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});
@@ -188,7 +245,7 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
  options.append(closeOptions);root.append(options);
  person.onclick=()=>options.showModal();
  const actions=document.createElement('div');actions.className='ep-im-actions';
- actions.append(button('视频预览','video',openVideo),button('语音通话','phone',openDialpad));
+ actions.append(button('视频','video',()=>openCall(item,'video')),button('语音通话','phone',()=>openCall(item,'voice')));
  header.append(back,person,actions);root.append(header);
  if(kind==='contact')void window.EmoiAvatars?.paint(avatar,item.id);
  const body=document.createElement('main');body.className='ep-im-timeline';body.setAttribute('aria-label','与'+(item.name||'联系人')+'的消息');
@@ -200,17 +257,33 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
  const history=document.createElement('div');history.className='ep-im-history';
  content.append(history);body.append(content);root.append(body);
  const notice=document.createElement('div');notice.className='ep-im-notice';notice.setAttribute('role','status');notice.hidden=true;root.append(notice);
- const footer=document.createElement('form');footer.className='ep-im-footer';footer.autocomplete='off';
+ const footer=document.createElement('form');footer.className='ep-im-footer';footer.id='ep-im-send-form';footer.autocomplete='off';
  const composer=document.createElement('div');composer.className='ep-im-composer';
  const input=document.createElement('textarea');input.rows=1;input.maxLength=10000;input.placeholder='iMessage';input.setAttribute('aria-label','输入消息');
  const submit=document.createElement('button');submit.type='submit';submit.className='ep-im-submit';submit.setAttribute('aria-label','发送消息');submit.innerHTML=icon('arrow');submit.disabled=true;
- const attach=button('添加附件','plus',()=>{picker.hidden=!picker.hidden},'ep-im-attach');
- const mic=button('录制语音','mic',recordVoice,'ep-im-attach ep-im-mic');
- const picker=document.createElement('div');picker.className='ep-im-picker';picker.hidden=true;
+ const attach=button('添加附件','plus',()=>{input.blur();setPicker(picker.hidden)},'ep-im-attach');
+ function setPicker(open){picker.hidden=!open;attach.setAttribute('aria-expanded',String(open));if(open)emojiRow.hidden=true}
+ attach.setAttribute('aria-expanded','false');
+ attach.setAttribute('aria-controls','ep-im-picker');
+ const mic=button('录制语音','wave',recordVoice,'ep-im-attach ep-im-mic');
+ const picker=document.createElement('div');picker.className='ep-im-picker';picker.id='ep-im-picker';picker.hidden=true;picker.setAttribute('aria-label','信息附件');
  const preview=document.createElement('div');preview.className='ep-im-pending';preview.hidden=true;
- composer.append(input,mic,submit);footer.append(attach,composer);root.append(picker,preview,footer);
+ const recorderBar=document.createElement('div');recorderBar.className='ep-record-bar';recorderBar.hidden=true;
+ const redWave=document.createElement('span');redWave.className='ep-voice-wave';redWave.setAttribute('aria-hidden','true');
+ const elapsed=document.createElement('span');elapsed.className='ep-voice-time';elapsed.textContent='0:00';
+ const stop=button('结束录制','stop',()=>stopRecording(),'ep-voice-play');
+ recorderBar.append(redWave,elapsed,stop);
+ composer.append(input,mic,submit);footer.append(attach,composer,recorderBar);root.append(picker,preview,footer);
  let sending=false,replying=false,timer,remoteRows=[],pendingRequest=null,attachment=null,recording=null,starting=false;
+ let draftURL;
  const isOpen=()=>root.contains(history);
+ const outside=e=>{if(!picker.hidden&&!picker.contains(e.target)&&!attach.contains(e.target))setPicker(false)};
+ const escape=e=>{if(e.key==='Escape'&&!picker.hidden){setPicker(false);attach.focus()}};
+ root.addEventListener('pointerdown',outside);
+ root.addEventListener('keydown',escape);
+ function stopRecording(){if(recording?.recorder.state==='recording')recording.recorder.stop()}
+ function clearDraft(){if(draftURL){URL.revokeObjectURL(draftURL);draftURL=null}}
+
  const mediaURLs=new Map();
  function registerURL(id,blob){
   if(!isOpen())return null;
@@ -219,20 +292,28 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
  }
  const removal=new MutationObserver(()=>{
   if(isOpen())return;
-  removal.disconnect();clearTimeout(timer);
+  removal.disconnect();clearTimeout(timer);clearDraft();
+  root.removeEventListener('pointerdown',outside);root.removeEventListener('keydown',escape);
   if(recording?.recorder.state==='recording')recording.recorder.stop();
   recording?.stream.getTracks().forEach(track=>track.stop());
   mediaURLs.forEach(url=>URL.revokeObjectURL(url));
  });
  removal.observe(root,{childList:true});
- for(const [kind,label,capture] of [['image','照片'],['image','拍照','environment'],['sticker','表情包']]){
-  const pick=document.createElement('input');pick.type='file';pick.accept=[...imageTypes.keys()].join(',');pick.hidden=true;
-  if(capture)pick.setAttribute('capture',capture);
-  const tile=button(label,'photo',()=>pick.click(),'ep-home-control');tile.textContent=label;
-  pick.onchange=()=>{const file=pick.files?.[0];pick.value='';if(file)setAttachment(file,kind)};
-  picker.append(tile,pick);
+ function pickerButton(label,glyph,action,tone){
+  const tile=button(label,glyph,action,'ep-im-menu-item');
+  tile.dataset.tone=tone;tile.append(document.createTextNode(label));return tile;
  }
- const emojiRow=document.createElement('div');emojiRow.className='ep-im-emoji';
+ function filePicker(kind){
+  const pick=document.createElement('input');pick.type='file';pick.accept=[...imageTypes.keys()].join(',');pick.hidden=true;
+  pick.onchange=()=>{const file=pick.files?.[0];pick.value='';if(file)setAttachment(file,kind)};
+  return pick;
+ }
+ const photos=filePicker('image'),stickers=filePicker('sticker');
+ const emojiRow=document.createElement('div');emojiRow.className='ep-im-emoji';emojiRow.hidden=true;
+ picker.append(pickerButton('照片','photo',()=>photos.click(),'photo'),photos,
+  pickerButton('贴纸','sticker',()=>{emojiRow.hidden=!emojiRow.hidden},'sticker'),stickers,
+  pickerButton('音频','wave',recordVoice,'audio'));
+ emojiRow.append(pickerButton('导入表情包','plus',()=>stickers.click(),'sticker'));
  for(const emoji of ['🤍','🫧','🥺','🫶','🌙','✨']){
   const tile=document.createElement('button');tile.type='button';tile.textContent=emoji;
   tile.setAttribute('aria-label','表情包 '+emoji);
@@ -245,18 +326,17 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
   };
   emojiRow.append(tile);
  }
- const location=button('位置','plus',()=>{
+ const location=pickerButton('位置','location',()=>{
   if(!navigator.geolocation){report('当前浏览器无法获取位置');return}
   navigator.geolocation.getCurrentPosition(({coords})=>{
    if(isOpen()&&!sending&&!recording)setPending({kind:'location',latitude:coords.latitude,longitude:coords.longitude});
   },()=>{if(isOpen())report('无法获取位置，请检查定位权限')},{timeout:10000});
- },'ep-home-control');
- location.textContent='位置';
+ },'location');
  const voiceReply=document.createElement('label');voiceReply.className='ep-im-voice-option';
  const voiceCheck=document.createElement('input');voiceCheck.type='checkbox';
  voiceCheck.disabled=!endpoint||!window.EmoiRelay?.enabled;
  voiceReply.append(voiceCheck,'请用语音回复');
- picker.append(location,voiceReply,emojiRow);
+ picker.querySelector('[data-tone=sticker]').after(emojiRow);picker.append(location,voiceReply);
  const typing=document.createElement('div');typing.className='ep-im-typing';typing.hidden=true;typing.setAttribute('aria-label','等待 AI 回复');
  for(let i=0;i<3;i++)typing.append(document.createElement('i'));
  content.append(typing);
@@ -271,26 +351,40 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
  const updateSend=()=>{
   const ready=Boolean(input.value.trim()||attachment);
   submit.disabled=!ready||sending||replying||Boolean(recording)||starting;
-  submit.hidden=!ready;mic.hidden=ready&&!recording;typing.hidden=!replying;
+  const voiceMode=attachment?.kind==='voice';
+  submit.hidden=!ready;mic.hidden=ready;
+  input.hidden=voiceMode;attach.hidden=Boolean(recording)||voiceMode;
+  composer.hidden=Boolean(recording)||voiceMode;recorderBar.hidden=!recording;
+  if(voiceMode){const send=preview.querySelector('button[type=submit]');if(send)send.disabled=submit.disabled}
+  typing.hidden=!replying;
  };
- function setAttachment(blob,kind){
+ function setAttachment(blob,kind,duration){
   if(sending||recording)return;
   const mime=blob.type.split(';')[0].toLowerCase();
   const ext=(kind==='voice'?audioTypes:imageTypes).get(mime);
   if(!ext||!blob.size||blob.size>MAX_MEDIA_BYTES){report('请选择支持的格式，附件大小须在 8 MB 以内');return}
-  setPending({file:new File([blob],kind+'.'+ext,{type:mime}),kind});
+  setPending({file:new File([blob],kind+'.'+ext,{type:mime}),kind,duration});
  }
  function setPending(value){
   attachment=value;
   const {kind}=value;
-  const remove=button('移除附件','plus',()=>{attachment=null;preview.hidden=true;updateSend()},'ep-im-remove');
-  remove.textContent='移除';
-  preview.replaceChildren(document.createTextNode(mediaLabels[kind]+' · 待发送'),remove);
-  preview.hidden=false;picker.hidden=true;updateSend();
+  clearDraft();
+  const remove=button('移除附件','close',()=>{attachment=null;clearDraft();preview.hidden=true;updateSend()},'ep-im-remove');
+  preview.classList.toggle('ep-voice-draft',kind==='voice');
+  if(kind==='voice'){
+   draftURL=URL.createObjectURL(value.file);
+   const send=button('发送语音','arrow',null,'ep-im-submit');send.type='submit';send.setAttribute('form','ep-im-send-form');
+   const capsule=document.createElement('div');capsule.className='ep-voice-capsule';
+   capsule.append(voicePlayer(draftURL,value.duration),send);preview.replaceChildren(remove,capsule);
+  }else{
+   remove.textContent='移除';preview.replaceChildren(document.createTextNode(mediaLabels[kind]+' · 待发送'),remove);
+  }
+  preview.hidden=false;setPicker(false);updateSend();
  }
  async function recordVoice(){
-  if(recording){recording.recorder.stop();return}
-  if(starting||sending)return;
+  if(recording){stopRecording();return}
+  if(starting||sending||attachment)return;
+  input.blur();setPicker(false);
   if(!window.MediaRecorder||!navigator.mediaDevices?.getUserMedia){report('当前浏览器无法录音');return}
   starting=true;updateSend();
   let stream;
@@ -302,18 +396,19 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
    const chunks=[];
    recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
    recorder.onstop=()=>{
-    clearTimeout(limit);stream.getTracks().forEach(track=>track.stop());recording=null;
+    clearTimeout(limit);clearInterval(clock);stream.getTracks().forEach(track=>track.stop());recording=null;
     if(!isOpen())return;
-    mic.innerHTML=icon('mic');mic.setAttribute('aria-label','录制语音');report('');
-    if(chunks.length)setAttachment(new Blob(chunks,{type:recorder.mimeType||chunks[0].type}),'voice');
+    if(chunks.length&&!failed)setAttachment(new Blob(chunks,{type:recorder.mimeType||chunks[0].type}),'voice',(performance.now()-startedAt)/1000);
     updateSend();
    };
-   recorder.onerror=()=>{if(recorder.state==='recording')recorder.stop();stream.getTracks().forEach(track=>track.stop());report('录音中断')};
+   let failed=false;
+   recorder.onerror=()=>{failed=true;if(recorder.state==='recording')recorder.stop();stream.getTracks().forEach(track=>track.stop());report('录音中断')};
    recorder.start();
+   const startedAt=performance.now();elapsed.textContent='0:00';
+   const clock=setInterval(()=>{elapsed.textContent=mmss((performance.now()-startedAt)/1000)},250);
    const limit=setTimeout(()=>{if(recorder.state==='recording')recorder.stop()},60000);
    recording={recorder,stream};
-   picker.hidden=true;mic.innerHTML=icon('stop');mic.setAttribute('aria-label','停止录音');
-   report('录音中 · 点方块结束');
+
   }catch{stream?.getTracks().forEach(track=>track.stop());report('无法录音 · 请检查麦克风权限')}
   finally{starting=false;updateSend()}
  }
@@ -399,7 +494,7 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
     if(media?.kind==='location')pendingRequest.attachment=media;
     if(media?.file&&!pendingRequest.attachment){
      const uploaded=await window.EmoiRelay.upload(media.file);
-     pendingRequest.attachment={kind:media.kind,id:uploaded.url.split('/').pop()};
+     pendingRequest.attachment={kind:media.kind,id:uploaded.url.split('/').pop(),duration:media.duration};
     }
     const {nonce,attachment:uploaded}=pendingRequest;
     const answer=await window.EmoiRelay.request(endpoint,{method:'POST',
@@ -416,13 +511,13 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
     const id=crypto.randomUUID(), rows=local[key]??=[];
     if(media?.file)await mediaStore(id,media.file);
     rows.push({id,author:'human',text:text||'['+mediaLabels[media.kind]+']',
-     attachment:media?.file?{localId:id,kind:media.kind}:media,created_at:new Date().toISOString(),delivery:'local_only'});
+     attachment:media?.file?{localId:id,kind:media.kind,duration:media.duration}:media,created_at:new Date().toISOString(),delivery:'local_only'});
     if(!save(local)){rows.pop();throw new Error('本机存储已满，消息没有保存')}
    }
    if(!isOpen())return;
    hydrated=true;voiceCheck.checked=false;
    if(input.value.trim()===text){input.value='';input.style.height=''}
-   if(attachment===media){attachment=null;preview.hidden=true}
+   if(attachment===media){attachment=null;clearDraft();preview.hidden=true}
    paint();if(stickToBottom)body.scrollTop=body.scrollHeight;
   }catch(error){if(isOpen())report(error.message||'消息发送失败')}
   finally{sending=false;updateSend()}

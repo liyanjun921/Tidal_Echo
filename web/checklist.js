@@ -67,5 +67,25 @@ function render(ctx){wire();current=ctx;rollover(ctx);const {host,toolbar,record
  const columns=el('div','checklist-columns');const groups=ctx.filter==='all'?[['user','我的清单'],['ai','一起留下的']]:[[ctx.filter,names[ctx.filter]+' 的清单']];
  for(const [id,label]of groups){const column=el('section','checklist-column'),items=visible.filter(x=>id==='ai'?(x.data?.owner||'user')!=='user':(x.data?.owner||'user')===id);column.append(el('h4','',label+' · '+items.filter(x=>!x.data?.done).length));for(const item of items)column.append(itemRow(ctx,item));if(!items.length)column.append(el('p','checklist-empty','这一栏还没有清单项。'));columns.append(column)}host.append(columns);
  $('#pageFoot').textContent=(ctx.relay.enabled?'服务器每 15 秒检查到点项；模型成功生成后保存消息并推送':'本机清单可用；到点消息需连接自己的服务器与模型')+' · 旧待办保持原样';loadStates(ctx)}
-window.EmoiChecklist={render,open};
+function renderCalendar(ctx,day,showAll,onToggle){
+ wire();current=ctx;rollover(ctx);
+ const items=ctx.records.filter(x=>x.kind==='todo').filter(x=>{
+  const d=x.data||{};
+  return showAll||(d.cycle==='timed'?recordDay(new Date(d.trigger_at),d.timezone)===day:d.due?d.due===day:day===localDay());
+ }).sort((a,b)=>priority(a)-priority(b)||(a.data?.trigger_at||0)-(b.data?.trigger_at||0));
+ const section=el('section','calendar-detail calendar-checklist');
+ const head=el('header','calendar-checklist-head');
+ head.append(el('h3','',showAll?'全部提醒事项':day===localDay()?'今日事项':'所选日期事项'),
+  button(showAll?'返回所选日期':'查看全部',onToggle,'soft-button'));
+ const done=items.filter(x=>x.data?.done).length;
+ const summary=el('div','calendar-checklist-count');
+ summary.append(el('span','',done+' 已完成'),el('span','',(items.length-done)+' 待完成'),
+  el('span','',items.filter(x=>x.data?.cycle==='timed'&&!x.data.done).length+' 定时提醒'));
+ section.append(head,summary);
+ for(const item of items)section.append(itemRow(ctx,item));
+ if(!items.length)section.append(el('p','checklist-empty','暂无提醒事项'));
+ section.append(button('＋ 添加清单事项',()=>open(ctx),'soft-button'));
+ ctx.host.append(section);loadStates(ctx);
+}
+window.EmoiChecklist={render,renderCalendar,open};
 })();

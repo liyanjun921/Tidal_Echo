@@ -10,7 +10,10 @@
   const IMAGES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/heic', 'image/heif']);
 
   const PRESETS = [
-    {id:'white-lilies', name:'白百合', caption:'系统内置壁纸', value:"url('assets/emoi-white-lilies.webp')"}
+    {id:'white-lilies', name:'白百合', caption:'系统内置壁纸', value:"url('assets/emoi-white-lilies.webp')"},
+    {id:'cherry-dusk',name:'暮樱',caption:'花影',value:"url('assets/cherry-dusk.webp')"},
+    {id:'rain-glass',name:'雨窗',caption:'冷雾',value:"url('assets/rain-glass.webp')"},
+    {id:'green-canopy',name:'绿荫',caption:'日光',value:"url('assets/green-canopy.webp')"}
   ];
   const LEGACY_PRESETS = new Set(['inherit','green-bokeh','green-window','garden-tram','aura','archive','nocturne','water','lily','paper']);
 
@@ -41,11 +44,12 @@
     const parts = key.split(':');
     return (LABELS[parts[1]] || parts[1] || '当前页面') + ' · 专属壁纸';
   }
+  const pageDefaults={'page:journal':'cherry-dusk','page:reading':'green-canopy','page:memory':'rain-glass','page:moments':'cherry-dusk'};
   function selected(key) {
     const choice = settings[key];
     if (choice === 'custom') return choice;
     if (!choice && safeRead('emoi-v05-preferences', {}).theme === 'custom') return 'global-custom';
-    return 'white-lilies';
+    return PRESETS.some(p=>p.id===choice) ? choice : pageDefaults[key] || 'white-lilies';
   }
   function saveSettings() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); return true; }
@@ -90,6 +94,9 @@
   async function activate(key) {
     if (!/^(chat:(gpt|claude|group|(?:contact|group):[0-9a-fA-F-]{36})|page:[a-z]+)$/.test(key)) return;
     activeContext = key;
+    let material='';
+    try{material=localStorage.getItem('emoi-page-glass:'+key)||''}catch{}
+    document.body.dataset.pageGlass=['clear','frost'].includes(material)?material:'';
     if (key.startsWith('chat:')) lastChat = key;
     const turn = ++revision;
     const choice = selected(key);
@@ -126,6 +133,9 @@
   function refreshPicker() {
     if (!picker) return;
     picker.querySelector('#emoiWallpaperContext').textContent = contextName(activeContext);
+    const inherited=document.body.dataset.pageGlass;
+    const material=picker.querySelector('select');
+    material.value=['clear','frost'].includes(inherited)?inherited:'';
     pickerGrid.replaceChildren();
     const current = selected(activeContext);
     for (const option of PRESETS) {
@@ -225,7 +235,17 @@
       void activate(activeContext);
       picker.close();
     });
-    actions.append(uploadLabel,reset);
+    const material = document.createElement('select');
+    material.setAttribute('aria-label','当前页面玻璃材质');
+    for(const [value,label] of [['','跟随全局'],['clear','液态玻璃'],['frost','毛玻璃']]){
+      const option=document.createElement('option');option.value=value;option.textContent=label;material.append(option);
+    }
+    material.addEventListener('change',()=>{
+      try{localStorage.setItem('emoi-page-glass:'+activeContext,material.value)}
+      catch{inform('无法保存当前页面材质');return}
+      void activate(activeContext);
+    });
+    actions.append(material,uploadLabel,reset);
     pickerStatus = document.createElement('p');
     pickerStatus.className = 'emoi-picker-status';
     pickerStatus.setAttribute('role','status');

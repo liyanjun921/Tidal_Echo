@@ -10,15 +10,16 @@
   --beauty-filter: blur(var(--beauty-glass-blur)) saturate(var(--beauty-saturation, 165%))
     brightness(var(--beauty-brightness, 104%));
 }
-:root[data-glass=frost] {
-  --beauty-glass-blur: 24px;
-  --beauty-glass-alpha: .49;
+:root[data-glass=frost] body:not([data-page-glass=clear]),
+body[data-page-glass=frost] {
+  --beauty-glass-blur: 1.5px;
+  --beauty-glass-alpha: .15;
   --beauty-hue: 209 !important;
   --beauty-accent-sat: 48% !important;
   --beauty-accent-light: 42% !important;
   --beauty-accent: #386b9e;
-  --beauty-filter: blur(24px) saturate(118%) brightness(104%);
-  --beauty-rim: inset 0 1px 0 #fffc, 0 3px 12px #20354421;
+  --beauty-filter: blur(1.5px) contrast(1.02) brightness(1.02);
+  --beauty-rim: inset 0 0 0 1px #ffffff80, 0 4px 6px #0000000d;
 }
 body[data-dark=true] {
   --beauty-tint: rgb(20 26 34 / var(--beauty-glass-alpha));
@@ -39,8 +40,8 @@ body[data-ui-mode=phone] :is(.ep-settings-panel,.ep-list-panel,.ep-status-card,.
   box-shadow: var(--beauty-rim);
   corner-shape: round;
 }
-html[data-glass=frost] body[data-ui-mode=phone] .ep-home [data-ep-optics]::before,
-html[data-glass=frost] body[data-ui-mode=phone] .ep-home [data-ep-optics]::after {
+html[data-glass=frost] body[data-ui-mode=phone]:not([data-page-glass=clear]) .ep-home [data-ep-optics]::before,
+html[data-glass=frost] body[data-ui-mode=phone]:not([data-page-glass=clear]) .ep-home [data-ep-optics]::after {
   background-image: none;
 }
 body[data-ui-mode=phone] .ep-home [data-ep-optics] .ep-optical-canvas {
@@ -365,3 +366,108 @@ html[data-ep-keyboard] .ep-message-nav { display: none; }
 .ep-moment-meta { display:flex; align-items:center; gap:10px; }
 .ep-moment-meta time { flex:1; font-size:12px; color:var(--im-muted); }
 .ep-moment-card p { white-space:pre-wrap; overflow-wrap:anywhere; }
+
+/* Light frosted layers follow the supplied CSS. Voice and image keep separate surfaces. */
+body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-history,.ep-beauty-preview) .ep-im-row .ep-im-bubble:not([data-media]) {
+  background: rgb(251 250 255 / .12);
+  border: 1px solid rgb(255 255 255 / .50);
+  border-radius: 10px; padding: 5px 10px;
+  -webkit-backdrop-filter: blur(1.5px) contrast(1.02) brightness(1.02);
+  backdrop-filter: blur(1.5px) contrast(1.02) brightness(1.02);
+  box-shadow: 0 4px 6px rgb(0 0 0 / .05);
+  color: #fff; text-shadow: 0 1px 3px #17212c;
+}
+body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-history,.ep-beauty-preview) .ep-im-mine .ep-im-bubble:not([data-media]) {
+  background: rgb(160 167 186 / .15); border-color: rgb(255 255 255 / .45);
+}
+@media (prefers-reduced-transparency: reduce) {
+  body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-history,.ep-beauty-preview) .ep-im-row .ep-im-bubble:not([data-media]) {
+    background: #2b3b4b; -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+}
+body[data-ui-mode=phone] .sheet.page-sheet[open] {
+  background: linear-gradient(#57737c32,#17324379), var(--emoi-active-wallpaper, var(--wallpaper)) center / cover;
+}
+body[data-ui-mode=phone] .sheet.page-sheet[open] :is(.sheet-head,.page-toolbar,.page-foot) { color: #fff; }
+body[data-ui-mode=phone] [data-page=calendar] :is(.calendar-month-card,.calendar-detail) {
+  border: 1px solid #ffffff70; border-radius: 23px; padding: clamp(12px,3vw,23px); margin: 0 0 14px;
+  color: #fff; background: var(--beauty-tint); box-shadow: var(--beauty-rim);
+  -webkit-backdrop-filter: var(--beauty-filter); backdrop-filter: var(--beauty-filter);
+}
+body[data-ui-mode=phone] .sheet.page-sheet[open] :is(.entry-card,.reading-book-card,.journal-card) {
+  color: #f7fbff; background: var(--beauty-tint); border-color:#fff6;
+  box-shadow: var(--beauty-rim); -webkit-backdrop-filter:var(--beauty-filter); backdrop-filter:var(--beauty-filter);
+}
+body[data-ui-mode=phone] .sheet.page-sheet[open] :is(.entry-card,.reading-book-card,.journal-card) :is(h2,h3,.excerpt,.scope-badge,.entry-footer) {
+  color: inherit; text-shadow: 0 1px 2px #183342;
+}
+body[data-ui-mode=phone] [data-page=calendar] :is(.calendar-week,.calendar-day,.calendar-head,.checklist-empty,.form-help) { color: inherit; }
+body[data-ui-mode=phone] [data-page=calendar] .calendar-day { min-height: 39px; background: transparent; border-color: transparent; }
+body[data-ui-mode=phone] [data-page=calendar] .calendar-day.selected { background: #daf6ff54; border: 1px solid #fff8; box-shadow: inset 0 0 10px #c8f2ff7d; }
+body[data-ui-mode=phone] [data-page=calendar] .checklist-row {
+  border: 1px solid #fff5; border-radius: 15px; margin: 7px 0; padding: 7px 10px; background: #daf6ff23;
+}
+body[data-ui-mode=phone] [data-page=calendar] :is(.checklist-main strong,.checklist-meta,.checklist-alarm-state,.checklist-tick,.soft-button) { color: inherit; }
+.calendar-checklist-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.calendar-checklist-head h3 { margin: .2em 0; }
+.calendar-checklist-count { display: flex; flex-wrap: wrap; gap: 10px 18px; border-radius: 13px; background: #e3fbff24; padding: 10px; font-size: 13px; }
+.emoi-picker-actions select { border-radius: 12px; padding: 8px; }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-picker {
+  position: absolute; z-index: 8; inset: auto auto max(65px,calc(env(safe-area-inset-bottom) + 59px)) max(12px,calc((100% - 956px) / 2));
+  display: flex; flex-direction: column; align-items: stretch; gap: 0; margin: 0; padding: 8px;
+  width: min(calc(100% - 28px), 320px); max-height: 65%; overflow: auto;
+  color: #152331; background: rgb(245 249 252 / .86); border: 1px solid #fff8;
+  border-radius: 28px; box-shadow: 0 10px 44px #101b3840;
+  -webkit-backdrop-filter: blur(23px); backdrop-filter: blur(23px);
+}
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-picker[hidden],
+body[data-ui-mode=phone] #emoiPhoneView :is(.ep-record-bar,.ep-im-composer,.ep-im-emoji)[hidden] { display: none; }
+.ep-im-menu-item { display: flex; gap: 14px; align-items: center; width: 100%; padding: 9px 12px; text-align: left; border-radius: 16px; }
+.ep-im-menu-item:hover { background: #8798ae26; }
+.ep-im-menu-item svg { width: 34px; height: 34px; flex: none; border-radius: 50%; padding: 7px; color: #fff; background: #327bbb; }
+.ep-im-menu-item[data-tone=sticker] svg { background: linear-gradient(135deg,#9c76eb,#6ebde4); }
+.ep-im-menu-item[data-tone=audio] svg { background: #dc5947; }
+.ep-im-menu-item[data-tone=location] svg { background: #328268; }
+.ep-im-emoji > button.ep-im-menu-item { width: 100%; height: auto; font-size: 13px; }
+.ep-im-voice-option { padding: 6px 12px; }
+.ep-voice-player,.ep-voice-capsule,.ep-record-bar { display:flex; align-items:center; gap: 9px; min-width: 0; }
+.ep-voice-player { flex:1; padding: 3px 0; }
+.ep-voice-player audio { display:none; }
+.ep-voice-wave { position:relative; flex:1; min-width:35px; height:7px; color:inherit;
+  background: repeating-linear-gradient(90deg,currentColor 0 2px,transparent 2px 5px); border-radius:4px; opacity:.75; }
+.ep-voice-wave::after { content:''; position:absolute; inset:0 auto 0 0; width:var(--played,0%); border-radius:inherit; background:currentColor; opacity:.5; }
+.ep-voice-time { font-variant-numeric:tabular-nums; font-size:12px; white-space:nowrap; }
+.ep-voice-play { display:grid; place-items:center; border-radius:50%; padding: 0; width:31px;height:31px; flex:none; color:inherit; background:#ffffff30; }
+.ep-voice-play svg,.ep-im-remove svg { width:17px;height:17px; }
+.ep-im-bubble[data-media=voice] .ep-voice-player { width: min(61vw,260px); }
+body[data-ui-mode=phone] #emoiPhoneView .ep-im-mine .ep-im-bubble[data-media=voice] { background:#086eccbd; }
+.ep-record-bar,.ep-voice-capsule { flex:1; padding:8px 12px; border:1px solid #f5fbff82; border-radius:30px; background:#eef6fbd9; color:#193249; }
+.ep-record-bar { color:#be303d; }
+.ep-record-bar .ep-voice-wave { animation:ep-recording-pulse .95s ease-in-out infinite alternate; }
+@keyframes ep-recording-pulse { from { opacity:.38; } to { opacity:1; } }
+@media(prefers-reduced-motion:reduce) { .ep-record-bar .ep-voice-wave { animation:none; } }
+.ep-im-pending.ep-voice-draft { background:none; border:0; width:min(calc(100% - 26px),980px); flex-wrap:nowrap; padding:0; }
+.ep-voice-draft .ep-im-remove { display:grid; place-items:center; width:40px;height:40px; padding:0;border-radius:50%; }
+.ep-im-screen:has(.ep-voice-draft:not([hidden])) .ep-im-footer { min-height:max(4px,env(safe-area-inset-bottom)); padding-top:0; }
+.ep-im-call[open] {
+  position:fixed; inset:0; display:grid; grid-template-rows:auto 1fr auto; gap:16px; margin:0;
+  width:100%; height:100%; max-width:none; max-height:none; border:0; color:white;
+  padding:max(32px,env(safe-area-inset-top)) 24px max(24px,env(safe-area-inset-bottom));
+  background:linear-gradient(#17233182,#122433c7),var(--emoi-active-wallpaper,var(--wallpaper)) center / cover;
+}
+.ep-call-heading {text-align:center}
+.ep-call-heading p {margin:12px 0;color:#f0f5f7;font-size:14px}
+.ep-call-heading strong {font-size:clamp(34px,10vw,64px)}
+.ep-call-controls { grid-row:3; display:flex; justify-content:center; align-items:center; gap:20px; }
+.ep-call-control,.ep-call-flip { color:#fff;background:#f2f6ff30;border:1px solid #fbfdff77;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px); }
+.ep-call-control {width:57px;height:57px;border-radius:50%;display:grid;place-items:center}
+.ep-call-control svg {width:25px;height:25px}
+.ep-call-control[aria-pressed=true] {background:#fff;color:#247152}
+.ep-call-control.ep-call-end {background:#d83041}
+.ep-call-camera {position:absolute; bottom:max(24px,env(safe-area-inset-bottom));left:22px;width:min(37vw,220px);aspect-ratio:3/4}
+.ep-call-camera[hidden] {display:none}
+.ep-call-camera video {width:100%;height:100%;object-fit:cover;border-radius:22px;background:#152333}
+.ep-call-flip {position:absolute;bottom:10px;left:50%;transform:translateX(-50%);padding:5px 12px;border-radius:20px}
+.ep-im-call[data-mode=video] .ep-call-controls {justify-self:end;flex-direction:column;gap:12px}
+.ep-im-call[data-mode=video] .ep-call-heading {text-align:left}
+.ep-im-call[data-mode=video] .ep-call-heading strong {font-size:22px}
