@@ -1984,7 +1984,12 @@ async def loop_contact_reply(request: Request):
         route = next(iter(main_chain()), {})
     else:
         route = load_config().get("agents", {}).get(agent, {})
-    if route.get("connection_mode", "api") != "api" or route.get("protocol") not in (None, "", "openai", "anthropic") or not all(route.get(key) for key in ("url", "key", "model")):
+    uses_chatgpt_plan = agent == "gpt" and route.get("connection_mode") == "chatgpt_plan"
+    if not uses_chatgpt_plan and (
+        route.get("connection_mode", "api") != "api"
+        or route.get("protocol") not in (None, "", "openai", "anthropic")
+        or not all(route.get(key) for key in ("url", "key", "model"))
+    ):
         raise HTTPException(503, "请先配置此联系人绑定的模型 API")
     rows = body.get("history")
     if not isinstance(rows, list) or not rows:
@@ -2019,7 +2024,13 @@ async def loop_contact_reply(request: Request):
                         content = [{"type": "text", "text": content}, *parts]
             messages.append({"role": "user", "content": content})
     try:
-        result = await asyncio.wait_for(complete_chat(route, messages, None), timeout=26)
+        if uses_chatgpt_plan:
+            plan_route = {"model": route.get("subscription_model", "")}
+            result = await asyncio.wait_for(plan_chat(plan_route, messages, None), timeout=85)
+        else:
+            result = await asyncio.wait_for(complete_chat(route, messages, None), timeout=26)
+    except PlanError as exc:
+        raise HTTPException(exc.status, exc.message) from None
     except (ModelError, httpx.HTTPError, TimeoutError, ValueError):
         raise HTTPException(502, "联系人模型回复失败") from None
     text = result["text"][:10000].strip()

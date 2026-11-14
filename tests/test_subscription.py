@@ -198,6 +198,35 @@ class SubscriptionTests(unittest.TestCase):
             self.assertEqual(client.post("/loop/agents", json={"agent": "claude", "connection_mode": "chatgpt_plan"}).status_code, 422)
             self.assertFalse(client.get("/loop/subscriptions").json()["claude"]["ready"])
 
+    def test_gpt_contact_uses_saved_subscription_without_api_fallback(self):
+        loop = fixtures.loop
+        settings = {
+            "connection_mode": "chatgpt_plan", "subscription_model": "plan-model",
+            "url": "https://example.invalid/v1", "key": "old-api-key", "model": "old-api-model",
+        }
+        payload = {
+            "route": "gpt", "contact_id": "contact-one", "name": "甲", "notes": "甲的档案",
+            "history": [{"author": "human", "text": "你好"}],
+        }
+        with TestClient(loop.app) as client, patch.object(
+            loop, "load_config", return_value={"agents": {"gpt": settings}}
+        ), patch.object(loop, "plan_chat", return_value={"text": "你好"}) as subscription, patch.object(
+            loop, "complete_chat"
+        ) as api:
+            response = client.post("/loop/contact-reply", json=payload)
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json(), {"text": "你好"})
+            route, messages, tools = subscription.await_args.args
+            self.assertEqual(route, {"model": "plan-model"})
+            self.assertIn("甲的档案", messages[0]["content"])
+            self.assertEqual(messages[-1], {"role": "user", "content": "用户：你好"})
+            self.assertIsNone(tools)
+
+            subscription.side_effect = auth.PlanError(401, "请重新授权")
+            response = client.post("/loop/contact-reply", json=payload)
+            self.assertEqual(response.status_code, 401, response.text)
+            api.assert_not_called()
+
     def test_loopback_callback_completes_without_exposing_credentials(self):
         result = auth.start_login(self.store)
         query = parse_qs(urlsplit(result["authorization_url"]).query)
