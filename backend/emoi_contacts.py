@@ -251,6 +251,22 @@ def register(app, relay):
              AND julianday(created_at)>julianday('now','-90 seconds')
         """, (contact_id,)).fetchone()
 
+    def queue_requested_call(db, cid, person, message_id, mode):
+        # Explicit requests can replace an unaccepted invitation for the same contact.
+        db.execute("""
+            UPDATE emoi_v2_messages SET call_state='superseded'
+            WHERE conversation_id=? AND contact_id=? AND call_state IS NULL
+              AND json_extract(attachment,'$.kind')='call_invite'
+              AND julianday(created_at)>julianday('now','-90 seconds')
+        """, (cid, person["id"]))
+        return store_contact_action(
+            db, {**dict(person), "conversation_id": cid}, "owner-call:" + message_id,
+            "应你的请求发起", now(), {
+                "mode": mode + "_invite",
+                "attachment": {"kind": "call_invite", "mode": mode, "trigger": "owner_request"},
+            },
+        )
+
     async def notify_action(payload):
         if relay.get("push_to_all"):
             try:
@@ -1004,7 +1020,7 @@ def register(app, relay):
         attachment = json.loads(row["attachment"])
         return {"id": row["id"], "conversation_id": row["conversation_id"],
                 "contact_id": row["contact_id"], "name": row["name"],
-                "mode": attachment["mode"], "created_at": row["created_at"],
+                "mode": attachment["mode"], "trigger": attachment.get("trigger", "contact"), "created_at": row["created_at"],
                 "remaining_seconds": max(0, 90 - (datetime.now(timezone.utc) - datetime.fromisoformat(row["created_at"])).total_seconds())}
 
     @app.get("/emoi/v2/call-inbox")
@@ -1078,9 +1094,58 @@ def register(app, relay):
                     "model_connected": bool(relay.get("loop_base_url") and reply_targets(db, conv["id"])),
                     "replying": any(row["delivery"] == "replying" for row in msgs)}
 
-    @app.get("/emoi/v2/moments")
-    async def list_moments(request: Request):
+    def owner_moment_feedback(db, moment_id):
+        liked = db.execute("SELECT 1 FROM emoi_moment_owner_likes WHERE moment_id=?", (moment_id,)).fetchone()
+        comments = db.execute("""
+            SELECT id,text,created_at AS createdAt FROM emoi_moment_owner_comments
+            WHERE moment_id=? ORDER BY created_at,id
+        """, (moment_id,))
+        return {"liked_by_me": liked is not None, "my_comments": [dict(row) for row in comments]}
+
+    def moment_exists(db, moment_id):
+        if not db.execute("SELECT 1 FROM emoi_v2_moments WHERE id=?", (moment_id,)).fetchone():
+            raise HTTPException(404, "这条动态已不存在")
+
+    @app.put("/emoi/v2/moments/{moment_id}/like")
+    async def like_moment(moment_id: str, request: Request):
         auth(request)
+        moment_id = valid_id(moment_id)
+        body = await request.json()
+        liked = body.get("liked") if isinstance(body, dict) else None
+        if type(liked) is not bool:
+            raise HTTPException(422, "无效的点赞状态")
+        with connect(path) as db:
+            db.execute("BEGIN IMMEDIATE")
+            moment_exists(db, moment_id)
+            if liked:
+                db.execute("INSERT OR IGNORE INTO emoi_moment_owner_likes VALUES(?)", (moment_id,))
+            else:
+                db.execute("DELETE FROM emoi_moment_owner_likes WHERE moment_id=?", (moment_id,))
+            return owner_moment_feedback(db, moment_id)
+
+    @app.post("/emoi/v2/moments/{moment_id}/comments")
+    async def comment_moment(moment_id: str, request: Request):
+        auth(request)
+        moment_id = valid_id(moment_id)
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise HTTPException(422, "无效的评论")
+        ident = valid_id(body.get("id"))
+        text = clean_text(body.get("text"), 500, True)
+        with connect(path) as db:
+            db.execute("BEGIN IMMEDIATE")
+            moment_exists(db, moment_id)
+            db.execute("INSERT OR IGNORE INTO emoi_moment_owner_comments VALUES(?,?,?,?)",
+                       (ident, moment_id, text, now()))
+            original = db.execute("SELECT moment_id,text FROM emoi_moment_owner_comments WHERE id=?", (ident,)).fetchone()
+            if (original["moment_id"], original["text"]) != (moment_id, text):
+                raise HTTPException(409, "评论编号已使用")
+            return owner_moment_feedback(db, moment_id)
+
+    @app.get("/emoi/v2/moments")
+    async def list_moments(request: Request, response: Response):
+        auth(request)
+        response.headers["Cache-Control"] = "no-store"
         with connect(path) as db:
             rows = db.execute("""
                 SELECT m.id,m.text,m.created_at AS createdAt,m.contact_id,c.name AS author,m.attachment
@@ -1095,7 +1160,7 @@ def register(app, relay):
                     WHERE a.moment_id=? AND a.done=1 ORDER BY a.due,a.contact_id
                 """, (row["id"],))
                 posts.append({**dict(row), "attachment": json.loads(row["attachment"]) if row["attachment"] else None,
-                              "reactions": [dict(reaction) for reaction in reactions]})
+                              "reactions": [dict(reaction) for reaction in reactions], **owner_moment_feedback(db, row["id"])})
             return {"posts": posts}
 
     @app.post("/emoi/v2/moments")
@@ -1144,25 +1209,35 @@ def register(app, relay):
                 attachment["transcript"] = transcript[:3000]
         if not text:
             text = attachment.get("transcript") or "[" + MEDIA_LABELS[attachment["kind"]] + "]"
+        mode = body.get("call_mode")
+        mode = mode if mode in ("voice", "video") else ""
+        requested = autonomy.owner_call_request(text) if not mode and not attachment else None
+        call_notice = None
         with connect(path) as db:
             db.execute("BEGIN IMMEDIATE")
             conv=conversation(db,conversation_id)
             old=db.execute("SELECT * FROM emoi_v2_messages WHERE conversation_id=? AND nonce=?",(conv["id"],nonce)).fetchone()
             if old:
                 return {"message":view_message(old),"already_saved":True}
-            if db.execute("SELECT 1 FROM emoi_v2_messages WHERE conversation_id=? AND delivery='replying'", (conv["id"],)).fetchone():
-                raise HTTPException(409, "请等这轮 AI 回复结束")
             recipients = reply_targets(db, conv["id"]) if relay.get("loop_base_url") else []
+            direct_call = requested and conv["kind"] == "direct" and len(recipients) == 1
+            if not direct_call and db.execute("SELECT 1 FROM emoi_v2_messages WHERE conversation_id=? AND delivery='replying'", (conv["id"],)).fetchone():
+                raise HTTPException(409, "请等这轮 AI 回复结束")
             mid=str(uuid4())
             db.execute("""
               INSERT INTO emoi_v2_messages(id,conversation_id,author,contact_id,text,nonce,delivery,created_at,attachment)
               VALUES(?,?,'human',NULL,?,?,?,?,?)
-            """, (mid,conv["id"],text,nonce,"replying" if recipients else "stored_not_delivered",now(),
+            """, (mid,conv["id"],text,nonce,"replied" if direct_call else "replying" if recipients else "stored_not_delivered",now(),
                   json.dumps(attachment, ensure_ascii=False) if attachment else None))
+            if direct_call:
+                call_notice = queue_requested_call(db, conv["id"], recipients[0], mid, requested)
+                push_call = get_rule(db, recipients[0]["id"])["push"]
             row=db.execute("SELECT * FROM emoi_v2_messages WHERE id=?",(mid,)).fetchone()
+        if call_notice:
+            if push_call:
+                background.add_task(notify_action, call_notice)
+            return {"message":view_message(row),"call_queued":True,"model_dispatched":False}
         if recipients:
-            mode = body.get("call_mode")
-            mode = mode if mode in ("voice", "video") else ""
             background.add_task(generate_replies, conv["id"], mid, recipients, body.get("voice_reply") is True, mode)
         return {"message":view_message(row),"model_dispatched":bool(recipients)}
 

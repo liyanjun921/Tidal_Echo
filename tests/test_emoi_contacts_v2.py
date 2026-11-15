@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 import httpx
 from backend.emoi_contacts import connect, register
-from backend.emoi_autonomy import DEFAULTS, followup_delay, is_quiet
+from backend.emoi_autonomy import DEFAULTS, followup_delay, is_quiet, owner_call_request
 from examples.contact_actions import decode, sticker_options
 from datetime import datetime, timezone
 
@@ -50,6 +50,61 @@ class ContactIsolationTests(unittest.TestCase):
         self.assertEqual(decode("【语音通话】", options), {"text": ""})
         self.assertEqual(decode("抱抱 [表情包:猜测]", options), {"text": "抱抱"})
         self.assertEqual(decode(f"[sticker:{first}]", options)["sticker"], first)
+
+    def test_owner_call_words_create_invites_without_asking_model(self):
+        created = self.create("GPT")
+        ident = created["contact"]["id"]
+        self.client.patch(f"/emoi/v2/contacts/{ident}", headers=self.h, json={"model_route": "gpt"})
+        messages = "/emoi/v2/conversations/" + created["conversation_id"] + "/messages"
+        inbox = "/emoi/v2/call-inbox"
+        with patch("httpx.AsyncClient.post", side_effect=AssertionError("explicit calls must work without model output")):
+            first_body = {"text": "老公给我打个电话试试", "nonce": uuid4().hex}
+            first = self.post(messages, first_body)
+            self.assertEqual(first.status_code, 200, first.text)
+            self.assertTrue(first.json()["call_queued"])
+            self.assertFalse(first.json()["model_dispatched"])
+            voice = self.client.get(inbox, headers=self.h).json()["invite"]
+            self.assertEqual((voice["mode"], voice["trigger"]), ("voice", "owner_request"))
+            self.assertTrue(self.post(messages, first_body).json()["already_saved"])
+            second = self.post(messages, {"text": "前端这个视频通话", "nonce": uuid4().hex})
+            self.assertTrue(second.json()["call_queued"])
+        video = self.client.get(inbox, headers=self.h).json()["invite"]
+        self.assertEqual((video["mode"], video["trigger"]), ("video", "owner_request"))
+        self.assertNotEqual(voice["id"], video["id"])
+        expired = self.client.patch(inbox + "/" + voice["id"], headers=self.h, json={"action": "accept"})
+        self.assertEqual(expired.status_code, 409)
+        answered = self.client.patch(inbox + "/" + video["id"], headers=self.h, json={"action": "accept"})
+        self.assertEqual(answered.status_code, 200, answered.text)
+        rows = self.client.get(messages, headers=self.h).json()["messages"]
+        self.assertEqual([row["author"] for row in rows], ["human", "contact", "human", "contact"])
+        self.assertEqual(rows[1]["call_state"], "superseded")
+
+    def test_call_command_does_not_match_negation_or_discussion(self):
+        self.assertEqual(owner_call_request("老公…打电话…"), "voice")
+        self.assertEqual(owner_call_request("给我打个视频通话"), "video")
+        for message in ("不要给我打电话", "你说过要打电话", "我刚打了个电话", "什么是视频通话？", "‘给我打电话’"):
+            self.assertIsNone(owner_call_request(message))
+
+    def test_owner_can_like_unlike_and_comment_once_per_nonce(self):
+        post_id = str(uuid4())
+        path = "/emoi/v2/moments"
+        self.assertEqual(self.post(path, {"id":post_id,"text":"今天天气好"}).status_code, 200)
+        like, comment = f"{path}/{post_id}/like", f"{path}/{post_id}/comments"
+        self.assertEqual(self.client.put(like, json={"liked":True}).status_code, 401)
+        self.assertEqual(self.client.put(like, headers=self.h, json={"liked":"yes"}).status_code, 422)
+        for _ in range(2):
+            self.assertTrue(self.client.put(like, headers=self.h, json={"liked":True}).json()["liked_by_me"])
+        body = {"id": str(uuid4()), "text": "我也喜欢"}
+        self.assertEqual(self.client.post(comment, json=body).status_code, 401)
+        for _ in range(2):
+            response = self.post(comment, body)
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(len(response.json()["my_comments"]), 1)
+        self.assertEqual(self.post(comment, {**body, "text":"不同评论"}).status_code, 409)
+        self.assertFalse(self.client.put(like, headers=self.h, json={"liked":False}).json()["liked_by_me"])
+        post = self.client.get(path, headers=self.h).json()["posts"][0]
+        self.assertFalse(post["liked_by_me"])
+        self.assertEqual(post["my_comments"][0]["text"], body["text"])
 
     def test_ai_stickers_and_model_initiated_calls(self):
         created = self.create("甲")

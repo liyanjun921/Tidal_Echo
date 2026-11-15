@@ -2300,7 +2300,8 @@ async def loop_contact_reply(request: Request):
     can_call = body.get("can_call") is True and not active_call and initiative not in ("moment", "reaction")
     if can_call:
         prompt += ("\n你可以主动拨打应用内通话。你决定现在打、或用户请你打且你同意时，"
-                   "请写 [语音通话] 或 [视频通话]，可和自然的对白放在同一条。该标记会让用户界面实际响铃。")
+                   "请写 [语音通话] 或 [视频通话]，可和自然的对白放在同一条。该标记会让用户界面实际响铃。"
+                   "如果想现在通话，直接使用标记；不要只说要打，也不要让对方点击拨出按钮。")
     photo_mode = body.get("moment_photo", "auto")
     can_draw = bool(profile.get("image_connection")) and not active_call and initiative != "reaction" and (
         initiative != "moment" or photo_mode != "text"

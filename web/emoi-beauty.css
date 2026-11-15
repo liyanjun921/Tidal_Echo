@@ -678,12 +678,12 @@ body[data-ui-mode=phone][data-dark=true] #emoiPhoneView.ep-moments {
 .ep-moments .ep-moment-form textarea::placeholder,.ep-moments .ep-moment-meta time { color:var(--moment-muted); }
 .ep-moment-tools { display:flex; justify-content:space-between; gap:12px; margin-top:10px; align-items:center; }
 .ep-moment-tools .ep-action-primary { min-height:36px; border-radius:15px; }
-.ep-moment-photo-add,.ep-moment-photo-remove,.ep-moment-delete {
+.ep-moment-photo-add,.ep-moment-photo-remove {
   display:inline-flex; align-items:center; justify-content:center; gap:7px;
   padding:8px 10px; border:1px solid #ffffff60; border-radius:13px;
   color:var(--moment-ink); background:#ffffff25;
 }
-.ep-moment-tools svg,.ep-moment-delete svg,.ep-moment-photo-remove svg { width:18px; height:18px; }
+.ep-moment-tools svg,.ep-moment-photo-remove svg { width:18px; height:18px; }
 .ep-moment-preview { width:max-content; max-width:100%; position:relative; margin-top:10px; }
 .ep-moment-preview img { display:block; max-width:100%; max-height:150px; border-radius:13px; object-fit:contain; }
 .ep-moment-photo-remove { position:absolute; top:4px; right:4px; padding:4px; color:white; background:#171620a0; }
@@ -698,4 +698,29 @@ body[data-ui-mode=phone][data-dark=true] #emoiPhoneView.ep-moments {
 @media (prefers-reduced-transparency:reduce) {
   .ep-moments :is(.ep-moment-card,.ep-moment-form) { background:#f3eef7; }
   body[data-dark=true] .ep-moments :is(.ep-moment-card,.ep-moment-form) { background:#252434; }
+}
+
+.ep-moment-actions {
+  display:flex; justify-content:flex-end; gap:8px; margin-top:10px; padding-top:8px;
+  border-top:1px solid #ffffff65;
+}
+.ep-moment-feedback-button {
+  display:inline-flex; min-height:42px; align-items:center; justify-content:center; gap:5px;
+  padding:5px 11px; color:inherit; font:inherit; border:1px solid #ffffff50;
+  border-radius:13px; background:#ffffff24;
+}
+.ep-moment-feedback-button svg { width:17px; height:17px; }
+.ep-moment-feedback-button[aria-pressed=true] { color:#8b2854; background:#ffc9d896; }
+.ep-moment-feedback-button[aria-pressed=true] svg { fill:currentColor; }
+.ep-moment-feedback,.ep-moment-comment-form {
+  margin-top:8px; display:flex; flex-wrap:wrap; gap:8px; padding:9px;
+  border:1px solid #ffffff56; border-radius:13px; background:#ffffff20;
+}
+.ep-moment-feedback[hidden],.ep-moment-comment-form[hidden] { display:none; }
+.ep-moment-feedback { display:grid; }
+.ep-moment-feedback p { margin:0; }
+.ep-moment-like-summary { color:var(--moment-muted); font-size:.87rem; }
+.ep-moment-comment-form textarea {
+  flex-basis:100%; min-width:0; padding:8px; resize:vertical; border:1px solid #ffffff70;
+  border-radius:9px; color:inherit; background:#ffffff22; font:inherit; font-size:16px;
 }

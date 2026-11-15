@@ -11,6 +11,7 @@ const phone=document.getElementById('emoiPhone');
 if(!phone)return;
 const $=(s,r=document)=>r.querySelector(s);
 const icoPaths={
+ heart:'<path d="M20.8 8.6c0 4.3-8.8 9.6-8.8 9.6S3.2 12.9 3.2 8.6A4.5 4.5 0 0 1 12 7.1a4.5 4.5 0 0 1 8.8 1.5Z"/>',
  apps:'<path d="M4 4h6v6H4zm10 0h6v6h-6zM4 14h6v6H4zm10 0h6v6h-6z"/>',
   compose:'<path d="M12 4H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-7M10 14l1-4 7-7 3 3-7 7-4 1Z"/>',
   chat:'<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 9 9 0 0 1-4-.95L3 21l1.95-5a9 9 0 1 1 16.05-4.5Z"/>',
@@ -512,7 +513,8 @@ function openMessageSettings(){
    const {settings,count,next_moment}=await relay.request(path);
    if(version!==load||!editor.isConnected)return;
    const scheduled=next_moment?' · 下次发帖 '+new Date(next_moment*1000).toLocaleString('zh-CN'):'';
-   status.textContent='本轮主动联系 '+count+'/3'+scheduled;
+   status.textContent='本轮主动联系 '+count+'/3'+scheduled+
+    ' · 自主来电'+(settings.calls?'已允许':'未开启')+'；定时主动联系可单独开启。';
    const fields={};
    for(const [title,items] of groups){
     const group=create('fieldset');group.append(create('legend','',title));editor.append(group);
@@ -591,7 +593,7 @@ function openMoments(){
  },'ep-messages-action');toggle.setAttribute('aria-expanded','false');
  top.append(actionButton('返回桌面','back',openHome,'ep-messages-action'),toggle);
  let posts=safeRead(MOMENTS_KEY), pendingId=null, pendingPhoto=null, photoFile=null, previewURL=null;
- let publishing=false;
+ let publishing=false,changingFeedback=0;
  const localImageURLs=new Set();
  const cleanup=new MutationObserver(()=>{
   if(form.isConnected)return;
@@ -617,6 +619,80 @@ function openMoments(){
   setPhoto(file);status.textContent='';
  };
  updatePublish();
+ function addMomentFeedback(card,post){
+  const actions=create('div','ep-moment-actions');
+  const feedback=create('div','ep-moment-feedback');
+  const editor=create('form','ep-moment-comment-form');editor.hidden=true;
+  const input=create('textarea');input.maxLength=500;input.rows=2;input.placeholder='写评论…';
+  input.setAttribute('aria-label','评论正文');
+  const submit=create('button','ep-moment-feedback-button','发送');submit.type='submit';
+  const cancel=create('button','ep-moment-feedback-button','取消');cancel.type='button';
+  editor.append(input,submit,cancel);
+  const like=actionButton('点赞','heart',()=>void react({liked:!post.liked_by_me}),'ep-moment-feedback-button');
+  const likeLabel=create('span');like.append(likeLabel);
+  const comment=actionButton('评论','chat',()=>toggleEditor(editor.hidden),'ep-moment-feedback-button');
+  const commentLabel=create('span');comment.append(commentLabel);
+  actions.append(like,comment);card.append(actions,feedback,editor);
+  let commentId, busy=false;
+  function toggleEditor(open){
+   editor.hidden=!open;comment.setAttribute('aria-expanded',String(open));
+   if(open)input.focus();else if(editor.contains(document.activeElement))comment.focus();
+  }
+  cancel.onclick=()=>toggleEditor(false);
+  input.oninput=()=>{commentId=null};
+  function paintFeedback(){
+   feedback.replaceChildren();
+   const reactions=post.reactions||[];
+   const likes=reactions.filter(item=>item.liked).map(item=>item.name);
+   if(post.liked_by_me)likes.unshift('我');
+   const comments=[
+    ...reactions.filter(item=>item.comment).map(item=>({name:item.name,text:item.comment})),
+    ...(post.my_comments||[]).map(item=>({name:'我',text:item.text})),
+   ];
+   like.setAttribute('aria-pressed',String(Boolean(post.liked_by_me)));
+   like.setAttribute('aria-label',post.liked_by_me?'取消点赞':'点赞');
+   likeLabel.textContent=likes.length?'赞 '+likes.length:'赞';
+   commentLabel.textContent=comments.length?'评论 '+comments.length:'评论';
+   feedback.hidden=!likes.length&&!comments.length;
+   if(likes.length){
+    const summary=create('p','ep-moment-like-summary',likes.join('、'));
+    feedback.append(summary);
+   }
+   for(const item of comments){
+    const line=create('p','ep-moment-reaction');
+    line.append(create('strong','',item.name+'：'),document.createTextNode(window.EmoiRich.withoutEmoji(item.text)));
+    feedback.append(line);
+   }
+  }
+  async function react(change){
+   if(busy)return;
+   busy=true;changingFeedback++;like.disabled=true;submit.disabled=true;input.disabled=true;
+   try{
+    const path='/emoi/v2/moments/'+encodeURIComponent(post.id);
+    const isLike='liked' in change;
+    let updated;
+    if(post.remote){
+     updated=await window.EmoiRelay.json(path+(isLike?'/like':'/comments'),isLike?'PUT':'POST',change);
+    }else{
+     updated=isLike?{liked_by_me:change.liked}:{my_comments:[...(post.my_comments||[]),change]};
+     if(!save(MOMENTS_KEY,posts.filter(item=>!item.remote).map(item=>item.id===post.id?{...item,...updated}:item)))return;
+    }
+    Object.assign(post,updated);paintFeedback();
+    if(!isLike){input.value='';commentId=null;toggleEditor(false)}
+    status.textContent='';
+   }catch(error){status.textContent=error.message}
+   finally{busy=false;changingFeedback--;like.disabled=false;submit.disabled=false;input.disabled=false}
+  }
+  editor.onsubmit=event=>{
+   event.preventDefault();
+   const value=window.EmoiRich.withoutEmoji(input.value).trim();
+   if(!value||busy)return;
+   commentId??=crypto.randomUUID();
+   void react({id:commentId,text:value});
+  };
+  comment.setAttribute('aria-expanded','false');
+  paintFeedback();
+ }
  function render(){
   for(const url of localImageURLs)URL.revokeObjectURL(url);
   localImageURLs.clear();feed.replaceChildren();
@@ -630,19 +706,7 @@ function openMoments(){
    if(person)queueMicrotask(()=>window.EmoiAvatars?.paint(avatar,person.id,person.profile?.avatar));
    const byline=create('div','ep-moment-byline');byline.append(create('strong','',post.author||'我'),date);
    meta.append(avatar,byline);
-   const remove=actionButton('删除动态','x',()=>{},'ep-moment-delete');
-   remove.onclick=async()=>{
-    if(!confirm('删除这条动态？'))return;
-    remove.disabled=true;
-    try{
-     if(post.remote)await window.EmoiRelay.request('/emoi/v2/moments/'+encodeURIComponent(post.id),{method:'DELETE'});
-     const next=posts.filter(item=>item.id!==post.id);
-     if(!post.remote&&!save(MOMENTS_KEY,next.filter(item=>!item.remote)))return;
-     posts=next;render();
-    }catch(error){status.textContent=error.message}
-    finally{remove.disabled=false}
-   };
-   meta.append(remove);card.append(meta);
+   card.append(meta);
    if(post.text)card.append(create('p','ep-moment-copy',window.EmoiRich.withoutEmoji(post.text)));
    if(post.attachment?.kind==='image'){
     const image=create('img','ep-moment-image');image.alt='动态图片';image.loading='lazy';card.append(image);
@@ -654,15 +718,7 @@ function openMoments(){
      :window.EmoiRelay.media(post.attachment);
     void load.then(url=>{if(url&&image.isConnected)image.src=url}).catch(()=>image.remove());
    }
-   const reactions=post.reactions||[];
-   const likes=reactions.filter(item=>item.liked).map(item=>item.name);
-   if(likes.length)card.append(create('p','ep-moment-reaction',likes.join('、')+' 点了赞'));
-   for(const item of reactions){
-    if(!item.comment)continue;
-    const line=create('p','ep-moment-reaction');
-    line.append(create('strong','',item.name+'  '),document.createTextNode(window.EmoiRich.withoutEmoji(item.comment)));
-    card.append(line);
-   }
+   addMomentFeedback(card,post);
    feed.append(card);
   }
  }
@@ -694,11 +750,13 @@ function openMoments(){
  if(connected){
   let refreshing=false;
   const refresh=async()=>{
-   if(refreshing||publishing||screen!=='moments'||!feed.isConnected)return;
+   if(refreshing||publishing||changingFeedback||screen!=='moments'||!feed.isConnected||
+     feed.querySelector('.ep-moment-comment-form:not([hidden])'))return;
    refreshing=true;
    try{
-    const result=await window.EmoiRelay.request('/emoi/v2/moments');
-    if(!feed.isConnected||publishing)return;
+    const result=await window.EmoiRelay.request('/emoi/v2/moments',{cache:'no-store'});
+    if(!feed.isConnected||publishing||changingFeedback||
+      feed.querySelector('.ep-moment-comment-form:not([hidden])'))return;
     const next=[...result.posts.map(post=>({...post,remote:true})),...safeRead(MOMENTS_KEY)]
       .sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
     if(JSON.stringify(posts)!==JSON.stringify(next)){posts=next;render()}
@@ -1212,7 +1270,8 @@ async function checkIncomingCalls(){
   if(!person||document.hidden||messageApp?.isInCall())return;
   const dialog=create('dialog','ep-edit-dialog ep-incoming-call');incomingDialog=dialog;
   const heading=create('h2','',invite.name);
-  const copy=create('p','',invite.mode==='video'?'视频来电':'语音来电');
+  const label=invite.mode==='video'?'视频来电':'语音来电';
+  const copy=create('p','',invite.trigger==='owner_request'?label+' · 应你的请求':label);
   const footer=create('footer');
   const answer=async action=>{
    accept.disabled=true;decline.disabled=true;

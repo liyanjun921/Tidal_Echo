@@ -1,6 +1,8 @@
 """Persistent scheduling for a contact's private Émoi conversation."""
 import json
 import random
+import re
+import unicodedata
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -11,6 +13,24 @@ DEFAULTS = dict(idle=False, followup=False, moments=False, moment_photo="auto", 
                 comment_delay=120, comment_interval=60, idle_minutes=30, threshold=0, min_wait=15, max_wait=600,
                 min_hours=3, max_hours=48, zone="Asia/Shanghai", quiet=True,
                 quiet_start="01:00", quiet_end="07:00")
+
+
+# An owner command is distinct from a model deciding to place a call.
+_CALL_REQUEST = re.compile(
+    r"(?:老公|老婆|宝宝|姐姐|亲爱的)?(?:现在|马上|立刻)?(?:请|能不能|可以|能|你)?"
+    r"(?:给我|跟我|和我|向我|主动)?(?:打|拨打|发起|呼叫)(?:给我|一个|个|一通|通|一下)?"
+    r"(?P<kind>视频通话|视频电话|视频|语音通话|语音电话|电话|语音)"
+    r"(?:给我|试试|一下|好吗|好不好|可以吗|行吗|吗|吧|呀|啊|嘛|啦)*"
+)
+_APP_CALL_REQUEST = re.compile(r"(?:就要|就打|打|发起|试试)?(?:前端|应用内|这里|这个应用)(?:里的?|这个|的)?(?P<kind>视频通话|视频电话|语音通话|语音电话)")
+
+
+def owner_call_request(text):
+    command = re.sub(r"[\s,，。.!！?？、…～~]+", "", unicodedata.normalize("NFKC", text))
+    match = _CALL_REQUEST.fullmatch(command) or _APP_CALL_REQUEST.fullmatch(command)
+    if not match:
+        return None
+    return "video" if match["kind"].startswith("视频") else "voice"
 
 
 def init(db):
@@ -30,6 +50,15 @@ def init(db):
             done INTEGER NOT NULL DEFAULT 0, comment TEXT NOT NULL DEFAULT '',
             PRIMARY KEY(moment_id, contact_id)
         );
+        CREATE TABLE IF NOT EXISTS emoi_moment_owner_likes (
+            moment_id TEXT PRIMARY KEY REFERENCES emoi_v2_moments(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS emoi_moment_owner_comments (
+            id TEXT PRIMARY KEY,
+            moment_id TEXT NOT NULL REFERENCES emoi_v2_moments(id) ON DELETE CASCADE,
+            text TEXT NOT NULL, created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS emoi_moment_owner_comment_post ON emoi_moment_owner_comments(moment_id,created_at);
         CREATE INDEX IF NOT EXISTS emoi_moment_reaction_due ON emoi_moment_reactions(done,due);
     """)
 

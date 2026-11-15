@@ -453,7 +453,7 @@ function messageBubble(msg,members,showName,registerURL,joinCall){
  const bubble=document.createElement('div');bubble.className='ep-im-bubble';
  if(msg.attachment?.kind==='call_invite'){
   const label=msg.attachment.mode==='video'?'视频通话邀请':'语音通话邀请';
-  const answered=msg.call_state==='accept'?'已接听':msg.call_state==='decline'?'已拒接':'';
+  const answered=msg.call_state==='accept'?'已接听':msg.call_state==='decline'?'已拒接':msg.call_state==='superseded'?'已替换':'';
   bubble.textContent=[label,withoutEmoji(msg.text||''),answered].filter(Boolean).join(' · ');
   if(joinCall&&!answered&&Date.now()-Date.parse(msg.created_at)<90000){
    const connect=button('接听',msg.attachment.mode==='video'?'video':'phone',async()=>{
@@ -771,6 +771,7 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
     remoteRows.push(row);replying=row.delivery==='replying';
     saveConversation();
     if(!isOpen())return;
+    if(answer.call_queued)window.dispatchEvent(new Event('emoi-call-available'));
     report(replying?'等待 AI 回复…':row.delivery==='stored_not_delivered'?'未绑定回复模型':'');
     schedule();
    }else{
