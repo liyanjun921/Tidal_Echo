@@ -218,6 +218,48 @@ class ContactIsolationTests(unittest.TestCase):
             self.assertTrue(self.post(chat, {"text": "第二次", "nonce": uuid4().hex}).json()["model_dispatched"])
         self.assertEqual(bindings, [named, "chatgpt-plan"])
 
+    def test_worldbooks_trigger_globally_or_for_bound_contact(self):
+        url = "/emoi/v2/worldbooks"
+
+        def entry(text, *, always=False, enabled=True, keys="灯塔"):
+            return {"text": text, "keys": keys, "always": always, "enabled": enabled}
+
+        def book(name, entries, *, global_=False, enabled=True):
+            response = self.post(url, {"name": name, "entries": entries, "is_global": global_, "enabled": enabled})
+            self.assertEqual(response.status_code, 200, response.text)
+            return response.json()["book"]["id"]
+
+        shared = book("公共", [entry("公共规则", always=True), entry("彩色灯塔"), entry("停用条目", always=True, enabled=False)], global_=True)
+        personal = book("个人", [entry("私有规则", always=True)])
+        book("停用书", [entry("停用内容", always=True)], global_=True, enabled=False)
+        self.assertEqual(self.client.get(url).status_code, 401)
+        first = self.post("/emoi/v2/contacts", {"name": "甲", "model_route": "gpt",
+                              "profile": {"worldbook_ids": [shared, personal]}}).json()
+        second = self.post("/emoi/v2/contacts", {"name": "乙", "model_route": "gpt"}).json()
+        captured = []
+        real_client = httpx.AsyncClient
+
+        def reply(request):
+            import json
+            captured.append(json.loads(request.content)["worldbooks"])
+            return httpx.Response(200, json={"text": "收到"})
+
+        with patch("backend.emoi_contacts.httpx.AsyncClient", side_effect=lambda **kwargs:
+                   real_client(transport=httpx.MockTransport(reply), **kwargs)):
+            for contact, text in ((first, "去看灯塔"), (second, "出门")):
+                chat = "/emoi/v2/conversations/" + contact["conversation_id"] + "/messages"
+                self.post(chat, {"nonce": uuid4().hex, "text": text})
+        self.assertEqual(captured[0].count("公共规则"), 1)
+        self.assertIn("彩色灯塔", captured[0])
+        self.assertIn("私有规则", captured[0])
+        self.assertIn("公共规则", captured[1])
+        for word in ("停用条目", "停用内容", "私有规则", "彩色灯塔"):
+            self.assertNotIn(word, captured[1])
+        self.assertEqual(self.client.delete(url + "/" + personal, headers=self.h).status_code, 200)
+        rows = self.client.get("/emoi/v2/contacts", headers=self.h).json()["contacts"]
+        updated = next(row for row in rows if row["id"] == first["contact"]["id"])
+        self.assertEqual(updated["profile"]["worldbook_ids"], [shared])
+
     def test_call_reply_lookup_returns_only_the_requested_turn(self):
         new = self.post("/emoi/v2/contacts", {"name": "联系人", "model_route": "gpt"}).json()
         chat = "/emoi/v2/conversations/" + new["conversation_id"] + "/messages"

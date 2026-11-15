@@ -675,6 +675,8 @@ async def build_messages(
             if living['text']:messages.append({'role':'system','content':living['text']})
         except (RuntimeError,ValueError,OSError,sqlite3.Error):
             CURRENT_MEMORY.get()['living']={'status':'unavailable'}
+    worldbook_index = len(messages)
+    recent = [text]
     had_images = False
     following = []
     if use_context:
@@ -711,6 +713,7 @@ async def build_messages(
                         raise RuntimeError("落档游标尚未覆盖要移出的原话，未执行续接")
                 CURRENT_MEMORY.get()["continuation"] = {"archived": True, "checkpoint": True, "retained_messages": len(selected)}
         rows = selected
+        recent.extend(str(row.get("text") or "")[:3000] for row in rows[-7:])
         budget = cfg_int("history_images", 0, 20) if with_images else 0
         image_rows: set[int] = set()
         for row in reversed(rows):
@@ -736,6 +739,12 @@ async def build_messages(
                 body = "\n".join([t for t in [content] + [att_label(a) for a in row_atts if isinstance(a, dict)] if t])
             if body:
                 messages.append({"role": "user", "content": body})
+    if agent:
+        from emoi_worldbooks import context as worldbook_context
+        with contextlib.closing(sqlite3.connect(RELAY_DB)) as db:
+            global_books = worldbook_context(db, "\n".join(recent))
+        if global_books:
+            messages.insert(worldbook_index, {"role": "system", "content": "已启用世界书：\n" + global_books})
     parts, notes = await attachment_parts(atts, with_images=with_images)
     had_images = had_images or bool(parts)
     CURRENT_USER_INDEX.set(len(messages))
@@ -2260,6 +2269,9 @@ async def loop_contact_reply(request: Request):
         keys = [key.strip().casefold() for key in re.split("[,，]", first) if key.strip()]
         if "*" in keys or any(key in recent for key in keys):
             book.append(content.strip())
+    named_book = str(body.get("worldbooks") or "")[:12000].strip()
+    if named_book:
+        prompt += "\n\n已启用世界书：\n" + named_book
     if book:
         prompt += "\n\n世界书：\n" + "\n\n".join(book)[:12000]
     query = next((str(row.get("text") or "")[:1500] for row in reversed(rows)

@@ -677,6 +677,8 @@ function openContactEditor(id=null,prefill=null){
   input.title=p?.profile?.[input.name]?'已保存图片':'';
  }
  const profile={...p?.profile,...p?.pendingProfile};
+ form.querySelector('#epLegacyWorldbook').hidden=!form.elements.worldbook.value;
+ void window.EmoiWorldbooks?.contactSelector(form.querySelector('#epContactWorldbooks'),profile.worldbook_ids||[]);
  for(const field of ['voice_connection','image_connection','ob_server']){
   const select=form.elements[field];
   select.replaceChildren(new Option('不绑定',''));
@@ -710,6 +712,10 @@ function openGroupEditor(id=null){
  if(!contacts.length)members.append(create('p','ep-help','先添加联系人，才能选择群成员。'));
  dlg.showModal();
 }
+function openWorldbooks(){
+ setScreen('worldbooks');
+ return window.EmoiWorldbooks?.open({root:view(),header:header('世界书',openSettings)});
+}
 function openSettings(){
  setScreen('settings');const root=view();root.className='ep-view ep-settings';root.append(header('设置',openHome));
  const body=create('div','ep-list-scroll');
@@ -731,6 +737,7 @@ function openSettings(){
  }));
  rows.append(listItem('appearance','美化','玻璃风格与气泡动效','settings',openBeauty));
  rows.append(listItem('connect','API 管理','GPT Work 订阅与自定义 API','connect',()=>openConnection()));
+ rows.append(listItem('worldbooks','世界书','管理全局世界书和联系人专用条目','bookcase',openWorldbooks));
  rows.append(listItem('shared-memory','OB 共享记忆','谢临川与沈知予的空间','memory',()=>{
   openConnection();const settings=$('#contactObSettings');settings.open=true;settings.scrollIntoView({block:'start'});
  }));
@@ -784,7 +791,7 @@ function openApp(id){
  return launchPage(id);
 }
 function installDialogs(){
- const c=document.createElement('dialog');c.id='epContactDialog';c.className='ep-edit-dialog';c.innerHTML='<form id="epContactForm"><header><strong id="epContactHeading">添加联系人</strong><button type="button" data-ep-close="contact" aria-label="关闭" autofocus>'+icon('x')+'</button></header><p>每位 AI 都拥有永久独立身份、记忆及欲望命名空间。请先在设置里配置模型，再为联系人选择回复模型。</p><label>联系人姓名<input name="name" type="text" required maxlength="50" autocomplete="off" placeholder="自定义名字"></label><label>角色档案 / 人物简介<textarea name="notes" maxlength="5000" rows="4" placeholder="可以导入人物档案或手动填写"></textarea></label><label>角色指令<textarea name="instructions" maxlength="12000" rows="3"></textarea></label><label>世界书<textarea name="worldbook" maxlength="24000" rows="5" placeholder="关键词1,关键词2&#10;条目正文&#10;&#10;*&#10;始终载入的条目"></textarea></label><p>条目之间空一行。首行填写关键词，* 表示始终载入。</p><label>回复连接<select name="model_route"><option value="">不绑定</option></select></label><label>生图 API<select name="image_connection"></select></label><label>语音 API<select name="voice_connection"></select></label><label>共享 OB 空间<select name="ob_server"></select></label><p>在设置的 MCP 工具中添加 OB 后可选。绑定后，私聊会检索该空间，支持聊天归档的 OB 也会接收已保存的对话。</p><label class="ep-member"><input name="proactive_enabled" type="checkbox">允许欲望系统投递主动消息</label><label>Room 欲望空间<select name="desire_scope"><option value="">仅外部 Runtime 投递</option><option value="gpt">GPT 私聊空间</option><option value="claude">Claude 私聊空间</option></select></label><p role="status" id="epContactModelStatus"></p><footer><button type="button" data-ep-close="contact">取消</button><button type="submit">保存联系人</button></footer></form>';
+ const c=document.createElement('dialog');c.id='epContactDialog';c.className='ep-edit-dialog';c.innerHTML='<form id="epContactForm"><header><strong id="epContactHeading">添加联系人</strong><button type="button" data-ep-close="contact" aria-label="关闭" autofocus>'+icon('x')+'</button></header><p>每位 AI 都拥有永久独立身份、记忆及欲望命名空间。请先在设置里配置模型，再为联系人选择回复模型。</p><label>联系人姓名<input name="name" type="text" required maxlength="50" autocomplete="off" placeholder="自定义名字"></label><label>角色档案 / 人物简介<textarea name="notes" maxlength="5000" rows="4" placeholder="可以导入人物档案或手动填写"></textarea></label><label>角色指令<textarea name="instructions" maxlength="12000" rows="3"></textarea></label><strong>绑定世界书</strong><div id="epContactWorldbooks" class="ep-worldbook-bindings"></div><details id="epLegacyWorldbook" hidden><summary>旧版内嵌世界书</summary><label>原有条目<textarea name="worldbook" maxlength="24000" rows="5"></textarea></label><p>首行是触发词，* 表示常驻。条目之间空一行。</p></details><label>回复连接<select name="model_route"><option value="">不绑定</option></select></label><label>生图 API<select name="image_connection"></select></label><label>语音 API<select name="voice_connection"></select></label><label>共享 OB 空间<select name="ob_server"></select></label><p>在设置的 MCP 工具中添加 OB 后可选。绑定后，私聊会检索该空间，支持聊天归档的 OB 也会接收已保存的对话。</p><label class="ep-member"><input name="proactive_enabled" type="checkbox">允许欲望系统投递主动消息</label><label>Room 欲望空间<select name="desire_scope"><option value="">仅外部 Runtime 投递</option><option value="gpt">GPT 私聊空间</option><option value="claude">Claude 私聊空间</option></select></label><p role="status" id="epContactModelStatus"></p><footer><button type="button" data-ep-close="contact">取消</button><button type="submit">保存联系人</button></footer></form>';
  const g=document.createElement('dialog');g.id='epGroupDialog';g.className='ep-edit-dialog';g.innerHTML='<form id="epGroupForm"><header><strong id="epGroupHeading">创建群聊</strong><button type="button" data-ep-close="group" aria-label="关闭" autofocus>'+icon('x')+'</button></header><p>已绑定回复模型的成员会依次回复群消息。</p><label>群聊名称<input name="name" required maxlength="50" placeholder="给群聊起个名字"></label><strong>选择联系人</strong><div id="epGroupMembers" class="ep-member-list"></div><p id="epGroupError" role="status"></p><footer><button type="button" data-ep-close="group">取消</button><button type="submit">保存群聊</button></footer></form>';
  const artwork=[
   ['avatar','头像'],['character','人设图'],['voice_background','语音通话背景'],['video_background','视频通话背景'],['face_reference','生图脸部参考']
@@ -814,6 +821,9 @@ function installDialogs(){
    const profile=Object.fromEntries(['instructions','worldbook','ob_server','image_connection','voice_connection','desire_scope']
     .map(field=>[field,form.elements[field].value]));
    profile.proactive_enabled=form.elements.proactive_enabled.checked;
+   const books=form.querySelector('#epContactWorldbooks');
+   if(books.dataset.ready==='true')profile.worldbook_ids=[...books.querySelectorAll('input:checked')].map(node=>node.value);
+   else if(old?.pendingProfile?.worldbook_ids)profile.worldbook_ids=old.pendingProfile.worldbook_ids;
    if(window.EmoiRelay?.enabled&&navigator.onLine!==false){
     Object.assign(profile,await window.EmoiAlbums.uploadFields(form));
     try{await remoteSaveContact(person,false,profile)}

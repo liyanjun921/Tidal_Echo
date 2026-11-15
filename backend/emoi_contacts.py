@@ -16,6 +16,11 @@ from uuid import UUID, uuid4
 import httpx
 from fastapi import BackgroundTasks, HTTPException, Request
 
+try:
+    from . import emoi_worldbooks as worldbooks
+except ImportError:
+    import emoi_worldbooks as worldbooks
+
 MAX_CONTACTS = 120
 MAX_MEMBERS = 20
 MEDIA_TYPES = {
@@ -107,6 +112,7 @@ def init(path):
         """)
         if "favorite" not in {column[1] for column in db.execute("PRAGMA table_info(emoi_album_photos)")}:
             db.execute("ALTER TABLE emoi_album_photos ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0")
+        worldbooks.init(db)
         db.execute("UPDATE emoi_v2_messages SET delivery='interrupted' WHERE delivery='replying'")
 
 
@@ -134,6 +140,7 @@ def store_wake_message(db, scope, event, text, stamp):
 
 def register(app, relay):
     path = relay["DB_PATH"]
+    worldbooks.register(app, relay, connect, valid_id, clean_text)
 
     def auth(request):
         relay["check_auth"](request)
@@ -150,13 +157,15 @@ def register(app, relay):
             raise HTTPException(status_code=404, detail="conversation not found")
         return row
 
-    def view_contact(row):
+    def view_contact(db, row):
+        profile = json.loads(row["profile"])
+        profile["worldbook_ids"] = worldbooks.bindings(db, row["id"])
         return {
             "id": row["id"], "name": row["name"], "notes": row["notes"],
             "model_route": row["model_route"], "memory_namespace": row["memory_namespace"],
             "desire_namespace": row["desire_namespace"], "created_at": row["created_at"],
             "updated_at": row["updated_at"], "connected": False,
-            "memory_connected": False, "desire_connected": False, "profile": json.loads(row["profile"]),
+            "memory_connected": False, "desire_connected": False, "profile": profile,
         }
 
     def view_message(row):
@@ -216,6 +225,11 @@ def register(app, relay):
                     raise HTTPException(422, "主动消息开关无效")
                 previous["proactive_enabled"] = edits["proactive_enabled"]
         return json.dumps(previous, ensure_ascii=False)
+
+    def bind_worldbooks(db, contact_id, body):
+        edits = body.get("profile", {})
+        if "worldbook_ids" in edits:
+            worldbooks.bind(db, contact_id, edits["worldbook_ids"], valid_id)
 
     def check_wake_binding(db, ident, profile):
         bound = json.loads(profile)
@@ -346,11 +360,13 @@ def register(app, relay):
                     # Shared-memory spaces are private to the bound contact.
                     with connect(path) as db:
                         direct = conversation(db, cid)["kind"] == "direct"
+                        recent = "\n".join(entry["text"][:3000] for entry in history[-8:])
+                        book_context = worldbooks.context(db, recent, current["id"])
                     try:
                         response = await client.post(url, json={
                             "route": current["model_route"], "contact_id": current["id"],
                             "name": current["name"], "notes": current["notes"], "history": history,
-                            "call_mode": call_mode,
+                            "call_mode": call_mode, "worldbooks": book_context,
                             "profile": {**profile, "ob_server": profile.get("ob_server", "") if direct else ""},
                         })
                         response.raise_for_status()
@@ -431,7 +447,7 @@ def register(app, relay):
         auth(request)
         with connect(path) as db:
             rows=db.execute("SELECT * FROM emoi_v2_contacts WHERE archived=0 ORDER BY created_at").fetchall()
-            return {"contacts":[view_contact(row) for row in rows]}
+            return {"contacts":[view_contact(db, row) for row in rows]}
 
     @app.post("/emoi/v2/contacts")
     async def v2_create_contact(request: Request):
@@ -455,12 +471,13 @@ def register(app, relay):
             except sqlite3.IntegrityError:
                 raise HTTPException(409,"contact id already exists") from None
             db.execute("UPDATE emoi_v2_contacts SET profile=? WHERE id=?", (profile, cid))
+            bind_worldbooks(db, cid, body)
             # Each contact begins with an independent direct conversation.
             conv=str(uuid4())
             db.execute("INSERT INTO emoi_v2_conversations(id,kind,title,memory_namespace,created_at,updated_at) VALUES(?,'direct',?,?,?,?)",
                 (conv,name,"conversation:"+conv,timestamp,timestamp))
             db.execute("INSERT INTO emoi_v2_members VALUES(?,?)",(conv,cid))
-            return {"contact":view_contact(contact(db,cid)),
+            return {"contact":view_contact(db, contact(db,cid)),
                     "conversation_id":conv}
 
     @app.patch("/emoi/v2/contacts/{contact_id}")
@@ -479,7 +496,8 @@ def register(app, relay):
             # Never accept arbitrary memory/desire scope changes from the browser.
             db.execute("UPDATE emoi_v2_contacts SET name=?,notes=?,model_route=?,updated_at=?,profile=? WHERE id=?",
                 (name,notes,route,now(),profile,old["id"]))
-            return {"contact":view_contact(contact(db,old["id"]))}
+            bind_worldbooks(db, old["id"], body)
+            return {"contact":view_contact(db, contact(db,old["id"]))}
 
     @app.delete("/emoi/v2/contacts/{contact_id}")
     async def v2_archive_contact(contact_id: str,request: Request):
