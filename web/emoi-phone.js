@@ -731,6 +731,12 @@ function openSettings(){
  }));
  rows.append(listItem('appearance','美化','玻璃风格与气泡动效','settings',openBeauty));
  rows.append(listItem('connect','API 管理','GPT Work 订阅与自定义 API','connect',()=>openConnection()));
+ rows.append(listItem('shared-memory','OB 共享记忆','谢临川与沈知予的空间','memory',()=>{
+  openConnection();const settings=$('#contactObSettings');settings.open=true;settings.scrollIntoView({block:'start'});
+ }));
+ rows.append(listItem('backup','备份与导入','导出本机图片、聊天和设置','bookcase',()=>{
+  openConnection();$('#exportDeviceButton').scrollIntoView({block:'center'});
+ }));
  body.append(rows);
  const priv=create('div','ep-privacy-note');priv.innerHTML=icon('shield')+'<p>界面模式与联系人草稿保存在当前浏览器，不会清空 Émoi 原有聊天或记忆。切换模式不重建服务。</p>';
  body.append(priv);root.append(body);
@@ -936,6 +942,10 @@ function trackPhoneViewport(){
   root.toggleAttribute('data-ep-keyboard',keyboard);
   if(keyboard)root.style.setProperty('--ep-visual-height',Math.round(height)+'px');
   else root.style.removeProperty('--ep-visual-height');
+  if(standalone&&!keyboard){
+   const fullHeight=Math.max(height,window.innerHeight,root.clientHeight);
+   root.style.setProperty('--ep-standalone-height',Math.round(fullHeight)+'px');
+  }
   root.style.setProperty('--ep-visual-top',(keyboard?Math.max(0,viewport.offsetTop):0)+'px');
  }
  function schedule(){if(!frame)frame=requestAnimationFrame(update)}

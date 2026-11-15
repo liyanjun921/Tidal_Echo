@@ -125,3 +125,32 @@ CyberBoss 是独立的微信消息桥和 Codex/Claude Code runtime，Émoi 是�
 7. **安全**：密钥只在服务器；HTTP 内部端口不公网暴露；备份卷和凭据异地保存；`docker compose ... down` 不加 `-v`，不把敏感消息当系统提示执行。
 
 目前完成的是**品牌改名、云端拓扑核对、Garden/CyberBoss 事件入口适配代码和实施文档**；真实腾讯云、微信、Garden 和现有 OB 的接入均依赖用户服务器实际配置，不能未经现场验证声称已经全部连通。
+
+## 备份与恢复
+
+浏览器里的「设置 → 备份与导入」可导出本机数据，包含 IndexedDB 中的头像、壁纸和聊天媒体。浏览器备份需在存有这些数据的设备上导出，随后通过同一入口导入。旧版 JSON 仍可导入，附件索引需要原服务器提供文件。
+
+在腾讯云 WebShell 的 Émoi 仓库中执行：
+
+```bash
+bash scripts/emoi_volume_backup.sh export "$HOME/emoi-data-$(date +%Y%m%d-%H%M%S).tar.gz"
+```
+
+导出期间 Émoi 会短暂停止，完成后会启动原容器。压缩包包含完整 `/data`，包括 SQLite 数据库、图片和语音原件、API 配置及其他卷内状态。它包含私人配置，和部署用的原 `.env` 一起私密保存。外部 OB 的两个空间仍需从各自的 OB 实例备份。
+
+恢复先写到一个新卷并校验 SQLite：
+
+```bash
+bash scripts/emoi_volume_backup.sh restore "$HOME/emoi-data-20261115-120000.tar.gz" emoi_recovered
+```
+
+确认后，在恢复实例的 Compose 覆盖文件中把逻辑卷 `emoi_data` 指向新卷，并使用原 `.env`：
+
+```yaml
+volumes:
+  emoi_data:
+    external: true
+    name: emoi_recovered
+```
+
+后续启动应继续使用这份覆盖文件。在恢复实例验证聊天、图片和记忆后，再决定是否让正式网关指向该实例。

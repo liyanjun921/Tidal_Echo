@@ -448,8 +448,8 @@ body[data-ui-mode=phone] #emoiPhoneView :is(.ep-record-bar,.ep-im-composer,.ep-i
 .ep-voice-draft .ep-im-remove { display:grid; place-items:center; width:40px;height:40px; padding:0;border-radius:50%; }
 .ep-im-screen:has(.ep-voice-draft:not([hidden])) .ep-im-footer { min-height:max(4px,env(safe-area-inset-bottom)); padding-top:0; }
 .ep-im-call[open] {
-  position:fixed; inset:0; display:grid; grid-template-rows:auto 1fr auto; gap:16px; margin:0;
-  width:100%; height:100%; max-width:none; max-height:none; border:0; color:white;
+  position:fixed; inset:var(--ep-visual-top,0px) 0 auto; display:grid; grid-template-rows:auto minmax(0,1fr) auto; gap:16px; margin:0;
+  width:100%; height:var(--ep-visual-height,var(--ep-standalone-height,100dvh)); max-width:none; max-height:none; border:0; color:white;
   padding:max(32px,env(safe-area-inset-top)) 24px max(24px,env(safe-area-inset-bottom));
   background:linear-gradient(#17233182,#122433c7),var(--contact-call-background,var(--emoi-active-wallpaper,var(--wallpaper))) center / cover;
 }
@@ -506,13 +506,66 @@ html[data-ep-standalone]:has(body[data-ui-mode=phone]) {
 }
 html[data-ep-standalone] body[data-ui-mode=phone] { background: transparent; }
 html[data-ep-standalone] body[data-ui-mode=phone] .ep-home-bottom {
-  padding-bottom: max(32px, calc(env(safe-area-inset-bottom) + 12px));
+  padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
 }
 html[data-ep-standalone] body[data-ui-mode=phone] .ep-message-nav {
-  bottom: max(28px, calc(env(safe-area-inset-bottom) + 8px));
+  bottom: max(8px, env(safe-area-inset-bottom, 0px));
 }
 .ep-character-art { display:block; width:min(100%,440px); max-height:55dvh; object-fit:contain; border-radius:18px; }
 .ep-album-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(105px,1fr)); gap:10px; margin-top:14px; }
 .ep-album-grid figure { margin:0; min-width:0; }
 .ep-album-grid img { display:block; width:100%; aspect-ratio:1; object-fit:cover; border-radius:14px; }
 .ep-album-grid figcaption { margin-top:4px; overflow-wrap:anywhere; }
+
+/* Standalone fills the layout viewport, including the area behind the home indicator. */
+html[data-ep-standalone]:not([data-ep-keyboard]) body[data-ui-mode=phone]
+:is(.emoi-phone-host, #app, dialog.page-sheet[open], dialog.settings-sheet[open]) {
+  height: max(var(--ep-standalone-height, 0px), 100lvh);
+}
+html[data-ep-standalone]:not([data-ep-keyboard]) body[data-ui-mode=phone] .emoi-phone-host::before {
+  transform: none;
+}
+:is(.ep-im-avatar,.ep-list-avatar,.ep-contact-avatar):has(> .ep-avatar-image) {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.ep-avatar-image {
+  position: absolute;
+  inset: 0;
+  max-width: none;
+}
+
+.ep-call-exchange { position:relative; display:flex; align-items:center; gap:8px; width:min(90%,400px); margin:0 auto 12px; }
+.ep-call-exchange[hidden] { display:none; }
+.ep-call-exchange input { min-width:0; flex:1; border:1px solid #ffffff66; border-radius:24px; padding:10px 14px; background:#203444a6; color:white; font-size:16px; }
+.ep-call-response { position:relative; margin:0 auto 12px; max-width:80%; text-align:center; white-space:pre-wrap; }
+.ep-im-call audio:not([hidden]) { position:relative; display:block; margin:0 auto 12px; max-width:80%; }
+
+.ep-sticker-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(62px,1fr)); gap:8px; margin:12px 0; }
+.ep-sticker-grid button { border:1px solid #ffffff70; border-radius:14px; overflow:hidden; background:#ffffff21; aspect-ratio:1; padding:3px; }
+.ep-sticker-grid img { display:block; width:100%; height:100%; object-fit:contain; }
+
+.ep-album-settings { margin-bottom:16px; }
+.ep-album-settings summary { cursor:pointer; width:max-content; padding:8px 0; font-weight:600; }
+.ep-album-settings[open] { padding:8px 14px 14px; border:1px solid #ffffff55; border-radius:18px; }
+.ep-album-settings label { display:block; margin:12px 0; }
+.ep-album-content section { margin-bottom:26px; }
+.ep-album-content h2 { font-size:22px; margin:12px 0; }
+.ep-album-strip { display:grid; grid-auto-flow:column; grid-auto-columns:clamp(100px,29%,210px); gap:9px; overflow-x:auto; }
+.ep-album-cover { position:relative; aspect-ratio:1; overflow:hidden; border:1px solid #ffffff66; border-radius:18px; color:white; background:#47646c75; text-align:left; }
+.ep-album-cover img[src] { position:absolute; inset:0; height:100%; width:100%; object-fit:cover; }
+.ep-album-cover span { position:absolute; inset:auto 0 0; padding:20px 8px 8px; background:linear-gradient(transparent,#122731d9); }
+.ep-album-tabs { position:sticky; bottom:0; display:flex; gap:4px; width:max-content; padding:4px; margin:20px auto 0; border:1px solid #ffffff90; border-radius:40px; background:#e9f1f2d9; backdrop-filter:blur(15px); }
+.ep-album-tabs button { padding:9px 18px; border:0; border-radius:32px; background:none; color:#153749; }
+.ep-album-tabs button[aria-pressed=true] { background:#cedfe7; }
+
+.ep-call-turns { grid-row:2; align-self:end; min-height:0; overflow:auto; position:relative; z-index:1; }
+.ep-im-call[data-mode=video] .ep-call-camera { top:90px; bottom:auto; }
+.ep-im-call[data-mode=video] .ep-call-controls { justify-self:center; flex-direction:row; }
+
+.ep-album-thumbnail { display:block; width:100%; padding:0; border:0; background:transparent; }
+.ep-album-photo > img { display:block; max-width:100%; max-height:62dvh; margin:0 auto 12px; object-fit:contain; border-radius:14px; }
+
+.ep-im-invite-accept { display:flex; align-items:center; gap:6px; margin-top:8px; padding:7px 12px; color:inherit; background:#fff2; border:1px solid #fff7; border-radius:20px; }
+.ep-im-invite-accept svg { width:17px; height:17px; }

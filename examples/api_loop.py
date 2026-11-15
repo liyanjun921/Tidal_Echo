@@ -856,6 +856,9 @@ class McpServer:
         }
 
 
+CONTACT_OB_SPACES = {"ob-space-one": "空间一 · 谢临川", "ob-space-two": "空间二 · 沈知予"}
+
+
 class McpManager:
     def __init__(self) -> None:
         self.servers: dict[str, McpServer] = {}
@@ -898,12 +901,16 @@ class McpManager:
     def rebuild_index(self) -> None:
         self.index = {}
         for s in self.servers.values():
+            if s.name in CONTACT_OB_SPACES:
+                continue
             for t in s.tools:
                 self.index[tool_public_name(s.name, t.name)] = (s.name, t.name)
 
     def openai_tools(self) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
         for s in self.servers.values():
+            if s.name in CONTACT_OB_SPACES:
+                continue
             for t in s.tools:
                 schema = t.inputSchema if isinstance(getattr(t, "inputSchema", None), dict) else {}
                 if schema.get("type") != "object":
@@ -925,7 +932,7 @@ class McpManager:
             if s:
                 rows.append(s.public())
             else:
-                rows.append({**cfg, "status": "disabled" if not cfg.get("enabled", True) else "offline", "error": "", "tools": []})
+                rows.append({**McpServer(cfg).public(), "status": "disabled" if not cfg.get("enabled", True) else "offline"})
         return rows
 
 
@@ -1885,6 +1892,10 @@ async def loop_mcp_upsert(request: Request):
     rows = [r for r in (cfg.get("mcp_servers") or []) if isinstance(r, dict)]
     prev = next((r for r in rows if r.get("name") == name), None)
     if prev:
+        if name in CONTACT_OB_SPACES and body.get("keep_authorization") and entry.get("url") == prev.get("url"):
+            previous_auth = (prev.get("headers") or {}).get("Authorization")
+            if previous_auth:
+                entry["headers"].setdefault("Authorization", previous_auth)
         # keep masked secrets the UI echoed back unchanged
         for field in ("headers", "env"):
             for k, v in (prev.get(field) or {}).items():
@@ -2161,9 +2172,17 @@ async def album_suggest_person(request: Request):
 
 @app.get("/loop/contact-memory-servers")
 async def contact_memory_servers():
-    return {"servers": [{"name": server.name, "online": server.status == "online"}
-                        for server in mcp_manager.servers.values()
-                        if any(tool.name == "breath_search" for tool in server.tools)]}
+    servers = []
+    configured = {row["name"]: row for row in mcp_manager.configured()}
+    for name in dict.fromkeys([*CONTACT_OB_SPACES, *mcp_manager.servers]):
+        server = mcp_manager.servers.get(name)
+        tools = {tool.name for tool in server.tools} if server else set()
+        if name not in CONTACT_OB_SPACES and "breath_search" not in tools:
+            continue
+        servers.append({"name": name, "label": CONTACT_OB_SPACES.get(name, name),
+                        "configured": name in configured, "online": bool(server and server.status == "online"),
+                        "search": "breath_search" in tools, "archive": "chat_append" in tools})
+    return {"servers": servers}
 
 
 async def contact_ob(server_name, tool, arguments):
@@ -2226,6 +2245,8 @@ async def loop_contact_reply(request: Request):
     notes = str(body.get("notes") or "")[:5000]
     prompt = (f"你是这场聊天中的{name}。按以下角色档案自然回复。"
               "只写你自己的下一条消息，不代替其他人发言。\n" + notes)
+    if body.get("call_mode") in ("voice", "video"):
+        prompt += "\n现在正在应用内通话。口语化回复，通常一两句。只有收到图片才描述画面。"
     profile = body.get("profile") if isinstance(body.get("profile"), dict) else {}
     instructions = str(profile.get("instructions") or "")[:12000].strip()
     if instructions:

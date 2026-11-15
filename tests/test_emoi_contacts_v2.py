@@ -158,6 +158,11 @@ class ContactIsolationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         photos = self.client.get("/emoi/v2/albums", headers=self.h).json()["photos"]
         self.assertEqual(photos[0]["contact_id"], ident)
+        target = f'/emoi/v2/albums/photos/{photos[0]["id"]}'
+        self.assertEqual(self.client.patch(target, json={"favorite": True}).status_code, 401)
+        self.assertEqual(self.client.patch(target, headers=self.h, json={"favorite": True}).json(), {"favorite": True})
+        photos = self.client.get("/emoi/v2/albums", headers=self.h).json()["photos"]
+        self.assertTrue(photos[0]["favorite"])
 
     def test_room_wake_goes_only_to_opted_in_contact(self):
         from backend.emoi_contacts import connect, now, store_wake_message
@@ -212,6 +217,26 @@ class ContactIsolationTests(unittest.TestCase):
             self.assertEqual(update.json()["contact"]["model_route"], "chatgpt-plan")
             self.assertTrue(self.post(chat, {"text": "第二次", "nonce": uuid4().hex}).json()["model_dispatched"])
         self.assertEqual(bindings, [named, "chatgpt-plan"])
+
+    def test_call_reply_lookup_returns_only_the_requested_turn(self):
+        new = self.post("/emoi/v2/contacts", {"name": "联系人", "model_route": "gpt"}).json()
+        chat = "/emoi/v2/conversations/" + new["conversation_id"] + "/messages"
+        call_modes = []
+        real_client = httpx.AsyncClient
+
+        def reply(request):
+            import json
+            call_modes.append(json.loads(request.content)["call_mode"])
+            return httpx.Response(200, json={"text": "收到"})
+
+        with patch("backend.emoi_contacts.httpx.AsyncClient", side_effect=lambda **kwargs:
+                   real_client(transport=httpx.MockTransport(reply), **kwargs)):
+            first = self.post(chat, {"text": "通话", "nonce": uuid4().hex, "call_mode": "voice"}).json()
+            self.post(chat, {"text": "后续聊天", "nonce": uuid4().hex})
+        result = self.client.get(chat, headers=self.h, params={"reply_to": first["message"]["id"]}).json()
+        self.assertEqual(call_modes, ["voice", ""])
+        self.assertEqual([row["text"] for row in result["messages"]], ["通话", "收到"])
+        self.assertFalse(result["replying"])
 
     def test_group_replies_are_ordered_isolated_and_idempotent(self):
         a = self.post("/emoi/v2/contacts", {"name":"甲","notes":"甲的私有档案","model_route":"gpt"}).json()

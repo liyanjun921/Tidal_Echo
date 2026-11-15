@@ -66,7 +66,7 @@
   for(const [field,title,entries] of [
    ['voice_connection','语音接口',connections.filter(row=>row.provider!=='images')],
    ['image_connection','生图接口',connections.filter(row=>row.provider==='images')],
-   ['ob_server','共享 OB 空间',servers.map(row=>({id:row.name,name:row.name+(row.online?'':'（离线）')}))]
+   ['ob_server','共享 OB 空间',servers.filter(row=>row.configured!==false).map(row=>({id:row.name,name:(row.label||row.name)+(row.search===false?'（未连通）':'')}))]
   ]){
    const select=form.elements[field], selected=select.value;
    select.replaceChildren(new Option('未绑定 '+title,''));
@@ -75,6 +75,34 @@
    select.value=selected;
   }
  }
+ const obSettings=$('contactObSettings'),obForm=obSettings.querySelector('form'),obStatus=$('contactObStatus');
+ async function checkOb(){
+  if(!relay.enabled){obStatus.textContent='请先连接 Émoi 服务器';return}
+  const {servers}=await relay.request('/app/loop/contact-memory-servers');
+  obStatus.replaceChildren();
+  for(const row of servers.filter(entry=>['ob-space-one','ob-space-two'].includes(entry.name))){
+   const status=document.createElement('p');
+   status.textContent=row.label+' · '+(!row.configured?'待配置':!row.search?'检索未连通':row.archive?'可检索及归档':'可检索，空间未提供对话归档');
+   obStatus.append(status);
+  }
+ }
+ const refreshOb=()=>checkOb().catch(error=>{obStatus.textContent=error.message});
+ $('contactObCheck').onclick=refreshOb;
+ obSettings.addEventListener('toggle',()=>{if(obSettings.open)void refreshOb()});
+ obForm.onsubmit=async event=>{
+  event.preventDefault();
+  const submit=event.submitter;submit.disabled=true;
+  const fields=obForm.elements,authorization=fields.authorization.value.trim();
+  obStatus.textContent='正在连接已有 OB…';
+  try{
+   await relay.json('/app/loop/mcp','POST',{
+    name:fields.space.value,transport:'http',url:fields.url.value,enabled:true,
+    headers:authorization?{Authorization:authorization}:{},keep_authorization:!authorization
+   });
+   fields.authorization.value='';await checkOb();
+  }catch(error){obStatus.textContent=error.message}
+  finally{submit.disabled=false}
+ };
  $('connectionDialog').addEventListener('close',close);
  window.EmoiContactMedia={open,bind};
 })();

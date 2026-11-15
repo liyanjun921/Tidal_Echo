@@ -156,9 +156,25 @@ function wire(){
  $('#mcpForm').onsubmit=async e=>{e.preventDefault();const f=e.target;try{const auth=f.elements.authorization.value.trim();await json('/app/loop/mcp','POST',{name:f.elements.serverName.value,transport:'http',url:f.elements.url.value,headers:auth?{Authorization:auth}:{},enabled:true});f.elements.authorization.value='';await toolStatus();toast('工具服务器已保存')}catch(e){toast(e.message)}};
  $('#notificationButton').onclick=()=>notify().catch(e=>toast(e.message));
  $('#pushTestButton').onclick=()=>json('/app/push_test','POST',{}).then(()=>toast('已发起通知测试，请检查实际送达')).catch(e=>toast(e.message));
+ $('#exportDeviceButton').onclick=async event=>{
+  const button=event.currentTarget;button.disabled=true;toast('正在打包本机数据…');
+  try{
+   const data=await window.EmoiDeviceBackup.snapshot();
+   const url=URL.createObjectURL(new Blob([JSON.stringify(data)],{type:'application/json'}));
+   const link=document.createElement('a');link.href=url;link.download='Emoi-device-'+new Date().toISOString().slice(0,10)+'.json';link.click();
+   setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }catch(error){toast('本机备份失败：'+error.message)}
+  finally{button.disabled=false}
+ };
  $('#exportButton').onclick=async()=>{try{const data=secret?await request('/emoi/export'):{format:'emoi-local-v04',data:window.EmoiApp.snapshot()};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='Emoi-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}catch(e){toast(e.message)}};
- $('#importFile').onchange=async e=>{const file=e.target.files[0];e.target.value='';if(!file)return;if(file.size>20*1024*1024){toast('请选择 20 MB 内的 JSON 备份');return}
- try{const body=JSON.parse(await file.text());if(!confirm('导入会追加聊天与记忆，不覆盖现有数据。示例记忆会跳过。继续？'))return;
+ $('#importFile').onchange=async e=>{const file=e.target.files[0];e.target.value='';if(!file)return;
+ try{const body=JSON.parse(await file.text());
+ if(body.format==='emoi-device-v1'){
+  if(!confirm('本机备份将覆盖同名设置和记录。建议在新设备恢复，或先导出当前设备。继续？'))return;
+  await window.EmoiDeviceBackup.restore(body);location.reload();return;
+ }
+ if(file.size>20*1024*1024)throw Error('旧版备份最多 20 MB');
+ if(!confirm('导入会追加聊天与记忆，不覆盖现有数据。示例记忆会跳过。继续？'))return;
  if(secret){const r=await json('/emoi/import','POST',body);toast(r.duplicate?'这份备份已导入':`已导入 ${r.messages} 条消息、${r.memories} 条记忆`);await connect()}else await window.EmoiApp.importData(body);
  }catch(e){toast('导入失败：'+e.message)}};
  window.addEventListener('online',()=>{if(secret)realtime();sync()});document.addEventListener('visibilitychange',()=>{if(document.hidden){stream?.close();stream=null}else{if(secret)realtime();sync()}});

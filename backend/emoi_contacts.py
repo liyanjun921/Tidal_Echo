@@ -105,6 +105,8 @@ def init(path):
                 attachment TEXT NOT NULL, contact_id TEXT, created_at TEXT NOT NULL
             );
         """)
+        if "favorite" not in {column[1] for column in db.execute("PRAGMA table_info(emoi_album_photos)")}:
+            db.execute("ALTER TABLE emoi_album_photos ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0")
         db.execute("UPDATE emoi_v2_messages SET delivery='interrupted' WHERE delivery='replying'")
 
 
@@ -261,9 +263,22 @@ def register(app, relay):
             if person:
                 person = contact(db, person)["id"]
             ident = str(uuid4())
-            db.execute("INSERT INTO emoi_album_photos VALUES(?,?,?,?,?)",
+            db.execute("INSERT INTO emoi_album_photos(id,album_id,attachment,contact_id,created_at) VALUES(?,?,?,?,?)",
                        (ident, album_id, json.dumps(attachment), person or None, now()))
         return {"id": ident}
+
+    @app.patch("/emoi/v2/albums/photos/{photo_id}")
+    async def update_photo(photo_id: str, request: Request):
+        auth(request)
+        body = await request.json()
+        if not isinstance(body, dict) or type(body.get("favorite")) is not bool:
+            raise HTTPException(422, "收藏设置无效")
+        with connect(path) as db:
+            changed = db.execute("UPDATE emoi_album_photos SET favorite=? WHERE id=?",
+                                 (body["favorite"], valid_id(photo_id))).rowcount
+            if not changed:
+                raise HTTPException(404, "照片不存在")
+        return {"favorite": body["favorite"]}
 
     @app.post("/emoi/v2/albums/suggest-person")
     async def suggest_person(request: Request):
@@ -304,7 +319,7 @@ def register(app, relay):
     def reply_targets(db, cid):
         return [member for member in model_members(db, cid) if member["model_route"] in MODEL_ROUTES or API_CONNECTION_ROUTE.fullmatch(member["model_route"])]
 
-    async def generate_replies(cid, message_id, recipients, voice_reply=False):
+    async def generate_replies(cid, message_id, recipients, voice_reply=False, call_mode=""):
         completed = 0
         try:
             url = relay["loop_base_url"]() + "/loop/contact-reply"
@@ -335,6 +350,7 @@ def register(app, relay):
                         response = await client.post(url, json={
                             "route": current["model_route"], "contact_id": current["id"],
                             "name": current["name"], "notes": current["notes"], "history": history,
+                            "call_mode": call_mode,
                             "profile": {**profile, "ob_server": profile.get("ob_server", "") if direct else ""},
                         })
                         response.raise_for_status()
@@ -611,12 +627,18 @@ def register(app, relay):
         return {"id": ident, "duplicate": not count}
 
     @app.get("/emoi/v2/conversations/{conversation_id}/messages")
-    async def v2_messages(conversation_id:str, request:Request,limit:int=60):
+    async def v2_messages(conversation_id:str, request:Request,limit:int=60,reply_to:str=""):
         auth(request)
         limit=max(1,min(limit,100))
         with connect(path) as db:
             conv=conversation(db,conversation_id)
-            msgs=db.execute("SELECT * FROM emoi_v2_messages WHERE conversation_id=? ORDER BY created_at DESC,id DESC LIMIT ?",(conv["id"],limit)).fetchall()
+            if reply_to:
+                ident = valid_id(reply_to)
+                msgs = db.execute("""SELECT * FROM emoi_v2_messages WHERE conversation_id=?
+                    AND (id=? OR nonce LIKE ?) ORDER BY rowid DESC""",
+                    (conv["id"], ident, "reply:" + ident + ":%")).fetchall()
+            else:
+                msgs=db.execute("SELECT * FROM emoi_v2_messages WHERE conversation_id=? ORDER BY created_at DESC,id DESC LIMIT ?",(conv["id"],limit)).fetchall()
             return {"messages":[view_message(row) for row in reversed(msgs)],
                     "model_connected": bool(relay.get("loop_base_url") and reply_targets(db, conv["id"])),
                     "replying": any(row["delivery"] == "replying" for row in msgs)}
@@ -687,7 +709,9 @@ def register(app, relay):
                   json.dumps(attachment, ensure_ascii=False) if attachment else None))
             row=db.execute("SELECT * FROM emoi_v2_messages WHERE id=?",(mid,)).fetchone()
         if recipients:
-            background.add_task(generate_replies, conv["id"], mid, recipients, body.get("voice_reply") is True)
+            mode = body.get("call_mode")
+            mode = mode if mode in ("voice", "video") else ""
+            background.add_task(generate_replies, conv["id"], mid, recipients, body.get("voice_reply") is True, mode)
         return {"message":view_message(row),"model_dispatched":bool(recipients)}
 
     return {"init":lambda:init(path), "store_wake":store_wake_message}
