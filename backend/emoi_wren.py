@@ -532,6 +532,7 @@ def register(app, relay):
             usage = {}
             read_evidence = None
             xinchao_delivered = []
+            delivery = None
             if kind == 'say':
                 action, text = 'say', timer['body']
             else:
@@ -555,6 +556,10 @@ def register(app, relay):
                     '只使用本回合真实提供的只读材料；没有工具证据时，不得声称已搜索、发帖、发送邮件、支付或操作外部设备。'
                     '只输出合法 JSON：{"action":"say|note|pass","text":"正文","self_commitment":null}；如需预约，将 self_commitment 替换为 {"minutes":60,"reason":"..."}。'
                     'say 是发给用户，note 只留在 Room，pass 不生成正文。'
+                    '若你绑定了 Émoi 联系人，say 可以额外指定 delivery，取 text、image、voice_invite、video_invite 或 moment。'
+                    'voice_invite 和 video_invite 是应用内来电邀请。moment 是朋友圈动态，正文请用动态口吻。'
+                    '指定 image 或想给 moment 配图时，另给 image_prompt，描述具体画面，最多 1200 字。'
+                    '不确定时使用 text，不声称用户已经接听或已看到。'
                     + json.dumps({
                         'intent': snapshot['intent'],
                         'decision': decision,
@@ -587,6 +592,12 @@ def register(app, relay):
                     self_commitment = {'minutes': minutes, 'reason': reason.strip()}
                 usage = result.get('usage') or {}
                 xinchao_delivered = result.get('xinchao_delivered') or []
+                if action == 'say' and (relay.get('contacts_runtime') or {}).get('prepare_wake'):
+                    mode = output.get('delivery')
+                    image_prompt = output.get('image_prompt')
+                    delivery = await relay['contacts_runtime']['prepare_wake'](
+                        scope, mode, image_prompt.strip()[:1200] if isinstance(image_prompt, str) else '')
+
             msg = None
             contact_notification = None
             with connection(path) as db:
@@ -602,7 +613,7 @@ def register(app, relay):
                     mid = db.execute("INSERT INTO messages(ts,direction,kind,text,meta) VALUES(?,'out','reply',?,?)", (stamp, text, json.dumps(meta, ensure_ascii=False))).lastrowid
                     msg = {'id': mid, 'ts': stamp, 'direction': 'out', 'kind': 'reply', 'text': text, 'meta': meta}
                     if relay.get("contacts_runtime"):
-                        contact_notification = relay["contacts_runtime"]["store_wake"](db, scope, eid, text, stamp)
+                        contact_notification = relay["contacts_runtime"]["store_wake"](db, scope, eid, text, stamp, delivery)
                 db.execute('UPDATE emoi_wren_events SET state=?,body=?,usage=?,message_id=?,finished=? WHERE id=?',
                            (action, text, json.dumps(usage), msg['id'] if msg else None, time.time(), eid))
                 if xinchao_delivered:

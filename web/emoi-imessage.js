@@ -22,6 +22,8 @@ const icons={
  mic:'<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2m-7 9v3m-3 0h6"/>',
  video:'<rect x="2" y="5" width="14" height="14" rx="3"/><path d="m16 10 6-4v12l-6-4"/>',
  phone:'<path d="M7 3H4a1 1 0 0 0-1 1 17 17 0 0 0 17 17 1 1 0 0 0 1-1v-3l-5-2-2 2a13 13 0 0 1-7-7l2-2-2-5Z"/>',
+ minimize:'<rect x="3" y="4" width="18" height="16" rx="2"/><rect x="11" y="11" width="7" height="6" rx="1"/>',
+ expand:'<path d="M8 4H4v4m12-4h4v4M4 16v4h4m12-4v4h-4"/>',
  dial:'<path d="M6 5h.1M12 5h.1M18 5h.1M6 10h.1M12 10h.1M18 10h.1M6 15h.1M12 15h.1M18 15h.1M12 20h.1" stroke-width="3"/>',
  stop:'<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/>',
  pin:'<path d="m16 3 5 5-3 2-3 5-2 1-5-5 1-2 5-3 2-3ZM9 15l-6 6"/>',
@@ -67,42 +69,73 @@ function stickerIndex(){
  try{return JSON.parse(localStorage.getItem(stickerKey)||'[]')}catch{return []}
 }
 function openStickers(onSelect){
- const {dialog,close}=dialogFor('表情包');
- const search=document.createElement('input');search.type='search';search.placeholder='搜索名称';search.setAttribute('aria-label','搜索表情包');
+ const managing=!onSelect;
+ const {dialog,close}=dialogFor(managing?'表情包管理':'表情包');
+ dialog.classList.add('ep-sticker-tray');
+ const title=dialog.querySelector('h2');
+ const header=document.createElement('header');header.append(title,close);
+ const search=document.createElement('input');search.type='search';search.placeholder='搜索表情包';search.setAttribute('aria-label','搜索表情包');
+ const categories=document.createElement('div');categories.className='ep-sticker-categories';
  const grid=document.createElement('div');grid.className='ep-sticker-grid';
- const status=document.createElement('p');status.setAttribute('role','status');
- const add=document.createElement('label');add.className='ep-home-control';add.append('添加表情包 ');
- const file=document.createElement('input');file.type='file';file.accept=[...imageTypes.keys()].join(',');file.multiple=true;add.append(file);
+ const status=document.createElement('p');status.className='ep-sticker-empty';status.setAttribute('role','status');
+ const controls=document.createElement('div');controls.className='ep-sticker-tools';controls.hidden=!managing;
+ const file=document.createElement('input');file.type='file';file.accept=[...imageTypes.keys(),'.zip'].join(',');file.multiple=true;file.hidden=true;
+ const add=document.createElement('button');add.type='button';add.className='ep-home-control';
+ add.textContent='添加图片或导入 ZIP';add.onclick=()=>file.click();controls.append(add,file);
  const urls=new Set();
+ let category='全部';
  function paint(){
-  urls.forEach(url=>URL.revokeObjectURL(url));urls.clear();grid.replaceChildren();
-  const matches=stickerIndex().filter(item=>item.name.toLowerCase().includes(search.value.trim().toLowerCase()));
-  if(!matches.length)grid.textContent=search.value?'没有匹配的表情包':'添加图片后，下次可直接选用';
+  urls.forEach(url=>URL.revokeObjectURL(url));urls.clear();grid.replaceChildren();categories.replaceChildren();
+  const items=stickerIndex();
+  for(const pack of new Set(['全部',...items.map(item=>item.pack||'我的表情')])){
+   const chip=document.createElement('button');chip.type='button';chip.textContent=pack;
+   chip.setAttribute('aria-pressed',String(pack===category));chip.onclick=()=>{category=pack;paint()};categories.append(chip);
+  }
+  const needle=search.value.trim().toLowerCase();
+  const matches=items.filter(item=>(category==='全部'||category===(item.pack||'我的表情'))&&item.name.toLowerCase().includes(needle));
+  status.textContent=matches.length?'':needle?'没有匹配的表情包':managing?'可添加图片或导入已有 ZIP。':'在「设置 → 表情包」添加后即可选用。';
   for(const item of matches){
-   const tile=document.createElement('button');tile.type='button';tile.setAttribute('aria-label','选择 '+item.name);
-   const img=document.createElement('img');img.alt=item.name;tile.append(img);grid.append(tile);
+   const tile=document.createElement('button');tile.type='button';tile.setAttribute('aria-label',(managing?'删除 ':'选择 ')+item.name);
+   const img=document.createElement('img');img.alt=item.name;img.loading='lazy';tile.append(img);grid.append(tile);
    void mediaStore(item.id).then(blob=>{
     if(!tile.isConnected||!blob)return;
     const url=URL.createObjectURL(blob);urls.add(url);img.src=url;
-    tile.onclick=()=>{onSelect(new File([blob],item.name,{type:blob.type}));dialog.close()};
+    tile.onclick=()=>{
+     if(managing){
+      if(!confirm('删除表情包「'+item.name+'」？'))return;
+      localStorage.setItem(stickerKey,JSON.stringify(stickerIndex().filter(row=>row.id!==item.id||row.pack!==item.pack)));paint();
+     }else{onSelect(new File([blob],item.name,{type:blob.type}));dialog.close()}
+    };
    }).catch(()=>{});
   }
  }
+ async function addImage(image,name,pack){
+  if(!imageTypes.has(image.type)||!image.size||image.size>10*1024*1024)throw Error('请选择 10 MB 内的图片');
+  const entries=stickerIndex();
+  const bytes=await crypto.subtle.digest('SHA-256',await image.arrayBuffer());
+  const id='sticker:'+Array.from(new Uint8Array(bytes),n=>n.toString(16).padStart(2,'0')).join('');
+  if(entries.some(item=>item.id===id&&item.pack===pack))return;
+  await mediaStore(id,image);
+  localStorage.setItem(stickerKey,JSON.stringify([...entries,{id,name,pack}]));
+ }
  file.onchange=async()=>{
-  const selected=[...file.files];file.value='';file.disabled=true;
+  const selected=[...file.files];file.value='';add.disabled=true;status.textContent='正在导入…';
   try{
    for(const image of selected){
-    if(!imageTypes.has(image.type)||!image.size||image.size>12*1024*1024)throw Error('表情包须为 12 MB 内的图片');
-    const id='sticker:'+crypto.randomUUID();
-    await mediaStore(id,image);
-    localStorage.setItem(stickerKey,JSON.stringify([{id,name:image.name},...stickerIndex()]));
+    if(!image.name.toLowerCase().endsWith('.zip')){await addImage(image,image.name,'我的表情');continue}
+    if(!window.EmoiRelay?.enabled)throw Error('导入 ZIP 需要先连接 Émoi');
+    const {stickers}=await window.EmoiRelay.request('/emoi/v2/stickers/unpack',{method:'POST',body:image,timeout:60000});
+    for(const item of stickers){
+     const data=Uint8Array.from(atob(item.data),value=>value.charCodeAt(0));
+     await addImage(new Blob([data],{type:item.mime}),item.name,item.pack);
+    }
    }
-   status.textContent='已加入表情包';
-  }catch(error){status.textContent=error.message}
-  finally{file.disabled=false;if(dialog.open)paint()}
+   if(dialog.open){category='全部';paint();status.textContent='表情包已导入'}
+  }catch(error){if(dialog.open){paint();status.textContent=error.message}}
+  finally{add.disabled=false}
  };
  dialog.addEventListener('close',()=>urls.forEach(url=>URL.revokeObjectURL(url)),{once:true});
- search.oninput=paint;dialog.append(search,grid,add,status,close);dialog.showModal();paint();
+ search.oninput=paint;dialog.append(header,search,categories,controls,status,grid);dialog.showModal();paint();
 }
 function button(label,glyph,action,className='ep-im-more'){
  const el=document.createElement('button');el.type='button';el.className=className;
@@ -118,25 +151,24 @@ function dialogFor(title,{persistent=false}={}){
  if(!persistent)dialog.addEventListener('close',()=>dialog.remove(),{once:true});
  return {dialog,close};
 }
-function openDialpad(){
- const {dialog,close}=dialogFor('语音通话');
- const number=document.createElement('input');number.type='tel';number.inputMode='none';number.setAttribute('aria-label','电话号码');
- const keys=document.createElement('div');keys.className='ep-im-dial-keys';
- for(const digit of '123456789*0#'){
-  const key=document.createElement('button');key.type='button';key.textContent=digit;
-  key.onclick=()=>{number.value+=digit;number.dispatchEvent(new Event('input'))};keys.append(key);
- }
- const erase=document.createElement('button');erase.type='button';erase.className='ep-home-control';erase.textContent='删除一位';
- erase.onclick=()=>{number.value=number.value.slice(0,-1);number.dispatchEvent(new Event('input'))};
- const call=document.createElement('a');call.textContent='用系统电话拨打';call.className='ep-home-control';call.hidden=true;
- number.oninput=()=>{
-  const value=number.value.replace(/[\s()-]/g,'');
-  call.hidden=!/^\+?[0-9*#]{1,32}$/.test(value);
-  if(!call.hidden)call.href='tel:'+value.replace(/#/g,'%23');else call.removeAttribute('href');
- };
- dialog.append(number,keys,erase,call,close);dialog.showModal();
+let activeCall=null;
+function draggable(handle, element, bounds){
+ handle.addEventListener('pointerdown',event=>{
+  if(event.button!==0||event.target.closest('button'))return;
+  const origin=element.getBoundingClientRect(), area=bounds();
+  handle.setPointerCapture(event.pointerId);
+  function move(next){
+   const x=Math.min(Math.max(origin.left-area.left+next.clientX-event.clientX,0),Math.max(0,area.width-origin.width));
+   const y=Math.min(Math.max(origin.top-area.top+next.clientY-event.clientY,0),Math.max(0,area.height-origin.height));
+   element.style.inset='auto';element.style.left=x+'px';element.style.top=y+'px';
+  }
+  handle.addEventListener('pointermove',move);
+  handle.addEventListener('lostpointercapture',()=>handle.removeEventListener('pointermove',move),{once:true});
+ });
 }
-function openCall(item,initialMode,endpoint){
+function openCall(item,initialMode,endpoint,members=[]){
+ if(activeCall){activeCall();return}
+ const participants=members.length?members:[item];
  const dialog=document.createElement('dialog');dialog.className='ep-im-call';
  dialog.setAttribute('aria-label','通话');
  const heading=document.createElement('div');heading.className='ep-call-heading';
@@ -148,7 +180,25 @@ function openCall(item,initialMode,endpoint){
  const utterance=document.createElement('input');utterance.placeholder='说一句，或输入文字';utterance.setAttribute('aria-label','通话内容');
  const send=document.createElement('button');send.type='submit';send.className='ep-home-control';send.textContent='发送';
  const response=document.createElement('p');response.className='ep-call-response';response.setAttribute('aria-live','polite');
- const audio=document.createElement('audio');audio.controls=true;audio.hidden=true;
+ const audio=document.createElement('audio');audio.hidden=true;
+ let queue=[];
+ const stage=document.createElement('div');stage.className='ep-call-stage';
+ const resumeAudio=button('播放回复','play',()=>void playReply(),'ep-call-resume-audio');resumeAudio.hidden=true;
+ async function playReply(){
+  try{await audio.play();resumeAudio.hidden=true}
+  catch{if(dialog.open)resumeAudio.hidden=false}
+ }
+ audio.onended=()=>{resumeAudio.hidden=true;void nextReply()};
+ audio.onerror=()=>{if(dialog.open&&queue.length)void nextReply()};
+ async function nextReply(){
+  const row=queue.shift();
+  if(!row||!dialog.open)return;
+  response.textContent=(members.length?(participants.find(person=>person.id===row.contact_id)?.name||'成员')+'：':'')+row.text;
+  if(row.attachment?.kind==='voice'){
+   try{audio.src=await relay.media(row.attachment);if(dialog.open)await playReply()}
+   catch{if(dialog.open)await nextReply()}
+  }else if(queue.length)await nextReply();
+ }
  const mic=button('开始听写','wave',()=>listen(),'ep-call-control');
  const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
  const [engine,abort]=[Recognition?new Recognition():null,new AbortController()];
@@ -182,7 +232,7 @@ function openCall(item,initialMode,endpoint){
   event.preventDefault();
   const text=withoutEmoji(utterance.value).trim();
   if(!text||busy||!dialog.open)return;
-  busy=true;send.disabled=true;mic.disabled=true;audio.pause();audio.hidden=true;
+  busy=true;send.disabled=true;mic.disabled=true;audio.pause();queue=[];resumeAudio.hidden=true;
   status.textContent='等待对方回复…';
   const callMode=mode;
   try{
@@ -197,17 +247,11 @@ function openCall(item,initialMode,endpoint){
    const deadline=Date.now()+105000;
    while(dialog.open&&Date.now()<deadline){
     const state=await relay.request(endpoint+'?reply_to='+encodeURIComponent(result.message.id),opts);
-    const reply=state.messages.find(row=>row.author==='contact');
-    if(reply){
-     response.textContent=reply.text;status.textContent='通话中';
-     if(reply.attachment?.kind==='voice'){
-      audio.src=await relay.media(reply.attachment);
-      if(!dialog.open)return;
-      audio.hidden=false;void audio.play().catch(()=>{if(dialog.open)status.textContent='点播放收听回复'});
-     }else status.textContent='收到文字回复 · 请检查联系人的语音 API';
-     return;
+    if(!state.replying){
+     queue=state.messages.filter(row=>row.author==='contact');
+     if(!queue.length)throw Error('对方未能回复，请检查联系人的模型');
+     status.textContent='通话中';await nextReply();return;
     }
-    if(!state.replying)throw Error('对方未能回复，请检查联系人的模型');
     await new Promise(resolve=>setTimeout(resolve,1400));
    }
    if(dialog.open)throw Error('回复等待超时，可回聊天查看');
@@ -219,12 +263,32 @@ function openCall(item,initialMode,endpoint){
  flip.textContent='翻转';
  camera.append(video,flip);
  const controls=document.createElement('div');controls.className='ep-call-controls';
- const videoToggle=button('切换视频','video',()=>setMode(mode==='video'?'voice':'video'),'ep-call-control');
- const phone=button('系统拨号','dial',openDialpad,'ep-call-control');
- const end=button('结束','close',()=>dialog.close(),'ep-call-control ep-call-end');
- controls.append(phone,mic,videoToggle,end);
- turns.append(response,audio,exchange);
- dialog.append(heading,camera,turns,controls);document.body.append(dialog);
+ const videoToggle=button('切换视频','video',()=>{if(!busy)setMode(mode==='video'?'voice':'video')},'ep-call-control');
+ const minimize=button('缩小为浮窗','minimize',()=>setMinimized(true),'ep-call-control');
+ const end=button('结束','close',endCall,'ep-call-control ep-call-end');
+ const mini= document.createElement('div');mini.className='ep-call-mini-controls';
+ const restore=button('返回通话','expand',()=>setMinimized(false),'ep-call-control');
+ const endMini=button('结束通话','close',endCall,'ep-call-control ep-call-end');
+ const miniName=document.createElement('span');miniName.textContent=name.textContent;
+ mini.append(miniName,restore,endMini);
+ controls.append(minimize,mic,videoToggle,end);
+ turns.append(response,audio,resumeAudio,exchange);
+ dialog.append(stage,heading,camera,turns,controls,mini);document.body.append(dialog);
+ draggable(camera,camera,()=>dialog.getBoundingClientRect());
+ draggable(mini,dialog,()=>({left:0,top:0,width:document.documentElement.clientWidth,height:window.visualViewport?.height||window.innerHeight}));
+ function setMinimized(value){
+  if(dialog.hasAttribute('data-minimized')===value)return;
+  dialog.close();dialog.removeAttribute('style');camera.removeAttribute('style');
+  dialog.toggleAttribute('data-minimized',value);
+  if(value)dialog.show();else dialog.showModal();
+  if(stream)void video.play().catch(()=>{});
+ }
+ function endCall(){
+  abort.abort();engine?.abort();audio.pause();audio.removeAttribute('src');queue=[];
+  stopCamera();dialog.close();dialog.remove();activeCall=null;
+ }
+ dialog.addEventListener('cancel',event=>{event.preventDefault();endCall()});
+ activeCall=()=>setMinimized(false);
  let facing='user',mode,stream,ticket=0;
  function stopCamera(){
   ticket++;stream?.getTracks().forEach(track=>track.stop());stream=null;video.srcObject=null;
@@ -243,20 +307,22 @@ function openCall(item,initialMode,endpoint){
  }
  function setMode(next){
   mode=next;dialog.dataset.mode=mode;camera.hidden=mode!=='video';
-  dialog.style.removeProperty('--contact-call-background');
-  const background=item.profile?.[mode+'_background'];
-  if(background&&window.EmoiRelay?.enabled)void window.EmoiRelay.media(background).then(url=>{
-   if(dialog.open&&mode===next)dialog.style.setProperty('--contact-call-background','url("'+url+'")');
-  }).catch(()=>{});
+  stage.replaceChildren();stage.toggleAttribute('data-group',participants.length>1&&mode==='video');
+  for(const person of (mode==='video'?participants:participants.slice(0,1))){
+   const tile=document.createElement('div');tile.className='ep-call-participant';
+   const label=document.createElement('span');label.textContent=person.name;tile.append(label);stage.append(tile);
+   const profile=person.profile||{};
+   const background=profile[mode+'_background']||profile.character||profile.avatar;
+   if(background&&relay?.enabled)void relay.media(background).then(url=>{
+    if(tile.isConnected)tile.style.backgroundImage='linear-gradient(transparent 65%,#101d2799),url('+JSON.stringify(url)+')';
+   }).catch(()=>{});
+  }
   videoToggle.setAttribute('aria-pressed',String(mode==='video'));
   if(mode==='video')void startCamera();
   else{stopCamera();status.textContent=ready?'语音通话 · 点波形开始说话':'正在检查联系人连接…'}
  }
  let ready=false;
  mic.disabled=true;
- dialog.addEventListener('close',()=>{
-  abort.abort();engine?.abort();audio.pause();stopCamera();dialog.remove();
- },{once:true});
  dialog.showModal();setMode(initialMode);
  void (async()=>{
   try{
@@ -327,9 +393,16 @@ function messageBubble(msg,members,showName,registerURL,joinCall){
  const bubble=document.createElement('div');bubble.className='ep-im-bubble';
  if(msg.attachment?.kind==='call_invite'){
   const label=msg.attachment.mode==='video'?'视频通话邀请':'语音通话邀请';
-  bubble.textContent=label+' · '+withoutEmoji(msg.text||'');
-  if(joinCall){
-   const connect=button('接听',msg.attachment.mode==='video'?'video':'phone',()=>joinCall(msg.attachment.mode),'ep-im-invite-accept');
+  const answered=msg.call_state==='accept'?'已接听':msg.call_state==='decline'?'已拒接':'';
+  bubble.textContent=[label,withoutEmoji(msg.text||''),answered].filter(Boolean).join(' · ');
+  if(joinCall&&!answered&&Date.now()-Date.parse(msg.created_at)<90000){
+   const connect=button('接听',msg.attachment.mode==='video'?'video':'phone',async()=>{
+    connect.disabled=true;
+    try{
+     await window.EmoiRelay.json('/emoi/v2/call-inbox/'+encodeURIComponent(msg.id),'PATCH',{action:'accept'});
+     joinCall(msg.attachment.mode);
+    }catch{connect.textContent='邀请已处理或已过期'}
+   },'ep-im-invite-accept');
    connect.append(document.createTextNode('接听'));bubble.append(connect);
   }
  }else if(msg.attachment){
@@ -387,7 +460,7 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
  options.append(closeOptions);root.append(options);
  person.onclick=()=>options.showModal();
  const actions=document.createElement('div');actions.className='ep-im-actions';
- actions.append(button('视频','video',()=>openCall(item,'video',endpoint)),button('语音通话','phone',()=>openCall(item,'voice',endpoint)));
+ actions.append(button('视频','video',()=>openCall(item,'video',endpoint,members)),button('语音通话','phone',()=>openCall(item,'voice',endpoint,members)));
  header.append(back,person,actions);root.append(header);
  void window.EmoiAvatars?.paint(avatar,item.id,item.profile?.avatar);
  const body=document.createElement('main');body.className='ep-im-timeline';body.setAttribute('aria-label','与'+(item.name||'联系人')+'的消息');
@@ -554,10 +627,10 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
   for(const row of rows){
    const showTime=!prior||Date.parse(row.created_at)-Date.parse(prior.created_at)>=30*60*1000;
    const sameSender=!showTime&&row.author===prior.author&&row.contact_id===prior.contact_id;
-   const signature=JSON.stringify([row.text,row.attachment,row.delivery,sameSender]);
+   const signature=JSON.stringify([row.text,row.attachment,row.delivery,row.call_state,sameSender]);
    let entry=rendered.get(row.id);
    if(!entry||entry.signature!==signature){
-    const node=messageBubble(row,names,kind==='group'&&!sameSender,registerURL,endpoint?mode=>openCall(item,mode,endpoint):null);
+    const node=messageBubble(row,names,kind==='group'&&!sameSender,registerURL,endpoint?mode=>openCall(item,mode,endpoint,members):null);
     if(hydrated&&!entry)node.classList.add('ep-im-arriving');
     entry={signature,node,time:entry?.time};rendered.set(row.id,entry);
    }
@@ -662,5 +735,5 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
 function latest(kind,id){
  return (local[kind+':'+id]||[]).reduce((recent,row)=>!recent||row.created_at>recent.created_at?row:recent,null);
 }
-window.EmoiMessageApp={open,latest,pinned,togglePin};
+window.EmoiMessageApp={startCall:openCall,isInCall:()=>Boolean(activeCall),manageStickers:()=>openStickers(),open,latest,pinned,togglePin};
 })();

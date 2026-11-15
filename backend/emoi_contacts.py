@@ -17,9 +17,10 @@ import httpx
 from fastapi import BackgroundTasks, HTTPException, Request
 
 try:
-    from . import emoi_worldbooks as worldbooks
+    from . import emoi_worldbooks as worldbooks, emoi_stickers as stickers
 except ImportError:
     import emoi_worldbooks as worldbooks
+    import emoi_stickers as stickers
 
 MAX_CONTACTS = 120
 MAX_MEMBERS = 20
@@ -112,14 +113,22 @@ def init(path):
         """)
         if "favorite" not in {column[1] for column in db.execute("PRAGMA table_info(emoi_album_photos)")}:
             db.execute("ALTER TABLE emoi_album_photos ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0")
+        for table, columns in {
+            "emoi_v2_messages": (("call_state", "TEXT"),),
+            "emoi_v2_moments": (("contact_id", "TEXT"), ("attachment", "TEXT"), ("wake_event", "TEXT")),
+        }.items():
+            existing = {column[1] for column in db.execute(f"PRAGMA table_info({table})")}
+            for column, schema in columns:
+                if column not in existing:
+                    db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {schema}")
+        db.execute("CREATE UNIQUE INDEX IF NOT EXISTS emoi_moment_wake ON emoi_v2_moments(wake_event)")
         worldbooks.init(db)
         db.execute("UPDATE emoi_v2_messages SET delivery='interrupted' WHERE delivery='replying'")
 
 
-def store_wake_message(db, scope, event, text, stamp):
-    """Mirror a committed Room message into exactly one explicitly bound contact."""
+def wake_target(db, scope):
     targets = db.execute("""
-        SELECT c.id, c.name, v.id AS conversation_id
+        SELECT c.id, c.name, c.profile, v.id AS conversation_id
         FROM emoi_v2_contacts c JOIN emoi_v2_members m ON m.contact_id=c.id
         JOIN emoi_v2_conversations v ON v.id=m.conversation_id
         WHERE c.archived=0 AND v.archived=0 AND v.kind='direct'
@@ -127,20 +136,41 @@ def store_wake_message(db, scope, event, text, stamp):
           AND json_extract(c.profile,'$.desire_scope')=?
         LIMIT 2
     """, (scope,)).fetchall()
-    if len(targets) != 1:
+    return targets[0] if len(targets) == 1 else None
+
+
+def store_wake_message(db, scope, event, text, stamp, delivery=None):
+    """Publish a permitted Wren decision in the contact's own conversation or feed."""
+    contact = wake_target(db, scope)
+    if contact is None:
         return None
-    contact = targets[0]
+    delivery = delivery if delivery and delivery.get("contact_id") == contact["id"] else {}
+    attachment = delivery.get("attachment")
+    payload = json.dumps(attachment) if attachment else None
     ident = str(uuid4())
-    inserted = db.execute("""
-      INSERT OR IGNORE INTO emoi_v2_messages(id,conversation_id,author,contact_id,text,nonce,delivery,created_at)
-      VALUES(?,?,'contact',?,?,?,'generated',?)
-    """, (ident, contact["conversation_id"], contact["id"], text, "wren:" + event, stamp)).rowcount
-    return {"title": contact["name"], "body": "发来一条新消息", "url": "/", "id": ident} if inserted else None
+    mode = delivery.get("mode", "text")
+    if mode == "moment":
+        inserted = db.execute("""
+            INSERT OR IGNORE INTO emoi_v2_moments(id,text,created_at,contact_id,attachment,wake_event)
+            VALUES(?,?,?,?,?,?)
+        """, (ident, text, stamp, contact["id"], payload, event)).rowcount
+        summary = "发了一条朋友圈"
+    else:
+        inserted = db.execute("""
+            INSERT OR IGNORE INTO emoi_v2_messages
+              (id,conversation_id,author,contact_id,text,nonce,delivery,created_at,attachment)
+            VALUES(?,?,'contact',?,?,?,'generated',?,?)
+        """, (ident, contact["conversation_id"], contact["id"], text, "wren:" + event, stamp, payload)).rowcount
+        summary = "发来一条新消息"
+        if mode in ("voice_invite", "video_invite"):
+            summary = "邀请你" + ("语音通话" if mode == "voice_invite" else "视频通话")
+    return {"title": contact["name"], "body": summary, "url": "/", "id": ident} if inserted else None
 
 
 def register(app, relay):
     path = relay["DB_PATH"]
     worldbooks.register(app, relay, connect, valid_id, clean_text)
+    stickers.register(app, relay["check_auth"])
 
     def auth(request):
         relay["check_auth"](request)
@@ -639,10 +669,69 @@ def register(app, relay):
                 ident = db.execute("SELECT id FROM emoi_v2_messages WHERE conversation_id=? AND nonce=?",
                                    (cid, nonce)).fetchone()["id"]
         if count and relay.get("push_to_all"):
+            summary = {"voice_invite": "邀请你语音通话", "video_invite": "邀请你视频通话"}
             background.add_task(relay["push_to_all"], {
-                "title": person["name"], "body": "发来一条新消息", "url": "/", "id": ident,
+                "title": person["name"], "body": summary.get(mode, "发来一条新消息"), "url": "/", "id": ident,
             })
         return {"id": ident, "duplicate": not count}
+
+    def call_invite(row):
+        attachment = json.loads(row["attachment"])
+        return {"id": row["id"], "conversation_id": row["conversation_id"],
+                "contact_id": row["contact_id"], "name": row["name"],
+                "mode": attachment["mode"], "created_at": row["created_at"]}
+
+    @app.get("/emoi/v2/call-inbox")
+    async def call_inbox(request: Request):
+        auth(request)
+        with connect(path) as db:
+            row = db.execute("""
+                SELECT m.*, c.name FROM emoi_v2_messages m
+                JOIN emoi_v2_contacts c ON c.id=m.contact_id AND c.archived=0
+                JOIN emoi_v2_conversations v ON v.id=m.conversation_id AND v.archived=0
+                WHERE m.call_state IS NULL AND json_extract(m.attachment,'$.kind')='call_invite'
+                  AND julianday(m.created_at)>julianday('now','-90 seconds')
+                ORDER BY m.rowid DESC LIMIT 1
+            """).fetchone()
+            return {"invite": call_invite(row) if row else None}
+
+    @app.patch("/emoi/v2/call-inbox/{message_id}")
+    async def answer_call(message_id: str, request: Request):
+        auth(request)
+        body = await request.json()
+        action = body.get("action") if isinstance(body, dict) else None
+        if action not in ("accept", "decline"):
+            raise HTTPException(422, "来电处理方式无效")
+        with connect(path) as db:
+            changed = db.execute("""
+                UPDATE emoi_v2_messages SET call_state=? WHERE id=? AND call_state IS NULL
+                  AND json_extract(attachment,'$.kind')='call_invite'
+                  AND julianday(created_at)>julianday('now','-90 seconds')
+            """, (action, valid_id(message_id))).rowcount
+            if not changed:
+                raise HTTPException(409, "来电已处理")
+        return {"ok": True}
+
+    async def prepare_wake(scope, mode, prompt):
+        if mode not in ("image", "voice_invite", "video_invite", "moment"):
+            return None
+        with connect(path) as db:
+            target = wake_target(db, scope)
+        if target is None:
+            return None
+        profile = json.loads(target["profile"])
+        delivery = {"contact_id": target["id"], "mode": mode}
+        if mode in ("voice_invite", "video_invite"):
+            delivery["attachment"] = {"kind": "call_invite", "mode": mode.removesuffix("_invite")}
+        elif mode == "image" or (mode == "moment" and prompt):
+            media = relay.get("contact_media_runtime") or {}
+            if not prompt or not profile.get("image_connection") or not media:
+                return delivery if mode == "moment" else None
+            try:
+                delivery["attachment"] = await media["image"](profile["image_connection"], prompt, profile.get("face_reference"))
+            except (HTTPException, httpx.HTTPError, ValueError, OSError):
+                return delivery if mode == "moment" else None
+        return delivery
 
     @app.get("/emoi/v2/conversations/{conversation_id}/messages")
     async def v2_messages(conversation_id:str, request:Request,limit:int=60,reply_to:str=""):
@@ -665,8 +754,13 @@ def register(app, relay):
     async def list_moments(request: Request):
         auth(request)
         with connect(path) as db:
-            rows = db.execute("SELECT id,text,created_at AS createdAt FROM emoi_v2_moments ORDER BY created_at DESC,id DESC LIMIT 200")
-            return {"posts": [dict(row) for row in rows]}
+            rows = db.execute("""
+                SELECT m.id,m.text,m.created_at AS createdAt,m.contact_id,c.name AS author,m.attachment
+                FROM emoi_v2_moments m LEFT JOIN emoi_v2_contacts c ON c.id=m.contact_id
+                ORDER BY m.created_at DESC,m.id DESC LIMIT 200
+            """)
+            return {"posts": [{**dict(row), "attachment": json.loads(row["attachment"]) if row["attachment"] else None}
+                              for row in rows]}
 
     @app.post("/emoi/v2/moments")
     async def publish_moment(request: Request):
@@ -677,7 +771,7 @@ def register(app, relay):
         ident = valid_id(body.get("id"))
         text = clean_text(body.get("text"), 1000, True)
         with connect(path) as db:
-            db.execute("INSERT OR IGNORE INTO emoi_v2_moments VALUES(?,?,?)", (ident, text, now()))
+            db.execute("INSERT OR IGNORE INTO emoi_v2_moments(id,text,created_at) VALUES(?,?,?)", (ident, text, now()))
             row = db.execute("SELECT id,text,created_at AS createdAt FROM emoi_v2_moments WHERE id=?", (ident,)).fetchone()
         return {"post": dict(row)}
 
@@ -732,4 +826,4 @@ def register(app, relay):
             background.add_task(generate_replies, conv["id"], mid, recipients, body.get("voice_reply") is True, mode)
         return {"message":view_message(row),"model_dispatched":bool(recipients)}
 
-    return {"init":lambda:init(path), "store_wake":store_wake_message}
+    return {"init":lambda:init(path), "store_wake":store_wake_message, "prepare_wake":prepare_wake}

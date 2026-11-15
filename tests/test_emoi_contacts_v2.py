@@ -197,6 +197,51 @@ class ContactIsolationTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["attachment"], {"kind":"call_invite", "mode":"video"})
 
+    def test_wake_can_ring_and_publish_a_moment_as_the_bound_contact(self):
+        from backend.emoi_contacts import connect, now, store_wake_message
+
+        person = self.post("/emoi/v2/contacts", {"name": "角色", "profile": {
+            "proactive_enabled": True, "desire_scope": "gpt",
+        }}).json()["contact"]
+        video = {"contact_id": person["id"], "mode": "video_invite",
+                 "attachment": {"kind": "call_invite", "mode": "video"}}
+        moment = {"contact_id": person["id"], "mode": "moment"}
+        path = str(Path(self.tmp.name) / "emoi-v2-test.db")
+        with connect(path) as db:
+            notice = store_wake_message(db, "gpt", "fixture-ring", "想打视频", now(), video)
+            self.assertIn("视频", notice["body"])
+            self.assertIsNotNone(store_wake_message(db, "gpt", "fixture-moment", "出去走走", now(), moment))
+            self.assertIsNone(store_wake_message(db, "gpt", "fixture-moment", "出去走走", now(), moment))
+        inbox = "/emoi/v2/call-inbox"
+        self.assertEqual(self.client.get(inbox).status_code, 401)
+        invite = self.client.get(inbox, headers=self.h).json()["invite"]
+        self.assertEqual((invite["name"], invite["mode"]), ("角色", "video"))
+        answer = self.client.patch(inbox + "/" + invite["id"], headers=self.h, json={"action": "accept"})
+        self.assertEqual(answer.status_code, 200, answer.text)
+        self.assertIsNone(self.client.get(inbox, headers=self.h).json()["invite"])
+        rows = self.client.get("/emoi/v2/moments", headers=self.h).json()["posts"]
+        self.assertEqual([(row["author"], row["text"]) for row in rows], [("角色", "出去走走")])
+
+    def test_sticker_zip_preserves_group_and_skips_non_images(self):
+        import base64
+        import io
+        from zipfile import ZipFile
+
+        archive = io.BytesIO()
+        image = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jX1YAAAAASUVORK5CYII=")
+        with ZipFile(archive, "w") as zipped:
+            zipped.writestr("亲亲/小猫.png", image)
+            zipped.writestr("__MACOSX/ignored.png", image)
+            zipped.writestr("README.txt", "说明")
+        route = "/emoi/v2/stickers/unpack"
+        self.assertEqual(self.client.post(route, content=archive.getvalue()).status_code, 401)
+        response = self.client.post(route, headers=self.h, content=archive.getvalue())
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["stickers"], [{
+            "name": "小猫.png", "pack": "亲亲", "mime": "image/png",
+            "data": base64.b64encode(image).decode("ascii"),
+        }])
+
     def test_contact_can_switch_between_named_api_and_subscription(self):
         named = "api:" + uuid4().hex
         new = self.post("/emoi/v2/contacts", {"name": "测试", "model_route": named}).json()

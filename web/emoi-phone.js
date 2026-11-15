@@ -161,6 +161,7 @@ function updateClock(){
  for(const n of document.querySelectorAll('[data-ep-weekday]'))n.textContent=now.toLocaleDateString('zh-CN',{weekday:'long'});
 }
 function syncHomeViewport(){
+ document.documentElement.toggleAttribute('data-emoi-phone',mode==='phone');
  document.documentElement.toggleAttribute('data-emoi-home',mode==='phone'&&screen==='home');
 }
 function setMode(next){
@@ -462,7 +463,7 @@ function openMoments(){
    const card=create('article','ep-moment-card');
    const meta=create('div','ep-moment-meta');
    const date=create('time','',new Date(post.createdAt).toLocaleString('zh-CN'));date.dateTime=post.createdAt;
-   meta.append(create('strong','','我'),date);
+   meta.append(create('strong','',post.author||'我'),date);
    const remove=create('button','ep-thread-pin','删除');remove.type='button';
    remove.onclick=async()=>{
     if(!confirm('删除这条动态？'))return;
@@ -475,7 +476,12 @@ function openMoments(){
     }catch(error){status.textContent=error.message}
     finally{remove.disabled=false}
    };
-   meta.append(remove);card.append(meta,create('p','',post.text));feed.append(card);
+   meta.append(remove);card.append(meta,create('p','',post.text));
+   if(post.attachment?.kind==='image'){
+    const image=create('img','ep-moment-image');image.alt='动态图片';image.loading='lazy';card.append(image);
+    void window.EmoiRelay.media(post.attachment).then(url=>image.src=url).catch(()=>image.remove());
+   }
+   feed.append(card);
   }
  }
  form.onsubmit=async e=>{
@@ -492,11 +498,24 @@ function openMoments(){
   finally{publish.disabled=false}
  };
  render();list.append(create('h1','','朋友圈'),status,form,feed);
- if(connected)void window.EmoiRelay.request('/emoi/v2/moments').then(result=>{
-  posts=[...result.posts.map(post=>({...post,remote:true})),...safeRead(MOMENTS_KEY)]
-   .sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
-  status.textContent='';render();
- }).catch(error=>{status.textContent=error.message}).finally(()=>{publish.disabled=false});
+ if(connected){
+  let refreshing=false;
+  const refresh=async()=>{
+   if(refreshing||screen!=='moments'||!feed.isConnected)return;
+   refreshing=true;
+   try{
+    const result=await window.EmoiRelay.request('/emoi/v2/moments');
+    if(!feed.isConnected)return;
+    const next=[...result.posts.map(post=>({...post,remote:true})),...safeRead(MOMENTS_KEY)]
+      .sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+    if(JSON.stringify(posts)!==JSON.stringify(next)){posts=next;render()}
+    status.textContent='';
+   }catch(error){status.textContent=error.message}
+   finally{publish.disabled=false;refreshing=false}
+  };
+  queueMicrotask(refresh);
+  const poll=setInterval(()=>{if(!feed.isConnected)clearInterval(poll);else if(!document.hidden&&(!publish.disabled||!posts.length))void refresh()},15000);
+ }
  root.append(top,list,messageNavigation('moments'));
 }
 function openMessages(){
@@ -737,6 +756,7 @@ function openSettings(){
  }));
  rows.append(listItem('appearance','美化','玻璃风格与气泡动效','settings',openBeauty));
  rows.append(listItem('connect','API 管理','GPT Work 订阅与自定义 API','connect',()=>openConnection()));
+ rows.append(listItem('stickers','表情包','添加图片、导入 ZIP 或管理分组','photo',()=>window.EmoiMessageApp?.manageStickers()));
  rows.append(listItem('worldbooks','世界书','管理全局世界书和联系人专用条目','bookcase',openWorldbooks));
  rows.append(listItem('shared-memory','OB 共享记忆','谢临川与沈知予的空间','memory',()=>{
   openConnection();const settings=$('#contactObSettings');settings.open=true;settings.scrollIntoView({block:'start'});
@@ -950,12 +970,9 @@ function trackPhoneViewport(){
   keyboard=(editing||keyboard)&&layoutHeight-height>100;
   if(!editing&&!keyboard)restingHeight=height;
   root.toggleAttribute('data-ep-keyboard',keyboard);
-  if(keyboard)root.style.setProperty('--ep-visual-height',Math.round(height)+'px');
-  else root.style.removeProperty('--ep-visual-height');
-  if(standalone&&!keyboard){
-   const fullHeight=Math.max(height,window.innerHeight,root.clientHeight);
-   root.style.setProperty('--ep-standalone-height',Math.round(fullHeight)+'px');
-  }
+  const top=Math.max(0,viewport.offsetTop);
+  root.style.setProperty('--ep-visual-height',Math.floor(height)+'px');
+  root.style.setProperty('--ep-dialog-bottom',Math.max(0,window.innerHeight-height-top)+'px');
   root.style.setProperty('--ep-visual-top',(keyboard?Math.max(0,viewport.offsetTop):0)+'px');
  }
  function schedule(){if(!frame)frame=requestAnimationFrame(update)}
@@ -965,6 +982,45 @@ function trackPhoneViewport(){
  document.addEventListener('focusin',schedule);
  document.addEventListener('focusout',schedule);
  update();
+}
+let incomingDialog=null,checkingCalls=false;
+async function checkIncomingCalls(){
+ const relay=window.EmoiRelay,messageApp=window.EmoiMessageApp;
+ if(!relay?.enabled||document.hidden||mode!=='phone'||incomingDialog||checkingCalls||messageApp?.isInCall())return;
+ checkingCalls=true;
+ try{
+  const {invite}=await relay.request('/emoi/v2/call-inbox',{timeout:4000});
+  if(!invite||document.hidden||incomingDialog||messageApp?.isInCall())return;
+  if(!contacts.some(contact=>contact.id===invite.contact_id))await syncRemote();
+  const person=contacts.find(contact=>contact.id===invite.contact_id);
+  if(!person||document.hidden||messageApp?.isInCall())return;
+  const dialog=create('dialog','ep-edit-dialog ep-incoming-call');incomingDialog=dialog;
+  const heading=create('h2','',invite.name);
+  const copy=create('p','',invite.mode==='video'?'视频来电':'语音来电');
+  const footer=create('footer');
+  const answer=async action=>{
+   accept.disabled=true;decline.disabled=true;
+   try{
+    await relay.json('/emoi/v2/call-inbox/'+encodeURIComponent(invite.id),'PATCH',{action});
+    dialog.close();
+    if(action==='accept'){
+     remote.direct.set(person.id,invite.conversation_id);
+     openContactConversation(person.id);
+     messageApp.startCall(person,invite.mode,'/emoi/v2/conversations/'+encodeURIComponent(invite.conversation_id)+'/messages');
+    }
+   }catch(error){
+    if(error.status===409){dialog.close();return}
+    copy.textContent=error.message;accept.disabled=false;decline.disabled=false;
+   }
+  };
+  const decline=create('button','soft-button','拒接'),accept=create('button','primary-button','接听');
+  decline.onclick=()=>void answer('decline');accept.onclick=()=>void answer('accept');
+  footer.append(decline,accept);dialog.append(heading,copy,footer);document.body.append(dialog);
+  dialog.addEventListener('cancel',event=>{event.preventDefault();void answer('decline')});
+  const timeout=setTimeout(()=>{if(dialog.open)dialog.close()},Math.max(0,Date.parse(invite.created_at)+90000-Date.now()));
+  dialog.addEventListener('close',()=>{clearTimeout(timeout);dialog.remove();incomingDialog=null},{once:true});
+  dialog.showModal();
+ }catch{}finally{checkingCalls=false}
 }
 function init(){
  const artButton=$('#emoiSwitchToPhone');
@@ -986,6 +1042,8 @@ function init(){
  window.addEventListener('emoi-connected',refreshRegistry);
  window.addEventListener('online',refreshRegistry);
  if(window.EmoiRelay?.enabled)refreshRegistry();
+ setInterval(()=>void checkIncomingCalls(),5000);
+ document.addEventListener('visibilitychange',()=>void checkIncomingCalls());
 }
 window.EmoiUiMode={openBeauty(){if(mode!=='phone')setMode('phone');const workspace=$('#workspaceDialog');if(workspace.open)workspace.close();openBeauty()},setMode,getMode:()=>mode,openHome,openApp};
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();

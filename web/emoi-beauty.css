@@ -106,11 +106,6 @@ body[data-ui-mode=phone][data-phone-screen=legacy] #app {
   max-height: none;
   overscroll-behavior: none;
 }
-html[data-ep-standalone] body[data-ui-mode=phone][data-phone-screen=home] .emoi-phone-host {
-  position: fixed;
-  inset: var(--ep-visual-top, 0px) 0 auto;
-  height: var(--ep-visual-height, 100dvh);
-}
 @media (max-width: 700px) {
   html[data-ep-standalone] body[data-ui-mode=phone] :is(dialog.page-sheet, dialog.settings-sheet) .sheet-head {
     padding-top: max(52px, env(safe-area-inset-top));
@@ -118,7 +113,7 @@ html[data-ep-standalone] body[data-ui-mode=phone][data-phone-screen=home] .emoi-
   body[data-ui-mode=phone] .ep-edit-dialog[open] {
     --ep-dialog-margin: max(12px, env(safe-area-inset-top));
     position: fixed;
-    inset: auto 0 calc(max(0px, 100dvh - var(--ep-visual-height, 100dvh) - var(--ep-visual-top, 0px))) 0;
+    inset: auto 0 var(--ep-dialog-bottom,0px) 0;
     width: 100%;
     max-width: none;
     height: auto;
@@ -449,7 +444,7 @@ body[data-ui-mode=phone] #emoiPhoneView :is(.ep-record-bar,.ep-im-composer,.ep-i
 .ep-im-screen:has(.ep-voice-draft:not([hidden])) .ep-im-footer { min-height:max(4px,env(safe-area-inset-bottom)); padding-top:0; }
 .ep-im-call[open] {
   position:fixed; inset:var(--ep-visual-top,0px) 0 auto; display:grid; grid-template-rows:auto minmax(0,1fr) auto; gap:16px; margin:0;
-  width:100%; height:var(--ep-visual-height,var(--ep-standalone-height,100dvh)); max-width:none; max-height:none; border:0; color:white;
+  width:100%; height:var(--ep-visual-height,100dvh); max-width:none; max-height:none; border:0; color:white;
   padding:max(32px,env(safe-area-inset-top)) 24px max(24px,env(safe-area-inset-bottom));
   background:linear-gradient(#17233182,#122433c7),var(--contact-call-background,var(--emoi-active-wallpaper,var(--wallpaper))) center / cover;
 }
@@ -501,10 +496,10 @@ body[data-ui-mode=phone][data-dark=true] #emoiPhoneView .ep-im-picker { backgrou
 }
 
 
-html[data-ep-standalone]:has(body[data-ui-mode=phone]) {
+html[data-ep-phone] {
   background: var(--emoi-active-wallpaper,var(--wallpaper)) center / cover no-repeat fixed;
 }
-html[data-ep-standalone] body[data-ui-mode=phone] { background: transparent; }
+html[data-ep-phone] body[data-ui-mode=phone] { background: transparent; }
 html[data-ep-standalone] body[data-ui-mode=phone] .ep-home-bottom {
   padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
 }
@@ -517,23 +512,21 @@ html[data-ep-standalone] body[data-ui-mode=phone] .ep-message-nav {
 .ep-album-grid img { display:block; width:100%; aspect-ratio:1; object-fit:cover; border-radius:14px; }
 .ep-album-grid figcaption { margin-top:4px; overflow-wrap:anywhere; }
 
-/* Standalone fills the layout viewport, including the area behind the home indicator. */
-html[data-ep-standalone]:not([data-ep-keyboard]) body[data-ui-mode=phone]
-:is(.emoi-phone-host, #app, dialog.page-sheet[open], dialog.settings-sheet[open]) {
-  height: max(var(--ep-standalone-height, 0px), 100lvh);
-}
-html[data-ep-standalone]:not([data-ep-keyboard]) body[data-ui-mode=phone] .emoi-phone-host::before {
-  transform: none;
-}
-:is(.ep-im-avatar,.ep-list-avatar,.ep-contact-avatar):has(> .ep-avatar-image) {
-  position: relative;
-  overflow: hidden;
-  isolation: isolate;
+/* Keep the controls within the visible viewport while the root paints the wallpaper. */
+:is(.ep-thread-avatar,.ep-im-avatar,.ep-list-avatar,.ep-contact-avatar,.ep-detail-avatar) {
+  overflow:hidden;
+  flex-shrink:0;
 }
 .ep-avatar-image {
-  position: absolute;
-  inset: 0;
-  max-width: none;
+  position:static;
+  display:block;
+  width:100%;
+  height:100%;
+  min-width:0;
+  min-height:0;
+  max-width:100%;
+  max-height:100%;
+  object-fit:cover;
 }
 
 .ep-call-exchange { position:relative; display:flex; align-items:center; gap:8px; width:min(90%,400px); margin:0 auto 12px; }
@@ -580,3 +573,41 @@ html[data-ep-standalone]:not([data-ep-keyboard]) body[data-ui-mode=phone] .emoi-
 .ep-worldbook-entry > button { margin-top:10px; }
 .ep-edit-dialog form label.ep-worldbook-check { display:flex; flex-direction:row; align-items:center; gap:8px; }
 .ep-edit-dialog form .ep-worldbook-check input { width:auto; margin:0; }
+
+.ep-im-call[open] { isolation:isolate; }
+.ep-call-stage { position:absolute; inset:0; z-index:-1; overflow:hidden; }
+.ep-call-stage:not([data-group]) .ep-call-participant { width:100%; height:100%; }
+.ep-call-participant { min-height:0; background-position:center; background-size:cover; position:relative; }
+.ep-call-participant span { display:none; }
+.ep-call-stage[data-group] { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-auto-rows:minmax(92px,1fr); gap:5px; inset:104px 14px 31%; overflow:auto; }
+.ep-call-stage[data-group] .ep-call-participant { border-radius:16px; background-color:#375365; }
+.ep-call-stage[data-group] .ep-call-participant span { display:block; position:absolute; bottom:6px; left:7px; padding:2px 7px; border-radius:10px; background:#122631af; font-size:12px; }
+.ep-im-call .ep-call-camera { z-index:2; width:clamp(86px,25vw,168px); touch-action:none; user-select:none; cursor:grab; }
+.ep-im-call[data-mode=video] .ep-call-camera { top:106px; right:16px; left:auto; }
+.ep-call-mini-controls { display:none; }
+.ep-im-call[open][data-minimized] {
+  inset:auto max(12px,env(safe-area-inset-right)) calc(max(12px,env(safe-area-inset-bottom)) + 74px) auto;
+  width:min(220px,65vw); height:48px; border-radius:16px; padding:6px; margin:0;
+  z-index:1000; display:flex; align-items:end; background:#203c4d; overflow:hidden;
+}
+.ep-im-call[open][data-minimized][data-mode=video] { height:min(152px,26vh); }
+.ep-im-call[data-minimized] :is(.ep-call-heading,.ep-call-controls,.ep-call-turns,.ep-call-camera button) { display:none; }
+.ep-im-call[data-minimized] .ep-call-camera:not([hidden]) { display:block; inset:0; width:100%; height:100%; }
+.ep-im-call[data-minimized] .ep-call-mini-controls { position:relative; z-index:4; display:flex; width:100%; align-items:center; gap:4px; touch-action:none; cursor:grab; }
+.ep-call-mini-controls span { flex:1; min-width:0; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; font-size:12px; }
+.ep-call-mini-controls .ep-call-control { width:34px; height:34px; flex:none; }
+.ep-call-mini-controls .ep-call-control svg { width:16px; height:16px; }
+.ep-call-resume-audio:not([hidden]) { display:block; margin:0 auto 8px; }
+.ep-sticker-tray[open] { padding:14px 16px max(14px,env(safe-area-inset-bottom)); box-sizing:border-box; width:min(100%,560px); }
+.ep-sticker-tray header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.ep-sticker-tray header h2 { margin:0; }
+.ep-sticker-tray input[type=search] { width:100%; }
+.ep-sticker-categories { display:flex; overflow:auto; gap:6px; padding:8px 0; }
+.ep-sticker-categories button { flex:none; padding:5px 10px; border:0; border-radius:20px; background:#ffffff55; color:inherit; }
+.ep-sticker-categories button[aria-pressed=true] { background:#bed3e6; }
+.ep-sticker-empty { margin:4px 0; min-width:0; }
+.ep-sticker-empty:empty { display:none; }
+.ep-sticker-tray .ep-sticker-grid { grid-template-columns:repeat(auto-fill,minmax(58px,1fr)); margin:0; }
+.ep-sticker-tools[hidden] { display:none; }
+.ep-incoming-call[open] { padding:22px; text-align:center; color:#17304b; }
+.ep-moment-image { display:block; max-width:100%; max-height:340px; border-radius:14px; margin-top:10px; object-fit:contain; }
