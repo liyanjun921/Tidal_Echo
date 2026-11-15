@@ -496,16 +496,10 @@ body[data-ui-mode=phone][data-dark=true] #emoiPhoneView .ep-im-picker { backgrou
 }
 
 
-html[data-ep-phone] {
+html[data-emoi-phone] {
   background: var(--emoi-active-wallpaper,var(--wallpaper)) center / cover no-repeat fixed;
 }
-html[data-ep-phone] body[data-ui-mode=phone] { background: transparent; }
-html[data-ep-standalone] body[data-ui-mode=phone] .ep-home-bottom {
-  padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
-}
-html[data-ep-standalone] body[data-ui-mode=phone] .ep-message-nav {
-  bottom: max(8px, env(safe-area-inset-bottom, 0px));
-}
+html[data-emoi-phone] body[data-ui-mode=phone] { background: transparent; }
 .ep-character-art { display:block; width:min(100%,440px); max-height:55dvh; object-fit:contain; border-radius:18px; }
 .ep-album-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(105px,1fr)); gap:10px; margin-top:14px; }
 .ep-album-grid figure { margin:0; min-width:0; }
@@ -614,24 +608,20 @@ html[data-ep-standalone] body[data-ui-mode=phone] .ep-message-nav {
 
 /* A fixed canvas paints the viewport edges. In standalone only the controls
    use the bottom safe area. Safari manages the toolbar outside the page. */
-html[data-ep-phone] body[data-ui-mode=phone] { --ep-bottom-control: 8px; }
+html[data-emoi-phone] body[data-ui-mode=phone] { --ep-bottom-control: 8px; }
 html[data-ep-standalone]:not([data-ep-keyboard]) body[data-ui-mode=phone] {
   --ep-bottom-control: max(8px, env(safe-area-inset-bottom));
-}
-html[data-ep-phone] body[data-ui-mode=phone]::before {
-  content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
-  background:var(--emoi-active-wallpaper,var(--wallpaper)) center / cover;
 }
 html[data-ep-standalone]:not([data-ep-keyboard]) body[data-ui-mode=phone] .emoi-phone-host {
   inset:0; height:auto;
 }
-html[data-ep-phone] body[data-ui-mode=phone] .ep-home-bottom {
+html[data-emoi-phone] body[data-ui-mode=phone] .ep-home-bottom {
   padding-bottom:var(--ep-bottom-control);
 }
-html[data-ep-phone] body[data-ui-mode=phone] .ep-message-nav {
+html[data-emoi-phone] body[data-ui-mode=phone] .ep-message-nav {
   bottom:var(--ep-bottom-control); width:min(calc(100% - 26px), 380px);
 }
-html[data-ep-phone] body[data-ui-mode=phone] #emoiPhoneView:has(.ep-message-nav) :is(.ep-list-scroll,.ep-messages-list) {
+html[data-emoi-phone] body[data-ui-mode=phone] #emoiPhoneView:has(.ep-message-nav) :is(.ep-list-scroll,.ep-messages-list) {
   padding-bottom:calc(72px + var(--ep-bottom-control));
 }
 .ep-message-settings { display:block; min-height:0; overflow:auto; }
