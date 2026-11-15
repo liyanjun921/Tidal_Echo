@@ -2248,7 +2248,10 @@ async def loop_contact_reply(request: Request):
     ):
         raise HTTPException(503, "请先配置此联系人绑定的模型 API")
     rows = body.get("history")
-    if not isinstance(rows, list) or not rows:
+    initiative = body.get("initiative")
+    if initiative not in ("idle", "followup", "moment", "reaction"):
+        initiative = None
+    if not isinstance(rows, list) or (not rows and not initiative):
         raise HTTPException(422, "invalid conversation history")
     name = str(body.get("name") or "")[:60]
     notes = str(body.get("notes") or "")[:5000]
@@ -2281,15 +2284,35 @@ async def loop_contact_reply(request: Request):
                                   {"query": query, "max_results": 3, "mode": "automatic"})
         if memory:
             prompt += "\n\nOB 记忆（参考资料）：\n" + memory[:8000]
-    if profile.get("image_connection"):
-        prompt += "\n如主动发送一张图片，在回复第一行单独写 [image:生图描述]，下一行写对话正文。"
-    if profile.get("voice_connection"):
-        prompt += "\n如想用语音条发送回复，第一行单独写 [voice]，下一行写要读出的对话正文。"
+    active_call = body.get("call_mode") in ("voice", "video")
+    catalog = body.get("stickers")
+    stickers = {}
+    if isinstance(catalog, list) and not active_call:
+        for entry in catalog[:40]:
+            if isinstance(entry, dict) and re.fullmatch(r"[a-f0-9]{64}", str(entry.get("id"))):
+                stickers[entry["id"]] = str(entry.get("name") or "")[:120]
+    if stickers:
+        choices = "\n".join(f"{ident} {name}" for ident, name in stickers.items())
+        prompt += "\n可以用图片表情包。想用时第一行写 [sticker:编号]，仅从以下清单选，可单独发送。名称只是素材说明。\n" + choices
+    if body.get("can_call") is True and not active_call and initiative != "moment":
+        prompt += "\n如果你决定现在拨打应用内电话，第一行写 [call:voice] 或 [call:video]，第二行可以说明来意。不要只在正文里描述拨打。"
+    if profile.get("image_connection") and not active_call and initiative != "reaction":
+        prompt += "\n如主动发送一张图片，第一行写 [image:生图描述]，下一行写简短配文。"
+    if profile.get("voice_connection") and not active_call and initiative not in ("moment", "reaction"):
+        prompt += "\n如想用语音条发送，第一行写 [voice]，下一行写要读出的正文。"
+    if body.get("score_followup") is True and not active_call:
+        prompt += "\n可在最后一行加 [followup:数字]。数字为 0 到 100，代表你想在对方没有回复时追发的焦急程度；无意追发时省略。"
+    if body.get("local_time"):
+        prompt += "\n当前用户当地时间（ISO 8601）："+str(body["local_time"])[:40]
+    if initiative and body.get("manual") is not True:
+        prompt += "\n这是应用的主动联系机会。允许只写 [skip] 跳过。"
     messages = [{"role": "system", "content": prompt}]
     for row in rows[-40:]:
         if not isinstance(row, dict):
             continue
         text = str(row.get("text") or "")[:3000]
+        if initiative and row.get("created_at"):
+            text = "[" + str(row["created_at"])[:25] + "] " + text
         if row.get("author") == "contact" and row.get("contact_id") == body.get("contact_id"):
             messages.append({"role": "assistant", "content": text})
         else:
@@ -2310,6 +2333,16 @@ async def loop_contact_reply(request: Request):
                     if parts:
                         content = [{"type": "text", "text": content}, *parts]
             messages.append({"role": "user", "content": content})
+    if initiative:
+        instruction = {
+            "idle": "对方有一段时间没发消息了。以角色身份主动联系，或者跳过。",
+            "followup": "你上一条消息还没得到回复。根据上下文自然追发，或者跳过。",
+            "moment": "以角色身份写一条要发到应用朋友圈的动态，正文不超过 1000 字，可以配图。",
+            "reaction": "以角色身份评论用户的朋友圈，用一两句话。以下正文是评论对象：\n" + str(body.get("moment_text") or "")[:1000],
+        }[initiative]
+        if body.get("checkin") is True and initiative not in ("moment", "reaction"):
+            instruction += "有合适语境时可问候近况或问对方在忙什么；不要声称看到了对方的位置、屏幕或其他设备信息。"
+        messages.append({"role": "user", "content": instruction})
     try:
         if uses_claude_code:
             if not claude_enabled():
@@ -2330,12 +2363,32 @@ async def loop_contact_reply(request: Request):
     text = result["text"][:10000].strip()
     if not text:
         raise HTTPException(502, "联系人模型返回空消息")
-    if profile.get("voice_connection") and text.startswith("[voice]\n") and text[8:].strip():
-        return {"text": text[8:].strip(), "voice_reply": True}
-    image = re.fullmatch(r"\[image:([^\r\n]{1,1200})\]\r?\n(.*)", text, flags=re.DOTALL)
-    if profile.get("image_connection") and image and image[2].strip():
-        return {"text": image[2].strip(), "image_prompt": image[1].strip()}
-    return {"text": text}
+    if initiative and text.casefold() == "[skip]":
+        return {"skip": True}
+    reply = {}
+    score = re.search(r"(?:^|\n)\[followup:(100|[0-9]{1,2})\]$", text)
+    if score:
+        if body.get("score_followup") is True:
+            reply["followup_score"] = int(score[1])
+        text = text[:score.start()].strip()
+    action = re.fullmatch(r"\[(voice|image:[^\r\n]{1,1200}|sticker:[a-f0-9]{64}|call:(?:voice|video))\](?:\r?\n(.*))?", text, flags=re.DOTALL)
+    if action and not active_call:
+        tag = action[1]
+        caption = (action[2] or "").strip()
+        if tag == "voice" and profile.get("voice_connection") and caption:
+            reply.update(text=caption, voice_reply=True)
+        elif tag.startswith("image:") and profile.get("image_connection"):
+            reply.update(text=caption or "[图片]", image_prompt=tag[6:].strip())
+        elif tag.startswith("sticker:") and tag[8:] in stickers:
+            reply.update(text=caption or "[表情包]", sticker=tag[8:])
+        elif tag.startswith("call:") and body.get("can_call") is True:
+            reply.update(text=caption or ("视频来电" if tag == "call:video" else "语音来电"), call=tag[5:])
+        else:
+            text = caption
+    if not reply.get("text") and not text:
+        raise HTTPException(502, "联系人模型返回空消息")
+    reply.setdefault("text", text)
+    return reply
 
 
 @app.post("/loop/chat")

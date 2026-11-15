@@ -196,7 +196,8 @@ function setScreen(next){
  app.inert=mode==='phone'&&next!=='legacy';
  if(app.inert)app.setAttribute('aria-hidden','true');else app.removeAttribute('aria-hidden');
  if(mode!=='phone')return;
- if(next==='home')window.EmoiWallpapers?.activate('page:home');
+ if(next==='message-settings')window.EmoiWallpapers?.activate('page:messages');
+ else if(next==='home')window.EmoiWallpapers?.activate('page:home');
  else if(next!=='imessage'&&next!=='legacy')window.EmoiWallpapers?.activate('page:'+next.replace(/-detail$/, ''));
  updateClock();
 }
@@ -429,13 +430,131 @@ function messageNavigation(active){
  const nav=create('nav','ep-message-nav');nav.setAttribute('aria-label','信息导航');
  for(const [id,label,glyph,action] of [
   ['messages','信息','chat',openMessages],['contacts','联系人','contacts',openContacts],
-  ['moments','朋友圈','photo',openMoments]
+  ['moments','朋友圈','photo',openMoments],['settings','设置','settings',openMessageSettings]
  ]){
   const tab=actionButton(label,glyph,action,'ep-message-tab');
   tab.append(create('span','',label));if(active===id)tab.setAttribute('aria-current','page');
   nav.append(tab);
  }
  return nav;
+}
+function openMessageSettings(){
+ setScreen('message-settings');
+ const root=view();root.className='ep-view ep-messages';
+ const top=create('header','ep-messages-top');
+ top.append(actionButton('返回桌面','back',openHome,'ep-messages-action'));
+ const list=create('div','ep-messages-list ep-message-settings');
+ list.append(create('h1','','信息设置'));
+ const makeButton=(label,handler)=>{
+  const button=create('button','ep-action-primary',label);button.type='button';button.onclick=handler;return button;
+ };
+ const section=(label,parent)=>{
+  const panel=create('section','ep-message-settings-panel');
+  panel.append(create('h2','',label));parent.append(panel);return panel;
+ };
+ const appearance=section('外观与气泡',list);
+ appearance.append(makeButton('聊天美化与气泡样式',()=>openBeauty(openMessageSettings)),
+   makeButton('表情包管理与 AI 同步',()=>window.EmoiMessageApp.manageStickers()));
+ const notifications=section('通知',list);
+ const notice=create('p','ep-thread-empty');notice.setAttribute('role','status');
+ notifications.append(makeButton('开启此设备的推送',async()=>{
+  try{await window.EmoiRelay.notify();notice.textContent='已订阅此设备的通知'}catch(e){notice.textContent=e.message}
+ }),makeButton('发送测试通知',async()=>{
+  try{
+   const result=await window.EmoiRelay.json('/app/push_test','POST',{});
+   notice.textContent=result.skipped==='not_configured'?'服务器尚未配置推送密钥':result.sent
+    ?'推送服务已接收，请检查设备通知':'没有可用的推送订阅，请先在此设备开启通知';
+  }catch(e){notice.textContent=e.message}
+ }),notice);
+ const enter=create('input');enter.type='checkbox';enter.checked=localStorage.getItem('emoi-message-enter')!=='off';
+ enter.onchange=()=>localStorage.setItem('emoi-message-enter',enter.checked?'on':'off');
+ const enterRow=create('label','ep-message-rule-check','回车发送');enterRow.prepend(enter);appearance.append(enterRow);
+ const panel=section('角色主动联系',list);
+ const status=create('p','ep-thread-empty');status.setAttribute('role','status');
+ const picker=create('select');picker.setAttribute('aria-label','选择联系人');
+ const placeholder=create('option','','选择联系人…');placeholder.value='';picker.append(placeholder);
+ const editor=create('form');editor.hidden=true;
+ panel.append(picker,status,editor);
+ root.append(top,list,messageNavigation('settings'));
+ const relay=window.EmoiRelay;
+ if(!relay?.enabled){picker.disabled=true;status.textContent='连接私人服务器后可管理角色的定时消息和朋友圈。';return}
+ function paintOptions(){
+  picker.replaceChildren(placeholder);
+  for(const person of contacts.filter(item=>remote.direct.has(item.id))){
+   const option=create('option','',person.name);option.value=person.id;picker.append(option);
+  }
+  if(picker.options.length===1)status.textContent='先添加一个联系人，再设置主动联系规则。';
+ }
+ paintOptions();void syncRemote().then(()=>{if(picker.isConnected&&!picker.value)paintOptions()});
+ const groups=[
+  ['离线推送与定时消息',[
+   ['idle','长时间没消息时主动联系','checkbox'],['idle_minutes','沉默分钟数','number',1,1440],
+   ['checkin','允许主动问候近况','checkbox'],['calls','允许主动发起语音和视频来电','checkbox'],
+   ['push','此角色的主动消息和来电发推送','checkbox'],['quiet','启用安静时段','checkbox'],
+   ['quiet_start','开始','time'],['quiet_end','结束','time'],['zone','时区','text']]],
+  ['追发规则与延迟控制',[
+   ['followup','按角色焦虑值追发','checkbox'],['threshold','最低焦虑值（%）','number',0,100],
+   ['min_wait','最短等待（秒）','number',15,3600],['max_wait','最长等待（秒）','number',15,3600]]],
+  ['朋友圈',[
+   ['moments','允许角色自动发帖','checkbox'],['min_hours','最短发帖间隔（小时）','number',1,168],
+   ['max_hours','最长发帖间隔（小时）','number',1,168],
+   ['reactions','允许角色点赞和评论我的动态','checkbox'],
+   ['like_chance','点赞概率（%）','number',0,100],['comment_chance','评论概率（%）','number',0,100],
+   ['comment_delay','互动延迟（秒）','number',0,3600],['comment_interval','后续互动间隔（秒）','number',0,3600]]]
+ ];
+ let load=0;
+ picker.onchange=async()=>{
+  const version=++load;
+  editor.hidden=true;editor.replaceChildren();status.textContent='';
+  if(!picker.value)return;
+  const path='/emoi/v2/contacts/'+encodeURIComponent(picker.value)+'/message-rules';
+  try{
+   const {settings,count,next_moment}=await relay.request(path);
+   if(version!==load||!editor.isConnected)return;
+   const scheduled=next_moment?' · 下次发帖 '+new Date(next_moment*1000).toLocaleString('zh-CN'):'';
+   status.textContent='本轮主动联系 '+count+'/3'+scheduled;
+   const fields={};
+   for(const [title,items] of groups){
+    const group=create('fieldset');group.append(create('legend','',title));editor.append(group);
+    for(const [key,label,type,min,max] of items){
+     const row=create('label',type==='checkbox'?'ep-message-rule-check':'',label);
+     const input=create('input');input.type=type;input.required=type!=='checkbox';
+     if(type==='checkbox'){input.checked=settings[key];row.prepend(input)}
+     else{
+      input.value=settings[key];if(min!==undefined){input.min=min;input.max=max}
+      if(type==='text')input.autocapitalize='off';
+      row.append(input);
+     }
+     fields[key]=input;group.append(row);
+    }
+   }
+   const actions=create('div','ep-message-settings-actions');
+   const saveButton=create('button','ep-action-primary','保存规则');saveButton.type='submit';
+   actions.append(saveButton);
+   for(const [kind,label] of [['voice','测试语音来电'],['video','测试视频来电'],['moment','让角色立即发帖']]){
+    const run=makeButton(label,async()=>{
+     run.disabled=true;status.textContent='正在处理…';
+     try{
+      await relay.request(path+'/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:kind}),timeout:kind==='moment'?180000:15000});
+      if(version===load)status.textContent=kind==='moment'?'已发到朋友圈':'来电已发出';
+      if(kind!=='moment')void checkIncomingCalls();
+     }catch(e){if(version===load)status.textContent=e.message}
+     finally{run.disabled=false}
+    });
+    actions.append(run);
+   }
+   editor.onsubmit=async event=>{
+    event.preventDefault();saveButton.disabled=true;
+    const values=Object.fromEntries(Object.entries(fields).map(([name,input])=>[
+     name,input.type==='checkbox'?input.checked:input.type==='number'?input.valueAsNumber:input.value.trim()
+    ]));
+    try{await relay.json(path,'PUT',values);if(version===load)status.textContent='已保存到服务器'}
+    catch(e){if(version===load)status.textContent=e.message}
+    finally{saveButton.disabled=false}
+   };
+   editor.append(actions);editor.hidden=false;
+  }catch(e){if(version===load)status.textContent=e.message}
+ };
 }
 const MOMENTS_KEY='emoi-moments-v1';
 function openMoments(){
@@ -476,10 +595,19 @@ function openMoments(){
     }catch(error){status.textContent=error.message}
     finally{remove.disabled=false}
    };
-   meta.append(remove);card.append(meta,create('p','',post.text));
+   meta.append(remove);card.append(meta,create('p','',window.EmoiRich.withoutEmoji(post.text)));
    if(post.attachment?.kind==='image'){
     const image=create('img','ep-moment-image');image.alt='动态图片';image.loading='lazy';card.append(image);
     void window.EmoiRelay.media(post.attachment).then(url=>image.src=url).catch(()=>image.remove());
+   }
+   const reactions=post.reactions||[];
+   const likes=reactions.filter(item=>item.liked).map(item=>item.name);
+   if(likes.length)card.append(create('p','ep-moment-reaction',likes.join('、')+' 点了赞'));
+   for(const item of reactions){
+    if(!item.comment)continue;
+    const line=create('p','ep-moment-reaction');
+    line.append(create('strong','',item.name+'  '),document.createTextNode(window.EmoiRich.withoutEmoji(item.comment)));
+    card.append(line);
    }
    feed.append(card);
   }
@@ -910,9 +1038,9 @@ function applyBeauty(){
  root.style.setProperty('--beauty-accent-light',Math.min(60,Math.max(33,46*(Number.isFinite(beauty.brightness)?beauty.brightness:104)/104))+'%');
  root.style.setProperty('--beauty-accent-sat',Math.min(94,Math.max(0,(Number.isFinite(beauty.saturation)?beauty.saturation:165)*.52))+'%');
 }
-function openBeauty(){
+function openBeauty(onBack=openSettings){
  setScreen('beauty');const root=view();root.className='ep-view ep-settings ep-beauty';
- root.append(header('美化',openSettings));
+ root.append(header('美化',onBack));
  const body=create('div','ep-list-scroll');
  const sample=create('div','ep-beauty-preview');
  const samples=create('div','ep-beauty-samples');
@@ -971,7 +1099,7 @@ function trackPhoneViewport(){
   if(!editing&&!keyboard)restingHeight=height;
   root.toggleAttribute('data-ep-keyboard',keyboard);
   const top=Math.max(0,viewport.offsetTop);
-  root.style.setProperty('--ep-visual-height',Math.floor(height)+'px');
+  root.style.setProperty('--ep-visual-height',height+'px');
   root.style.setProperty('--ep-dialog-bottom',Math.max(0,window.innerHeight-height-top)+'px');
   root.style.setProperty('--ep-visual-top',(keyboard?Math.max(0,viewport.offsetTop):0)+'px');
  }
@@ -1039,7 +1167,7 @@ function init(){
   void syncRemote();
   void window.EmoiModelConnections?.load().catch(()=>{});
  };
- window.addEventListener('emoi-connected',refreshRegistry);
+ window.addEventListener('emoi-connected',()=>{refreshRegistry();void checkIncomingCalls()});
  window.addEventListener('online',refreshRegistry);
  if(window.EmoiRelay?.enabled)refreshRegistry();
  setInterval(()=>void checkIncomingCalls(),5000);

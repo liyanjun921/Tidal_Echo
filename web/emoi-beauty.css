@@ -611,3 +611,47 @@ html[data-ep-standalone] body[data-ui-mode=phone] .ep-message-nav {
 .ep-sticker-tools[hidden] { display:none; }
 .ep-incoming-call[open] { padding:22px; text-align:center; color:#17304b; }
 .ep-moment-image { display:block; max-width:100%; max-height:340px; border-radius:14px; margin-top:10px; object-fit:contain; }
+
+/* A fixed canvas paints the viewport edges. In standalone only the controls
+   use the bottom safe area. Safari manages the toolbar outside the page. */
+html[data-ep-phone] body[data-ui-mode=phone] { --ep-bottom-control: 8px; }
+html[data-ep-standalone]:not([data-ep-keyboard]) body[data-ui-mode=phone] {
+  --ep-bottom-control: max(8px, env(safe-area-inset-bottom));
+}
+html[data-ep-phone] body[data-ui-mode=phone]::before {
+  content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
+  background:var(--emoi-active-wallpaper,var(--wallpaper)) center / cover;
+}
+html[data-ep-standalone]:not([data-ep-keyboard]) body[data-ui-mode=phone] .emoi-phone-host {
+  inset:0; height:auto;
+}
+html[data-ep-phone] body[data-ui-mode=phone] .ep-home-bottom {
+  padding-bottom:var(--ep-bottom-control);
+}
+html[data-ep-phone] body[data-ui-mode=phone] .ep-message-nav {
+  bottom:var(--ep-bottom-control); width:min(calc(100% - 26px), 380px);
+}
+html[data-ep-phone] body[data-ui-mode=phone] #emoiPhoneView:has(.ep-message-nav) :is(.ep-list-scroll,.ep-messages-list) {
+  padding-bottom:calc(72px + var(--ep-bottom-control));
+}
+.ep-message-settings { display:block; min-height:0; overflow:auto; }
+.ep-message-settings-panel {
+  display:grid; gap:10px; margin:0 0 12px; padding:14px;
+  border:1px solid #fff9; border-radius:22px; background:var(--im-bar,#edf5f8d6);
+}
+.ep-message-settings-panel h2 { margin:0 0 4px; font-size:1.05rem; }
+.ep-message-settings-panel form { display:grid; gap:12px; }
+.ep-message-settings-panel form[hidden] { display:none; }
+.ep-message-settings-panel fieldset {
+  display:grid; min-width:0; gap:9px; padding:10px; border:1px solid #819aa763; border-radius:14px;
+}
+.ep-message-settings-panel :is(select,input:not([type=checkbox])) {
+  min-width:0; width:100%; padding:7px 9px; font:inherit; font-size:16px; color:inherit;
+  background:#ffffff40; border:1px solid #819aa763; border-radius:9px;
+}
+.ep-message-settings-panel label:not(.ep-message-rule-check) { display:grid; gap:4px; }
+.ep-message-rule-check { display:flex; align-items:center; gap:8px; min-height:32px; }
+.ep-message-rule-check input { width:18px; height:18px; margin:0; flex:none; }
+.ep-message-settings-actions,.ep-sticker-tools { display:flex; flex-wrap:wrap; gap:8px; }
+.ep-message-settings-panel .ep-thread-empty:empty { display:none; }
+.ep-moment-reaction { margin:8px 0 0; font-size:.87rem; overflow-wrap:anywhere; }

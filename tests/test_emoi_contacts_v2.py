@@ -1,5 +1,7 @@
 """The v2 contact API is a PRIVATE and isolated registry. No fake model delivery."""
+import asyncio
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from uuid import uuid4
@@ -8,20 +10,22 @@ from unittest.mock import patch
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 import httpx
-from backend.emoi_contacts import register
+from backend.emoi_contacts import connect, register
+from backend.emoi_autonomy import DEFAULTS, followup_delay, is_quiet
+from datetime import datetime, timezone
 
 
 class ContactIsolationTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        path = str(Path(self.tmp.name) / "emoi-v2-test.db")
+        path = self.path = str(Path(self.tmp.name) / "emoi-v2-test.db")
         self.uploads = Path(self.tmp.name) / "uploads"
         self.uploads.mkdir()
         app = FastAPI()
         def check_auth(request):
             if request.headers.get("authorization") != "Bearer test-only-owner":
                 raise HTTPException(401, "unauthorized")
-        runtime = register(app, {"DB_PATH":path,"UPLOAD_DIR":self.uploads,"check_auth":check_auth,"loop_base_url":lambda:"http://loop.test"})
+        runtime = self.runtime = register(app, {"DB_PATH":path,"UPLOAD_DIR":self.uploads,"check_auth":check_auth,"loop_base_url":lambda:"http://loop.test"})
         runtime["init"]()
         self.client=TestClient(app)
         self.h={"Authorization":"Bearer test-only-owner"}
@@ -35,6 +39,108 @@ class ContactIsolationTests(unittest.TestCase):
         result=self.post("/emoi/v2/contacts",{"id":str(uuid4()),"name":name})
         self.assertEqual(result.status_code,200,result.text)
         return result.json()
+
+    def test_ai_stickers_and_model_initiated_calls(self):
+        created = self.create("甲")
+        ident = created["contact"]["id"]
+        endpoint = f"/emoi/v2/contacts/{ident}"
+        self.client.patch(endpoint, headers=self.h, json={"model_route": "gpt"})
+        rules = endpoint + "/message-rules"
+        self.assertEqual(self.client.put(rules, headers=self.h, json={"calls": True}).status_code, 200)
+        stored = "att-" + uuid4().hex[:14] + ".gif"
+        (self.uploads / stored).write_bytes(b"test gif")
+        sticker = "a" * 64
+        result = self.post("/emoi/v2/stickers/shared", {
+            "id": sticker, "name": "抱抱", "pack": "日常", "upload": stored,
+        })
+        self.assertEqual(result.status_code, 200, result.text)
+        messages = "/emoi/v2/conversations/" + created["conversation_id"] + "/messages"
+
+        async def fake_reply(client, url, *, json, **kwargs):
+            self.assertTrue(json["can_call"])
+            self.assertEqual(json["stickers"][0]["id"], sticker)
+            is_call = json["history"][-1]["text"] == "视频"
+            reply = {"text": "接电话", "call": "video"} if is_call else {"text": "抱抱", "sticker": sticker}
+            return httpx.Response(200, json=reply, request=httpx.Request("POST", url))
+
+        with patch("httpx.AsyncClient.post", new=fake_reply):
+            for value in ("表情", "视频"):
+                sent = self.post(messages, {"text": value, "nonce": uuid4().hex})
+                self.assertEqual(sent.status_code, 200, sent.text)
+        rows = self.client.get(messages, headers=self.h).json()["messages"]
+        self.assertEqual(rows[1]["attachment"]["kind"], "sticker")
+        invite = self.client.get("/emoi/v2/call-inbox", headers=self.h).json()["invite"]
+        self.assertEqual(invite["mode"], "video")
+        self.assertEqual(invite["id"], rows[3]["id"])
+        answer = self.client.patch("/emoi/v2/call-inbox/" + invite["id"], headers=self.h, json={"action":"accept"})
+        self.assertEqual(answer.status_code, 200, answer.text)
+        self.assertIsNone(self.client.get("/emoi/v2/call-inbox", headers=self.h).json()["invite"])
+
+    def test_manual_moment_uses_bound_contact_and_skips_phantom_user_message(self):
+        created = self.create("甲")
+        ident = created["contact"]["id"]
+        endpoint = f"/emoi/v2/contacts/{ident}"
+        self.client.patch(endpoint, headers=self.h, json={"model_route": "gpt"})
+
+        async def fake_reply(client, url, *, json, **kwargs):
+            self.assertEqual(json["initiative"], "moment")
+            self.assertEqual(json["history"], [])
+            self.assertEqual(json["route"], "gpt")
+            return httpx.Response(200, json={"text": "今晚看到了月亮。"}, request=httpx.Request("POST", url))
+
+        with patch("httpx.AsyncClient.post", new=fake_reply):
+            result = self.post(endpoint + "/message-rules/run", {"mode": "moment"})
+        self.assertEqual(result.status_code, 200, result.text)
+        feed = self.client.get("/emoi/v2/moments", headers=self.h).json()["posts"]
+        self.assertEqual(feed[0]["contact_id"], ident)
+        self.assertEqual(feed[0]["text"], "今晚看到了月亮。")
+
+    def test_followup_delay_and_midnight_quiet_window(self):
+        config = {**DEFAULTS, "threshold": 20, "quiet_start": "23:00", "quiet_end": "07:00", "zone": "UTC"}
+        self.assertIsNone(followup_delay(config, 19))
+        self.assertEqual(followup_delay(config, 20), 600)
+        self.assertEqual(followup_delay(config, 60), 307.5)
+        self.assertEqual(followup_delay(config, 100), 15)
+        self.assertTrue(is_quiet(config, datetime(2026, 11, 15, 1, tzinfo=timezone.utc).timestamp()))
+        self.assertFalse(is_quiet(config, datetime(2026, 11, 15, 7, tzinfo=timezone.utc).timestamp()))
+
+    def test_offline_scheduler_delivers_one_message_and_one_reaction(self):
+        created = self.create("甲")
+        ident = created["contact"]["id"]
+        endpoint = f"/emoi/v2/contacts/{ident}"
+        self.client.patch(endpoint, headers=self.h, json={"model_route": "gpt"})
+        rules = endpoint + "/message-rules"
+        config = {"idle": True, "calls": True, "idle_minutes": 1, "quiet": False,
+                  "reactions": True, "like_chance": 100, "comment_chance": 100, "comment_delay": 0}
+        self.assertEqual(self.client.put(rules, headers=self.h, json=config).status_code, 200)
+        with connect(self.path) as db:
+            db.execute("UPDATE emoi_message_rules SET saved=?", (time.time() - 120,))
+        self.assertEqual(self.post("/emoi/v2/moments", {"id": str(uuid4()), "text": "今天去散步"}).status_code, 200)
+
+        async def fake_reply(client, url, *, json, **kwargs):
+            self.assertEqual(json["history"], [])
+            if json["initiative"] == "idle":
+                reply = {"text": "想给你打电话", "call": "voice"}
+            else:
+                self.assertEqual(json["initiative"], "reaction")
+                self.assertEqual(json["moment_text"], "今天去散步")
+                reply = {"text": "下次一起走走"}
+            return httpx.Response(200, json=reply, request=httpx.Request("POST", url))
+
+        class StopWatch(Exception):
+            pass
+
+        async def stop(_):
+            raise StopWatch
+
+        with patch("httpx.AsyncClient.post", new=fake_reply), patch("backend.emoi_contacts.asyncio.sleep", new=stop):
+            with self.assertRaises(StopWatch):
+                asyncio.run(self.runtime["watch"]())
+        invite = self.client.get("/emoi/v2/call-inbox", headers=self.h).json()["invite"]
+        self.assertEqual(invite["mode"], "voice")
+        self.assertEqual(self.client.get(rules, headers=self.h).json()["count"], 1)
+        feed = self.client.get("/emoi/v2/moments", headers=self.h).json()["posts"]
+        self.assertEqual(feed[0]["reactions"], [{"name": "甲", "liked": 1, "comment": "下次一起走走"}])
 
     def test_requires_owner_secret_even_for_lists(self):
         self.assertEqual(self.client.get("/emoi/v2/contacts").status_code,401)

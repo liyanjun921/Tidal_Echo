@@ -82,6 +82,33 @@ function openStickers(onSelect){
  const file=document.createElement('input');file.type='file';file.accept=[...imageTypes.keys(),'.zip'].join(',');file.multiple=true;file.hidden=true;
  const add=document.createElement('button');add.type='button';add.className='ep-home-control';
  add.textContent='添加图片或导入 ZIP';add.onclick=()=>file.click();controls.append(add,file);
+ const sync=document.createElement('button');sync.type='button';sync.className='ep-home-control';
+ sync.textContent='同步已有表情包给 AI';controls.append(sync);
+ sync.onclick=async()=>{
+  const relay=window.EmoiRelay;
+  if(!relay?.enabled){status.textContent='请先连接 Émoi 服务器';return}
+  sync.disabled=true;add.disabled=true;
+  try{
+   const {ids}=await relay.request('/emoi/v2/stickers/shared');
+   const known=new Set(ids);
+   const items=stickerIndex();
+   let count=0;
+   for(const item of items){
+    const id=item.id.slice('sticker:'.length);
+    if(known.has(id))continue;
+    const blob=await mediaStore(item.id);
+    if(!blob||!imageTypes.has(blob.type))continue;
+    status.textContent='正在同步 '+item.name;
+    const result=await relay.upload(new File([blob],'sticker.'+imageTypes.get(blob.type),{type:blob.type}));
+    await relay.json('/emoi/v2/stickers/shared','POST',{
+     id,name:item.name.trim().slice(0,120)||'表情包',pack:(item.pack||'我的表情').slice(0,120),upload:result.url.split('/').pop()
+    });
+    known.add(id);count++;
+   }
+   status.textContent=count?'已同步 '+count+' 张表情包给 AI':'已同步现有表情包';
+  }catch(e){status.textContent=e.message}
+  finally{sync.disabled=false;add.disabled=false}
+ };
  const urls=new Set();
  let category='全部';
  function paint(){
@@ -100,10 +127,15 @@ function openStickers(onSelect){
    void mediaStore(item.id).then(blob=>{
     if(!tile.isConnected||!blob)return;
     const url=URL.createObjectURL(blob);urls.add(url);img.src=url;
-    tile.onclick=()=>{
+    tile.onclick=async()=>{
      if(managing){
       if(!confirm('删除表情包「'+item.name+'」？'))return;
-      localStorage.setItem(stickerKey,JSON.stringify(stickerIndex().filter(row=>row.id!==item.id||row.pack!==item.pack)));paint();
+      const next=stickerIndex().filter(row=>row.id!==item.id||row.pack!==item.pack);
+      if(window.EmoiRelay?.enabled&&!next.some(row=>row.id===item.id)){
+       try{await window.EmoiRelay.request('/emoi/v2/stickers/shared/'+item.id.slice('sticker:'.length),{method:'DELETE'})}
+       catch(error){status.textContent=error.message;return}
+      }
+      localStorage.setItem(stickerKey,JSON.stringify(next));paint();
      }else{onSelect(new File([blob],item.name,{type:blob.type}));dialog.close()}
     };
    }).catch(()=>{});
@@ -686,7 +718,7 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
   if(!event.isComposing)filterEmojiInput(input);
   updateSend();input.style.height='32px';input.style.height=Math.min(input.scrollHeight,94)+'px';
  });
- input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&e.keyCode!==229){e.preventDefault();if(!submit.disabled)footer.requestSubmit()}});
+ input.addEventListener('keydown',e=>{if(e.key==='Enter'&&localStorage.getItem('emoi-message-enter')!=='off'&&!e.shiftKey&&!e.isComposing&&e.keyCode!==229){e.preventDefault();if(!submit.disabled)footer.requestSubmit()}});
  footer.onsubmit=async e=>{
   e.preventDefault();
   const text=withoutEmoji(input.value).trim(), media=attachment, voice=voiceCheck.checked;

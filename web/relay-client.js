@@ -181,7 +181,7 @@ function wire(){
  navigator.serviceWorker?.addEventListener('message',e=>{if(e.data?.type==='backfill')sync()});
  if(!preview&&'serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>toast('离线缓存暂不可用，在线聊天不受影响'));
 }
-window.EmoiRelay={get enabled(){return !!secret},get base(){return config.base},request,json,load,memories,media,tts,settings,connect,wire,pending,keepPending,clearPending,workspace,
+window.EmoiRelay={get enabled(){return !!secret},get base(){return config.base},request,json,load,memories,media,tts,notify,settings,connect,wire,pending,keepPending,clearPending,workspace,
  cinemaUrl(path){if(!secret||!/^\/api\/media\/[a-f0-9]{24}\/(?:stream|subtitles\/[a-z0-9-]+)$/.test(path))throw Error('影院资源地址不正确');return apiUrl('/emoi/cinema'+path)+'?token='+encodeURIComponent(secret)},
  select(room){activeRoom=room;if(secret)load(room).catch(e=>toast(e.message))},
  send(room,text,attachments,nonce){return json(`/emoi/rooms/${room}/send`,'POST',{text,attachments,nonce})},

@@ -10,17 +10,21 @@ import asyncio
 import json
 import re
 import sqlite3
+import logging
+import time
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from uuid import UUID, uuid4
 
 import httpx
 from fastapi import BackgroundTasks, HTTPException, Request
 
 try:
-    from . import emoi_worldbooks as worldbooks, emoi_stickers as stickers
+    from . import emoi_autonomy as autonomy, emoi_worldbooks as worldbooks, emoi_stickers as stickers
 except ImportError:
     import emoi_worldbooks as worldbooks
     import emoi_stickers as stickers
+    import emoi_autonomy as autonomy
 
 MAX_CONTACTS = 120
 MAX_MEMBERS = 20
@@ -114,7 +118,7 @@ def init(path):
         if "favorite" not in {column[1] for column in db.execute("PRAGMA table_info(emoi_album_photos)")}:
             db.execute("ALTER TABLE emoi_album_photos ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0")
         for table, columns in {
-            "emoi_v2_messages": (("call_state", "TEXT"),),
+            "emoi_v2_messages": (("call_state", "TEXT"), ("followup_score", "INTEGER"),),
             "emoi_v2_moments": (("contact_id", "TEXT"), ("attachment", "TEXT"), ("wake_event", "TEXT")),
         }.items():
             existing = {column[1] for column in db.execute(f"PRAGMA table_info({table})")}
@@ -123,6 +127,7 @@ def init(path):
                     db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {schema}")
         db.execute("CREATE UNIQUE INDEX IF NOT EXISTS emoi_moment_wake ON emoi_v2_moments(wake_event)")
         worldbooks.init(db)
+        autonomy.init(db)
         db.execute("UPDATE emoi_v2_messages SET delivery='interrupted' WHERE delivery='replying'")
 
 
@@ -145,6 +150,10 @@ def store_wake_message(db, scope, event, text, stamp, delivery=None):
     if contact is None:
         return None
     delivery = delivery if delivery and delivery.get("contact_id") == contact["id"] else {}
+    return store_contact_action(db, contact, event, text, stamp, delivery, prefix="wren:")
+
+
+def store_contact_action(db, contact, event, text, stamp, delivery, prefix=""):
     attachment = delivery.get("attachment")
     payload = json.dumps(attachment) if attachment else None
     ident = str(uuid4())
@@ -160,7 +169,7 @@ def store_wake_message(db, scope, event, text, stamp, delivery=None):
             INSERT OR IGNORE INTO emoi_v2_messages
               (id,conversation_id,author,contact_id,text,nonce,delivery,created_at,attachment)
             VALUES(?,?,'contact',?,?,?,'generated',?,?)
-        """, (ident, contact["conversation_id"], contact["id"], text, "wren:" + event, stamp, payload)).rowcount
+        """, (ident, contact["conversation_id"], contact["id"], text, prefix + event, stamp, payload)).rowcount
         summary = "发来一条新消息"
         if mode in ("voice_invite", "video_invite"):
             summary = "邀请你" + ("语音通话" if mode == "voice_invite" else "视频通话")
@@ -227,6 +236,304 @@ def register(app, relay):
         if kind == "voice" and type(duration) in (int, float) and 0 <= duration <= 120:
             attachment["duration"] = round(duration, 2)
         return attachment
+
+    def get_rule(db, contact_id):
+        row = db.execute("SELECT settings FROM emoi_message_rules WHERE contact_id=?", (contact_id,)).fetchone()
+        if row:
+            return {**autonomy.DEFAULTS, **json.loads(row["settings"])}
+        person = db.execute("SELECT profile FROM emoi_v2_contacts WHERE id=?", (contact_id,)).fetchone()
+        return {**autonomy.DEFAULTS, "calls": bool(person and json.loads(person["profile"]).get("proactive_enabled"))}
+
+    def pending_call(db, contact_id):
+        return db.execute("""
+            SELECT 1 FROM emoi_v2_messages WHERE contact_id=? AND call_state IS NULL
+             AND json_extract(attachment,'$.kind')='call_invite'
+             AND julianday(created_at)>julianday('now','-90 seconds')
+        """, (contact_id,)).fetchone()
+
+    async def notify_action(payload):
+        if relay.get("push_to_all"):
+            try:
+                await relay["push_to_all"](payload)
+            except Exception:
+                logging.getLogger(__name__).warning("Émoi notification failed")
+
+    async def action_attachment(profile, reply, text, catalog, can_call=False, voice_reply=False):
+        mode = reply.get("call")
+        if can_call and mode in ("voice", "video"):
+            return {"kind": "call_invite", "mode": mode}
+        sticker = reply.get("sticker")
+        if sticker and any(entry["id"] == sticker for entry in catalog):
+            with connect(path) as db:
+                row = db.execute("SELECT attachment FROM emoi_shared_stickers WHERE id=?", (sticker,)).fetchone()
+            if row:
+                return json.loads(row["attachment"])
+        media = relay.get("contact_media_runtime") or {}
+        try:
+            if reply.get("image_prompt") and profile.get("image_connection") and media:
+                return await media["image"](profile["image_connection"], reply["image_prompt"], profile.get("face_reference"))
+            if len(text) <= 900 and (voice_reply or reply.get("voice_reply") is True):
+                if profile.get("voice_connection") and media:
+                    data = await asyncio.to_thread(media["voice"], profile["voice_connection"], text)
+                elif voice_reply and relay.get("speech_runtime"):
+                    data = await asyncio.to_thread(relay["speech_runtime"]["synthesize"], {"text": text})
+                else:
+                    return None
+                attachment = relay["save_upload_bytes"](data, "reply.mp3", "audio/mpeg")
+                attachment.update(kind="voice", transcript=text)
+                return attachment
+        except (HTTPException, OSError, httpx.HTTPError, ValueError):
+            return None
+        return None
+
+    @app.get("/emoi/v2/stickers/shared")
+    async def shared_stickers(request: Request):
+        auth(request)
+        with connect(path) as db:
+            return {"ids": [row["id"] for row in db.execute("SELECT id FROM emoi_shared_stickers")]}
+
+    @app.post("/emoi/v2/stickers/shared")
+    async def share_sticker(request: Request):
+        auth(request)
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise HTTPException(422, "无效的表情包")
+        ident = clean_text(body.get("id"), 64, True)
+        if not re.fullmatch("[a-f0-9]{64}", ident):
+            raise HTTPException(422, "无效的表情包编号")
+        name = clean_text(body.get("name"), 120, True)
+        pack = clean_text(body.get("pack"), 120, True)
+        attachment = message_attachment({"kind": "sticker", "id": body.get("upload")})
+        with connect(path) as db:
+            db.execute("BEGIN IMMEDIATE")
+            exists = db.execute("SELECT 1 FROM emoi_shared_stickers WHERE id=?", (ident,)).fetchone()
+            if not exists and db.execute("SELECT COUNT(*) FROM emoi_shared_stickers").fetchone()[0] >= 5000:
+                raise HTTPException(409, "服务器表情包已达到 5000 张")
+            db.execute("INSERT OR IGNORE INTO emoi_shared_stickers VALUES(?,?,?,?)",
+                       (ident, name, pack, json.dumps(attachment)))
+        return {"ok": True}
+
+    @app.delete("/emoi/v2/stickers/shared/{sticker_id}")
+    async def unshare_sticker(sticker_id: str, request: Request):
+        auth(request)
+        with connect(path) as db:
+            db.execute("DELETE FROM emoi_shared_stickers WHERE id=?", (sticker_id,))
+        return {"ok": True}
+
+    def direct_recipient(db, contact_id):
+        person = contact(db, contact_id)
+        row = db.execute("""
+            SELECT v.id FROM emoi_v2_conversations v JOIN emoi_v2_members m ON v.id=m.conversation_id
+            WHERE m.contact_id=? AND v.kind='direct' AND v.archived=0
+        """, (person["id"],)).fetchone()
+        if not row:
+            raise HTTPException(404, "联系人会话不可用")
+        return {**dict(person), "conversation_id": row["id"]}
+
+    @app.get("/emoi/v2/contacts/{contact_id}/message-rules")
+    async def read_message_rules(contact_id: str, request: Request):
+        auth(request)
+        with connect(path) as db:
+            person = direct_recipient(db, contact_id)
+            row = db.execute("SELECT * FROM emoi_message_rules WHERE contact_id=?", (person["id"],)).fetchone()
+            count = autonomy.timeline(db, person["conversation_id"], row["saved"])[3] if row else 0
+            return {"settings": get_rule(db, person["id"]), "count": count,
+                    "next_moment": row["next_moment"] if row and json.loads(row["settings"])["moments"] else None}
+
+    @app.put("/emoi/v2/contacts/{contact_id}/message-rules")
+    async def write_message_rules(contact_id: str, request: Request):
+        auth(request)
+        config = autonomy.settings(await request.json())
+        stamp = time.time()
+        with connect(path) as db:
+            db.execute("BEGIN IMMEDIATE")
+            person = direct_recipient(db, contact_id)
+            old = db.execute("SELECT * FROM emoi_message_rules WHERE contact_id=?", (person["id"],)).fetchone()
+            previous = json.loads(old["settings"]) if old else {}
+            next_post = old["next_moment"] if old and all(previous.get(k) == config[k] for k in
+                         ("moments", "min_hours", "max_hours")) else autonomy.next_moment(config, stamp)
+            db.execute("""
+                INSERT INTO emoi_message_rules(contact_id,settings,saved,next_moment) VALUES(?,?,?,?)
+                ON CONFLICT(contact_id) DO UPDATE SET settings=excluded.settings,
+                  next_moment=excluded.next_moment, retry=0
+            """, (person["id"], json.dumps(config), stamp, next_post))
+        return {"settings": config}
+
+    async def generate_action(person, config, trigger, *, manual=False, moment_text=""):
+        cid = person["conversation_id"]
+        profile = json.loads(person["profile"])
+        with connect(path) as db:
+            rows = db.execute("""
+                SELECT m.author,m.contact_id,m.text,m.created_at,c.name
+                FROM emoi_v2_messages m LEFT JOIN emoi_v2_contacts c ON c.id=m.contact_id
+                WHERE m.conversation_id=? ORDER BY m.rowid DESC LIMIT 30
+            """, (cid,)).fetchall()
+            history = [dict(row) for row in reversed(rows)] if trigger != "reaction" else []
+            recent = "\n".join(entry["text"][:3000] for entry in history[-8:])
+            catalog = autonomy.catalog(db, recent) if trigger not in ("moment", "reaction") else []
+            book_context = worldbooks.context(db, recent, person["id"])
+        can_call = config["calls"] and trigger not in ("moment", "reaction")
+        async with httpx.AsyncClient(timeout=90, trust_env=False) as client:
+            response = await client.post(relay["loop_base_url"]() + "/loop/contact-reply", json={
+                "route": person["model_route"], "contact_id": person["id"], "name": person["name"],
+                "notes": person["notes"], "history": history, "profile": profile,
+                "local_time": datetime.now(ZoneInfo(config["zone"])).isoformat(timespec="minutes"),
+                "worldbooks": book_context, "stickers": catalog, "can_call": can_call,
+                "initiative": trigger, "checkin": config["checkin"], "manual": manual, "moment_text": moment_text,
+            })
+            response.raise_for_status()
+            reply = response.json()
+        if reply.get("skip"):
+            return None
+        text = clean_text(reply.get("text"), 1000 if trigger in ("moment", "reaction") else 10000, True)
+        if trigger == "reaction":
+            return text, {}
+        if trigger == "moment":
+            reply = {"image_prompt": reply.get("image_prompt")}
+        attachment = await action_attachment(profile, reply, text, catalog, can_call)
+        mode = "moment" if trigger == "moment" else (
+            attachment["mode"] + "_invite" if attachment and attachment["kind"] == "call_invite" else "text"
+        )
+        return text, {"mode": mode, "attachment": attachment}
+
+    @app.post("/emoi/v2/contacts/{contact_id}/message-rules/run")
+    async def run_message_rule(contact_id: str, request: Request):
+        auth(request)
+        body = await request.json()
+        mode = body.get("mode") if isinstance(body, dict) else None
+        if mode not in ("voice", "video", "moment"):
+            raise HTTPException(422, "无效的操作")
+        with connect(path) as db:
+            person = direct_recipient(db, contact_id)
+            config = get_rule(db, person["id"])
+        if mode == "moment":
+            if not relay.get("loop_base_url"):
+                raise HTTPException(503, "模型服务尚未连接")
+            try:
+                result = await generate_action(person, config, "moment", manual=True)
+            except httpx.HTTPStatusError as error:
+                raise HTTPException(502, f"绑定的模型未能发帖（HTTP {error.response.status_code}）") from None
+            except (httpx.RequestError, ValueError):
+                raise HTTPException(502, "模型服务暂不可用") from None
+            if result is None:
+                raise HTTPException(502, "角色没有生成动态")
+            text, delivery = result
+        else:
+            text = "语音来电测试" if mode == "voice" else "视频来电测试"
+            delivery = {"mode": mode + "_invite", "attachment": {"kind": "call_invite", "mode": mode}}
+        with connect(path) as db:
+            db.execute("BEGIN IMMEDIATE")
+            person = direct_recipient(db, contact_id)
+            if mode != "moment" and pending_call(db, person["id"]):
+                raise HTTPException(409, "已有待接听的来电")
+            event = "manual:" + uuid4().hex
+            item = store_contact_action(db, person, event, text, now(), delivery)
+        if item and config["push"]:
+            await notify_action(item)
+        return {"id": item["id"]}
+
+    async def schedule_one():
+        stamp = time.time()
+        selected = None
+        with connect(path) as db:
+            db.execute("BEGIN IMMEDIATE")
+            for row in db.execute("""
+                SELECT r.* FROM emoi_message_rules r JOIN emoi_v2_contacts c ON c.id=r.contact_id
+                 WHERE c.archived=0 AND c.model_route<>'' AND r.lease<=? AND r.retry<=?
+                 ORDER BY r.retry,r.contact_id
+            """, (stamp, stamp)):
+                config = {**autonomy.DEFAULTS, **json.loads(row["settings"])}
+                if not any(config[k] for k in ("idle", "followup", "moments")):
+                    continue
+                try:
+                    person = direct_recipient(db, row["contact_id"])
+                except HTTPException:
+                    continue
+                decision = autonomy.due(db, row, person["conversation_id"], config, stamp)
+                if decision:
+                    lease = stamp + 300
+                    db.execute("UPDATE emoi_message_rules SET lease=? WHERE contact_id=?", (lease, person["id"]))
+                    selected = row, person, config, decision
+                    break
+        if selected is None:
+            return
+        row, person, config, (trigger, cursor) = selected
+        key = person["id"]
+        payload = None
+        try:
+            result = await asyncio.wait_for(generate_action(person, config, trigger), timeout=175)
+            with connect(path) as db:
+                db.execute("BEGIN IMMEDIATE")
+                latest = db.execute("SELECT * FROM emoi_message_rules WHERE contact_id=?", (key,)).fetchone()
+                current = direct_recipient(db, key)
+                finished = time.time()
+                if latest["lease"] == lease and row["settings"] == latest["settings"] and (
+                    current["updated_at"] == person["updated_at"] and
+                    autonomy.due(db, latest, person["conversation_id"], config, finished) == (trigger, cursor)
+                ):
+                    if result:
+                        text, delivery = result
+                        if delivery["mode"].endswith("_invite") and pending_call(db, key):
+                            delivery = {}
+                        payload = store_contact_action(db, person, trigger + ":" + uuid4().hex, text, now(), delivery)
+                    if trigger == "moment":
+                        db.execute("UPDATE emoi_message_rules SET next_moment=? WHERE contact_id=?",
+                                   (autonomy.next_moment(config, finished), key))
+        finally:
+            with connect(path) as db:
+                db.execute("UPDATE emoi_message_rules SET lease=0,retry=? WHERE contact_id=? AND lease=?",
+                           (time.time() + (10 if payload else 120), key, lease))
+        if payload and config["push"]:
+            await notify_action(payload)
+
+    async def react_one():
+        stamp = time.time()
+        with connect(path) as db:
+            db.execute("BEGIN IMMEDIATE")
+            rows = db.execute("""
+                SELECT a.*,m.text,c.archived FROM emoi_moment_reactions a
+                JOIN emoi_v2_moments m ON m.id=a.moment_id
+                JOIN emoi_v2_contacts c ON c.id=a.contact_id
+                WHERE a.done=0 AND a.due<=? ORDER BY a.due
+            """, (stamp,))
+            for job in rows:
+                config = get_rule(db, job["contact_id"])
+                if job["archived"] or not config["reactions"]:
+                    db.execute("DELETE FROM emoi_moment_reactions WHERE moment_id=? AND contact_id=?",
+                               (job["moment_id"], job["contact_id"]))
+                elif not autonomy.is_quiet(config, stamp):
+                    person = direct_recipient(db, job["contact_id"])
+                    db.execute("UPDATE emoi_moment_reactions SET due=? WHERE moment_id=? AND contact_id=?",
+                               (stamp + 300, job["moment_id"], person["id"]))
+                    break
+            else:
+                return
+        comment = ""
+        if job["wants_comment"]:
+            try:
+                result = await asyncio.wait_for(generate_action(
+                    person, config, "reaction", moment_text=job["text"]), timeout=100)
+                if result:
+                    comment = result[0]
+            except (HTTPException, httpx.HTTPError, TimeoutError, ValueError, OSError):
+                pass
+        with connect(path) as db:
+            db.execute("BEGIN IMMEDIATE")
+            if get_rule(db, person["id"])["reactions"]:
+                db.execute("""
+                    UPDATE emoi_moment_reactions SET comment=?,done=1
+                    WHERE moment_id=? AND contact_id=? AND due=? AND done=0
+                """, (comment, job["moment_id"], person["id"], stamp + 300))
+
+    async def watch():
+        while True:
+            if relay.get("loop_base_url"):
+                try:
+                    await schedule_one()
+                    await react_one()
+                except (HTTPException, httpx.HTTPError, TimeoutError, ValueError, OSError, sqlite3.Error):
+                    logging.getLogger(__name__).warning("Émoi scheduled contact action failed")
+            await asyncio.sleep(5)
 
     def saved_picture(value):
         if value in (None, ""):
@@ -377,7 +684,7 @@ def register(app, relay):
                         if not current or current["model_route"] != recipient["model_route"]:
                             continue
                         rows = db.execute("""
-                          SELECT m.id, m.author, m.contact_id, m.text, m.attachment, c.name
+                          SELECT m.id, m.author, m.contact_id, m.text, m.created_at, m.attachment, c.name
                           FROM emoi_v2_messages m LEFT JOIN emoi_v2_contacts c ON c.id=m.contact_id
                           WHERE m.conversation_id=? ORDER BY m.rowid DESC LIMIT 40
                         """, (cid,)).fetchall()
@@ -392,11 +699,16 @@ def register(app, relay):
                         direct = conversation(db, cid)["kind"] == "direct"
                         recent = "\n".join(entry["text"][:3000] for entry in history[-8:])
                         book_context = worldbooks.context(db, recent, current["id"])
+                        catalog = autonomy.catalog(db, recent) if not call_mode else []
+                        rule = get_rule(db, current["id"])
+                    can_call = direct and not call_mode and rule["calls"]
+                    local_time = datetime.now(ZoneInfo(rule["zone"])).isoformat(timespec="minutes")
                     try:
                         response = await client.post(url, json={
                             "route": current["model_route"], "contact_id": current["id"],
                             "name": current["name"], "notes": current["notes"], "history": history,
-                            "call_mode": call_mode, "worldbooks": book_context,
+                            "call_mode": call_mode, "worldbooks": book_context, "local_time": local_time,
+                            "stickers": catalog, "can_call": can_call, "score_followup": rule["followup"] and not call_mode,
                             "profile": {**profile, "ob_server": profile.get("ob_server", "") if direct else ""},
                         })
                         response.raise_for_status()
@@ -404,26 +716,10 @@ def register(app, relay):
                         text = clean_text(reply.get("text"), 10000, True)
                     except (httpx.HTTPError, ValueError, HTTPException):
                         continue
-                    media = relay.get("contact_media_runtime") or {}
-                    attachment = None
-                    if reply.get("image_prompt") and profile.get("image_connection") and media:
-                        try:
-                            attachment = await media["image"](profile["image_connection"], reply["image_prompt"], profile.get("face_reference"))
-                        except (HTTPException, OSError, httpx.HTTPError, ValueError):
-                            pass
-                    if attachment is None and len(text) <= 900 and (voice_reply or reply.get("voice_reply") is True):
-                        try:
-                            if profile.get("voice_connection") and media:
-                                data = await asyncio.to_thread(media["voice"], profile["voice_connection"], text)
-                            elif voice_reply and relay.get("speech_runtime"):
-                                data = await asyncio.to_thread(relay["speech_runtime"]["synthesize"], {"text": text})
-                            else:
-                                data = None
-                            if data:
-                                attachment = relay["save_upload_bytes"](data, "reply.mp3", "audio/mpeg")
-                                attachment.update(kind="voice", transcript=text)
-                        except (HTTPException, OSError, ValueError):
-                            pass
+                    attachment = await action_attachment(profile, reply, text, catalog, can_call, voice_reply)
+                    score = reply.get("followup_score") if rule["followup"] and not call_mode else None
+                    if type(score) is not int or not 0 <= score <= 100:
+                        score = None
                     reply_id = str(uuid4())
                     with connect(path) as db:
                         db.execute("BEGIN IMMEDIATE")
@@ -435,12 +731,16 @@ def register(app, relay):
                         """, (cid, current["id"])).fetchone()
                         if not still_member:
                             continue
+                        if attachment and attachment["kind"] == "call_invite" and pending_call(db, current["id"]):
+                            attachment = None
                         db.execute("""
-                          INSERT INTO emoi_v2_messages(id,conversation_id,author,contact_id,text,nonce,delivery,created_at,attachment)
-                          VALUES(?,?,'contact',?,?,?,'generated',?,?)
+                          INSERT INTO emoi_v2_messages(id,conversation_id,author,contact_id,text,nonce,delivery,created_at,attachment,followup_score)
+                          VALUES(?,?,'contact',?,?,?,'generated',?,?,?)
                         """, (reply_id, cid, current["id"], text, "reply:"+message_id+":"+current["id"], now(),
-                              json.dumps(attachment, ensure_ascii=False) if attachment else None))
+                              json.dumps(attachment, ensure_ascii=False) if attachment else None, score))
                         completed += 1
+                    if attachment and attachment["kind"] == "call_invite" and rule["push"]:
+                        await notify_action({"title": current["name"], "body": "应用内来电", "url": "/", "id": reply_id})
                     if direct and profile.get("ob_server"):
                         with connect(path) as db:
                             turn = db.execute("SELECT * FROM emoi_v2_messages WHERE id IN (?,?) ORDER BY rowid",
@@ -759,8 +1059,16 @@ def register(app, relay):
                 FROM emoi_v2_moments m LEFT JOIN emoi_v2_contacts c ON c.id=m.contact_id
                 ORDER BY m.created_at DESC,m.id DESC LIMIT 200
             """)
-            return {"posts": [{**dict(row), "attachment": json.loads(row["attachment"]) if row["attachment"] else None}
-                              for row in rows]}
+            posts = []
+            for row in rows:
+                reactions = db.execute("""
+                    SELECT c.name,a.liked,a.comment FROM emoi_moment_reactions a
+                    JOIN emoi_v2_contacts c ON c.id=a.contact_id
+                    WHERE a.moment_id=? AND a.done=1 ORDER BY a.due,a.contact_id
+                """, (row["id"],))
+                posts.append({**dict(row), "attachment": json.loads(row["attachment"]) if row["attachment"] else None,
+                              "reactions": [dict(reaction) for reaction in reactions]})
+            return {"posts": posts}
 
     @app.post("/emoi/v2/moments")
     async def publish_moment(request: Request):
@@ -771,7 +1079,10 @@ def register(app, relay):
         ident = valid_id(body.get("id"))
         text = clean_text(body.get("text"), 1000, True)
         with connect(path) as db:
-            db.execute("INSERT OR IGNORE INTO emoi_v2_moments(id,text,created_at) VALUES(?,?,?)", (ident, text, now()))
+            inserted = db.execute("INSERT OR IGNORE INTO emoi_v2_moments(id,text,created_at) VALUES(?,?,?)",
+                                  (ident, text, now())).rowcount
+            if inserted:
+                autonomy.enqueue_reactions(db, ident, time.time())
             row = db.execute("SELECT id,text,created_at AS createdAt FROM emoi_v2_moments WHERE id=?", (ident,)).fetchone()
         return {"post": dict(row)}
 
@@ -826,4 +1137,4 @@ def register(app, relay):
             background.add_task(generate_replies, conv["id"], mid, recipients, body.get("voice_reply") is True, mode)
         return {"message":view_message(row),"model_dispatched":bool(recipients)}
 
-    return {"init":lambda:init(path), "store_wake":store_wake_message, "prepare_wake":prepare_wake}
+    return {"init":lambda:init(path), "store_wake":store_wake_message, "prepare_wake":prepare_wake, "watch":watch}
