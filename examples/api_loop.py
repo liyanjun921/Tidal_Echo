@@ -870,7 +870,11 @@ class McpServer:
         }
 
 
-CONTACT_OB_SPACES = {"ob-space-one": "空间一 · 谢临川", "ob-space-two": "空间二 · 沈知予"}
+CONTACT_OB_SPACES = {
+    "ob-space-one": "空间一 · 谢临川",
+    "ob-space-two": "空间二 · 沈知予",
+    "ob-space-three": "空间三",
+}
 
 
 class McpManager:
@@ -1866,7 +1870,10 @@ async def loop_mcp_list():
 
 @app.post("/loop/mcp")
 async def loop_mcp_upsert(request: Request):
-    body = await request.json()
+    return await upsert_mcp(await request.json())
+
+
+async def upsert_mcp(body):
     name = TOOL_NAME_RE.sub("_", str(body.get("name") or "")).strip("_")[:32]
     if not name:
         raise HTTPException(status_code=400, detail="name required (letters, digits, _ -)")
@@ -2184,6 +2191,62 @@ async def album_suggest_person(request: Request):
     return {"contact_id": refs[index - 1] if 1 <= index <= len(refs) else None}
 
 
+def contact_ob_url(value, *, dashboard=False):
+    if not isinstance(value, str) or not value.strip() or len(value) > 2048:
+        raise HTTPException(422, "请填写有效的 OB 地址")
+    value = value.strip()
+    try:
+        parts = urlsplit(value)
+        hostname = parts.hostname
+        parts.port  # Validate an explicitly supplied port.
+    except ValueError:
+        raise HTTPException(422, "OB 地址格式无效") from None
+    if (not hostname or parts.scheme not in ("https", "http") or parts.username is not None or parts.password is not None
+            or parts.query or parts.fragment or "\\" in value or any(char.isspace() for char in value)):
+        raise HTTPException(422, "请填写不含凭据、查询参数或片段的 HTTP(S) 地址")
+    if dashboard and parts.scheme == "http" and hostname not in ("localhost", "127.0.0.1", "::1"):
+        raise HTTPException(422, "手机上的 OB 管理页请使用 HTTPS 地址")
+    if dashboard and parts.path.rstrip("/").endswith("/mcp"):
+        raise HTTPException(422, "请填写 OB 管理页地址；空间的 /mcp 地址填在下方")
+    return value
+
+
+@app.post("/loop/contact-ob/dashboard")
+async def save_contact_ob_dashboard(request: Request):
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(422, "无效的管理页配置")
+    value = body.get("url")
+    url = "" if value == "" else contact_ob_url(value, dashboard=True)
+    cfg = load_config()
+    cfg["contact_ob_dashboard"] = url
+    save_config(cfg)
+    return {"dashboard_url": url}
+
+
+@app.post("/loop/contact-ob/space")
+async def save_contact_ob_space(request: Request):
+    body = await request.json()
+    name = body.get("space") if isinstance(body, dict) else None
+    if not isinstance(name, str) or name not in CONTACT_OB_SPACES:
+        raise HTTPException(422, "请选择 OB 空间一、二或三")
+    url = contact_ob_url(body.get("url"))
+    authorization = body.get("authorization", "")
+    if not isinstance(authorization, str) or len(authorization) > 4096 or "\r" in authorization or "\n" in authorization:
+        raise HTTPException(422, "Authorization 格式无效")
+    authorization = authorization.strip()
+    if authorization and not authorization.lower().startswith("bearer "):
+        authorization = "Bearer " + authorization
+    rows = mcp_manager.configured()
+    for row in rows:
+        if row["name"] != name and row["name"] in CONTACT_OB_SPACES and row.get("url", "").rstrip("/") == url.rstrip("/"):
+            raise HTTPException(422, "此 MCP 地址已绑定另一个 OB 空间，请核对各空间自己的地址")
+    await upsert_mcp({"name": name, "transport": "http", "url": url, "enabled": True,
+                      "headers": {"Authorization": authorization} if authorization else {},
+                      "keep_authorization": not authorization})
+    return await contact_memory_servers()
+
+
 @app.get("/loop/contact-memory-servers")
 async def contact_memory_servers():
     servers = []
@@ -2193,10 +2256,20 @@ async def contact_memory_servers():
         tools = {tool.name for tool in server.tools} if server else set()
         if name not in CONTACT_OB_SPACES and "breath_search" not in tools:
             continue
-        servers.append({"name": name, "label": CONTACT_OB_SPACES.get(name, name),
+        endpoint = ""
+        if name in CONTACT_OB_SPACES and configured.get(name, {}).get("url"):
+            try:
+                endpoint = contact_ob_url(configured[name]["url"])
+            except HTTPException:
+                pass
+        servers.append({"name": name, "label": CONTACT_OB_SPACES.get(name, name), "mcp_url": endpoint,
                         "configured": name in configured, "online": bool(server and server.status == "online"),
                         "search": "breath_search" in tools, "archive": "chat_append" in tools})
-    return {"servers": servers}
+    try:
+        dashboard = contact_ob_url(load_config().get("contact_ob_dashboard"), dashboard=True)
+    except HTTPException:
+        dashboard = ""
+    return {"servers": servers, "dashboard_url": dashboard}
 
 
 async def contact_ob(server_name, tool, arguments):

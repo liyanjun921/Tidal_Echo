@@ -11,6 +11,9 @@ const phone=document.getElementById('emoiPhone');
 if(!phone)return;
 const $=(s,r=document)=>r.querySelector(s);
 const icoPaths={
+ phone:'<path d="M6.8 3.5 9.4 7l-1.8 2.4c1.2 2.6 3.1 4.5 5.7 5.7l2.4-1.8 3.5 2.6c.6.4.7 1.2.4 1.8l-1.1 1.9c-.3.5-.9.8-1.5.7C9.5 19.4 4.1 14 3.2 6.5c-.1-.6.2-1.2.7-1.5l1.1-1.1c.5-.5 1.4-.6 1.8-.4Z"/>',
+ camera:'<rect x="3" y="6.5" width="12" height="11" rx="2"/><path d="m15 10 5-3v10l-5-3"/>',
+ mute:'<path d="M5 9v6h4l5 4V5L9 9Zm12 1 4 4m0-4-4 4"/>',
  heart:'<path d="M20.8 8.6c0 4.3-8.8 9.6-8.8 9.6S3.2 12.9 3.2 8.6A4.5 4.5 0 0 1 12 7.1a4.5 4.5 0 0 1 8.8 1.5Z"/>',
  apps:'<path d="M4 4h6v6H4zm10 0h6v6h-6zM4 14h6v6H4zm10 0h6v6h-6z"/>',
   compose:'<path d="M12 4H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-7M10 14l1-4 7-7 3 3-7 7-4 1Z"/>',
@@ -1009,15 +1012,21 @@ function openSettings(){
  rows.append(listItem('connect','API 管理','GPT Work 订阅与自定义 API','connect',()=>openConnection()));
  rows.append(listItem('stickers','表情包','添加图片、导入 ZIP 或管理分组','photo',()=>window.EmoiMessageApp?.manageStickers()));
  rows.append(listItem('worldbooks','世界书','管理全局世界书和联系人专用条目','bookcase',openWorldbooks));
- rows.append(listItem('shared-memory','OB 共享记忆','谢临川与沈知予的空间','memory',()=>{
-  openConnection();const settings=$('#contactObSettings');settings.open=true;settings.scrollIntoView({block:'start'});
- }));
+ rows.append(listItem('shared-memory','OB 共享记忆','打开原有 OB · 空间 1 / 2 / 3','memory',openOb));
  rows.append(listItem('backup','备份与导入','导出本机图片、聊天和设置','bookcase',()=>{
   openConnection();$('#exportDeviceButton').scrollIntoView({block:'center'});
  }));
  body.append(rows);
  const priv=create('div','ep-privacy-note');priv.innerHTML=icon('shield')+'<p>界面模式与联系人草稿保存在当前浏览器，不会清空 Émoi 原有聊天或记忆。切换模式不重建服务。</p>';
  body.append(priv);root.append(body);
+}
+function openOb(){
+ if(mode!=='phone')setMode('phone');
+ $('#connectionDialog')?.close();
+ setScreen('ob');const root=view();root.className='ep-view ep-list-screen ep-ob-screen';
+ root.append(header('OB 共享记忆',openSettings));
+ const body=create('div','ep-list-scroll ep-ob-page');root.append(body);
+ window.EmoiContactMedia?.mountOb(body);
 }
 function openMore(){
  setScreen('more');const root=view();root.className='ep-view ep-list-screen';root.append(header('全部应用',openHome));
@@ -1268,35 +1277,61 @@ async function checkIncomingCalls(){
   if(!contacts.some(contact=>contact.id===invite.contact_id))await syncRemote();
   const person=contacts.find(contact=>contact.id===invite.contact_id);
   if(!person||document.hidden||messageApp?.isInCall())return;
-  const dialog=create('dialog','ep-edit-dialog ep-incoming-call');incomingDialog=dialog;
-  const heading=create('h2','',invite.name);
+  const banner=create('aside','ep-call-banner');incomingDialog=banner;
+  banner.setAttribute('aria-label','应用内来电');
+  const head=create('div','ep-call-banner-info');
+  const avatar=create('span','ep-call-banner-avatar',invite.name.slice(0,1));
+  const caller=create('div','ep-call-banner-caller');caller.setAttribute('role','status');
+  const heading=create('strong','',invite.name);
   const label=invite.mode==='video'?'视频来电':'语音来电';
   const copy=create('p','',invite.trigger==='owner_request'?label+' · 应你的请求':label);
-  const footer=create('footer');
+  caller.append(heading,copy);head.append(avatar,caller);
+  const controls=create('div','ep-call-banner-controls');
+  const compact=actionButton('展开来电','phone',()=>collapse(false),'ep-call-banner-compact');
+  compact.append(create('span','',invite.name+' · '+label));compact.hidden=true;
+  let expiry,ringing;
+  function closeBanner(){
+   clearTimeout(expiry);clearInterval(ringing);
+   if(banner.hasAttribute('popover'))banner.hidePopover();
+   banner.remove();
+   if(incomingDialog===banner)incomingDialog=null;
+  }
+  function collapse(hidden){
+   clearInterval(ringing);
+   head.hidden=hidden;controls.hidden=hidden;compact.hidden=!hidden;
+   banner.toggleAttribute('data-compact',hidden);
+   (hidden?compact:hide).focus({preventScroll:true});
+  }
   const answer=async action=>{
-   accept.disabled=true;decline.disabled=true;
+   accept.disabled=true;decline.disabled=true;hide.disabled=true;
+   clearInterval(ringing);
    try{
     await relay.json('/emoi/v2/call-inbox/'+encodeURIComponent(invite.id),'PATCH',{action});
-    dialog.close();
-    if(action==='accept'){
+    closeBanner();
+    if(action==='accept'&&!messageApp.isInCall()){
      if(mode!=='phone')setMode('phone');
      remote.direct.set(person.id,invite.conversation_id);
      openContactConversation(person.id);
      messageApp.startCall(person,invite.mode,'/emoi/v2/conversations/'+encodeURIComponent(invite.conversation_id)+'/messages');
     }
    }catch(error){
-    if(error.status===409){dialog.close();return}
-    copy.textContent=error.message;accept.disabled=false;decline.disabled=false;
+    if(error.status===409){closeBanner();return}
+    copy.textContent=error.message;accept.disabled=false;decline.disabled=false;hide.disabled=false;
    }
   };
-  const decline=create('button','soft-button','拒接'),accept=create('button','primary-button','接听');
-  decline.onclick=()=>void answer('decline');accept.onclick=()=>void answer('accept');
-  footer.append(decline,accept);dialog.append(heading,copy,footer);document.body.append(dialog);
-  dialog.addEventListener('cancel',event=>{event.preventDefault();void answer('decline')});
-  const timeout=setTimeout(()=>{if(dialog.open)dialog.close()},Math.max(0,invite.remaining_seconds!=null?invite.remaining_seconds*1000:Date.parse(invite.created_at)+90000-Date.now()));
-  let ringing;
-  dialog.addEventListener('close',()=>{clearTimeout(timeout);clearInterval(ringing);dialog.remove();incomingDialog=null},{once:true});
-  try{dialog.showModal()}catch(error){clearTimeout(timeout);dialog.remove();incomingDialog=null;throw error}
+  const hide=actionButton('隐藏来电','mute',()=>collapse(true),'ep-call-banner-hide');
+  hide.append(create('span','','隐藏'));
+  const decline=actionButton('拒接','phone',()=>void answer('decline'),'ep-call-banner-answer ep-call-banner-decline');
+  const accept=actionButton('接听',invite.mode==='video'?'camera':'phone',()=>void answer('accept'),'ep-call-banner-answer ep-call-banner-accept');
+  controls.append(hide,decline,accept);banner.append(head,controls,compact);
+  banner.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();collapse(true)}});
+  if(typeof banner.showPopover==='function')banner.setAttribute('popover','manual');
+  document.body.append(banner);
+  if(banner.hasAttribute('popover')){
+   try{banner.showPopover()}catch{banner.removeAttribute('popover')}
+  }
+  void window.EmoiAvatars?.paint(avatar,person.id,person.profile?.avatar);
+  expiry=setTimeout(closeBanner,Math.max(0,invite.remaining_seconds!=null?invite.remaining_seconds*1000:Date.parse(invite.created_at)+90000-Date.now()));
   ringIncomingCall();ringing=setInterval(ringIncomingCall,2700);
  }catch(error){console.debug('Émoi 来电暂不可读取：',error.message)}
  finally{checkingCalls=false}
@@ -1321,12 +1356,13 @@ function init(){
  };
  window.addEventListener('emoi-connected',()=>{refreshRegistry();void checkIncomingCalls()});
  window.addEventListener('online',refreshRegistry);
+ window.addEventListener('emoi-ob-binding-changed',()=>void syncRemote());
  if(window.EmoiRelay?.enabled){refreshRegistry();void checkIncomingCalls()}
  window.addEventListener('emoi-call-available',()=>void checkIncomingCalls());
  document.addEventListener('pointerdown',unlockCallAudio,{passive:true});
  setInterval(()=>void checkIncomingCalls(),2500);
  document.addEventListener('visibilitychange',()=>void checkIncomingCalls());
 }
-window.EmoiUiMode={openBeauty(){if(mode!=='phone')setMode('phone');const workspace=$('#workspaceDialog');if(workspace.open)workspace.close();openBeauty()},setMode,getMode:()=>mode,openHome,openApp};
+window.EmoiUiMode={openBeauty(){if(mode!=='phone')setMode('phone');const workspace=$('#workspaceDialog');if(workspace.open)workspace.close();openBeauty()},setMode,getMode:()=>mode,openHome,openApp,openOb};
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();

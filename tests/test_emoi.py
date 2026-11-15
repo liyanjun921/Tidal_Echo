@@ -7,7 +7,8 @@ import sqlite3
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
 
 import httpx
 
@@ -57,6 +58,60 @@ class ModelConnectionTests(unittest.TestCase):
             authenticated = client.post(path, json=self.first, headers={"Authorization": "Bearer test-owner-secret-only"})
             self.assertEqual(authenticated.json(), {"models": []})
             proxy.assert_called_once_with("/loop/model-connections/models", method="POST", body=self.first)
+
+    def test_ob_dashboard_and_three_private_space_connections(self):
+        dashboard = "https://ob.example.invalid/dashboard"
+        self.assertEqual(self.client.post("/loop/contact-ob/dashboard", json={"url": dashboard}).json(),
+                         {"dashboard_url": dashboard})
+        for invalid in ("javascript:alert(1)", "https://ob.example.invalid/mcp", "https://ob.example.invalid/?token=secret"):
+            self.assertEqual(self.client.post("/loop/contact-ob/dashboard", json={"url": invalid}).status_code, 422)
+        connections = {}
+        async def fake_restart(name, entry):
+            marker = name.removeprefix("ob-space-")
+            server = SimpleNamespace(
+                name=name, status="online", public=lambda: {"name": name},
+                tools=[SimpleNamespace(name="breath_search"), SimpleNamespace(name="chat_append")],
+                call=AsyncMock(return_value=SimpleNamespace(isError=False, content=[SimpleNamespace(type="text", text=marker)])),
+            )
+            connections[name] = server
+            return server
+
+        with patch.object(loop.mcp_manager, "servers", connections), patch.object(loop.mcp_manager, "restart", side_effect=fake_restart):
+            for number in ("one", "two", "three"):
+                key = "ob-space-" + number
+                response = self.client.post("/loop/contact-ob/space", json={
+                    "space": key, "url": f"https://{number}.ob.example.invalid/mcp", "authorization": "test-token",
+                })
+                self.assertEqual(response.status_code, 200, response.text)
+                self.assertNotIn("test-token", response.text)
+                self.assertEqual(response.json()["dashboard_url"], dashboard)
+            rows = self.client.get("/loop/contact-memory-servers").json()["servers"]
+            self.assertEqual([row["name"] for row in rows], list(loop.CONTACT_OB_SPACES))
+            self.assertTrue(all(row["search"] and row["archive"] for row in rows))
+            self.assertEqual(loop.mcp_manager.openai_tools(), [])
+            duplicate = self.client.post("/loop/contact-ob/space", json={
+                "space": "ob-space-three", "url": "https://two.ob.example.invalid/mcp/",
+            })
+            self.assertEqual(duplicate.status_code, 422)
+            for number in ("one", "two", "three"):
+                self.assertEqual(asyncio.run(loop.contact_ob("ob-space-" + number, "breath_search", {"query":"test"})), number)
+            archive = self.client.post("/loop/contact-archive", json={
+                "server":"ob-space-three", "conversation_id":"fixture", "messages":[{"text":"one"},{"text":"two"}],
+            })
+            self.assertTrue(archive.json()["ok"])
+            self.assertEqual(connections["ob-space-three"].call.await_args.args[0], "chat_append")
+            self.assertEqual(connections["ob-space-one"].call.await_count, 1)
+            self.assertEqual(connections["ob-space-two"].call.await_count, 1)
+
+    def test_ob_space_relay_requires_owner(self):
+        route = "/app/loop/contact-ob/space"
+        fixture = {"space":"ob-space-three","url":"https://third.example.invalid/mcp"}
+        with TestClient(relay.app) as client, patch.object(relay, "loop_json", return_value={"servers":[]}) as proxy:
+            self.assertEqual(client.post(route, json=fixture).status_code, 401)
+            proxy.assert_not_called()
+            result = client.post(route, json=fixture, headers={"Authorization":"Bearer test-owner-secret-only"})
+            self.assertEqual(result.status_code, 200)
+            proxy.assert_called_once_with("/loop/contact-ob/space", method="POST", body=fixture)
 
     def test_manage_named_connections_and_route_replies(self):
         saved = self.client.post(self.root, json=self.first)

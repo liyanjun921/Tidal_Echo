@@ -784,6 +784,9 @@ def register(app, relay):
                         await notify_action({"title": current["name"], "body": "应用内来电", "url": "/", "id": call_id})
                     if direct and profile.get("ob_server"):
                         with connect(path) as db:
+                            current_profile = json.loads(contact(db, current["id"], active=False)["profile"])
+                            if current_profile.get("ob_server") != profile["ob_server"]:
+                                continue
                             turn = db.execute("SELECT * FROM emoi_v2_messages WHERE id IN (?,?) ORDER BY rowid",
                                               (message_id, reply_id)).fetchall()
                         try:

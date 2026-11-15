@@ -1126,6 +1126,13 @@ async def loop_model_catalog(request: Request):
     return await asyncio.to_thread(loop_json, "/loop/model-connections/models", method="POST", body=body)
 
 
+@app.post("/app/loop/contact-ob/space")
+async def loop_bind_ob_space(request: Request):
+    check_auth(request)
+    body = await request.json()
+    return await asyncio.to_thread(loop_json, "/loop/contact-ob/space", method="POST", body=body)
+
+
 @app.post("/app/loop/{path:path}")
 async def loop_proxy_post(request: Request, path: str):
     check_auth(request)

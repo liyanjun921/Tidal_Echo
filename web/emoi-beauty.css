@@ -603,7 +603,6 @@ html[data-emoi-phone] body[data-ui-mode=phone] { background: transparent; }
 .ep-sticker-empty:empty { display:none; }
 .ep-sticker-tray .ep-sticker-grid { grid-template-columns:repeat(auto-fill,minmax(58px,1fr)); margin:0; }
 .ep-sticker-tools[hidden] { display:none; }
-.ep-incoming-call[open] { padding:22px; text-align:center; color:#17304b; }
 .ep-moment-image { display:block; max-width:100%; max-height:340px; border-radius:14px; margin-top:10px; object-fit:contain; }
 
 /* A fixed canvas paints the viewport edges. In standalone only the controls
@@ -724,3 +723,51 @@ body[data-ui-mode=phone][data-dark=true] #emoiPhoneView.ep-moments {
   flex-basis:100%; min-width:0; padding:8px; resize:vertical; border:1px solid #ffffff70;
   border-radius:9px; color:inherit; background:#ffffff22; font:inherit; font-size:16px;
 }
+
+.ep-call-banner {
+  position:fixed; z-index:10000; inset:auto 0 auto; bottom:auto;
+  top:calc(var(--ep-visual-top, 0px) + env(safe-area-inset-top, 0px) + 9px);
+  width:min(calc(100% - 24px),440px); box-sizing:border-box; margin:0 auto;
+  padding:14px; border-radius:23px; border:1px solid #ffffff9a;
+  color:#f8fbff; background:linear-gradient(135deg,#607383ab,#252d43dd);
+  box-shadow:0 10px 30px #16263842,inset 0 1px #ffffff66;
+  -webkit-backdrop-filter:blur(22px) saturate(145%); backdrop-filter:blur(22px) saturate(145%);
+  font:inherit;
+}
+.ep-call-banner::backdrop { background:transparent; pointer-events:none; }
+.ep-call-banner-info,.ep-call-banner-controls { display:flex; align-items:center; gap:11px; }
+.ep-call-banner-info[hidden],.ep-call-banner-controls[hidden] { display:none; }
+.ep-call-banner-avatar {
+  width:46px; height:46px; flex:none; border-radius:13px; color:inherit;
+  background:#ffffff30; display:grid; place-items:center; overflow:hidden; font-weight:650;
+}
+.ep-call-banner-caller { min-width:0; }
+.ep-call-banner-caller > strong,.ep-call-banner-compact > span {
+  display:block; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.ep-call-banner-caller > p { margin:2px 0 0; font-size:.87rem; color:#e4edf7; overflow-wrap:anywhere; }
+.ep-call-banner-controls { margin-top:12px; }
+.ep-call-banner :is(.ep-call-banner-hide,.ep-call-banner-answer,.ep-call-banner-compact) {
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  min-height:42px; margin:0; padding:6px 11px; color:#fff;
+  border-radius:999px; border:1px solid #ffffff5c; background:#ffffff24; font:inherit;
+}
+.ep-call-banner .ep-call-banner-hide { margin-right:auto; }
+.ep-call-banner .ep-call-banner-answer { width:44px; height:44px; padding:0; flex:none; }
+.ep-call-banner button svg { width:21px; height:21px; flex:none; }
+.ep-call-banner .ep-call-banner-decline { background:#c84453; }
+.ep-call-banner .ep-call-banner-decline svg { transform:rotate(135deg); }
+.ep-call-banner .ep-call-banner-accept { background:#197f58; }
+.ep-call-banner[data-compact] { width:max-content; max-width:calc(100vw - 24px); padding:3px; }
+.ep-call-banner .ep-call-banner-compact { max-width:100%; border-color:transparent; background:transparent; }
+.ep-call-banner .ep-call-banner-compact[hidden] { display:none; }
+.ep-ob-page { width:min(100%,700px); margin:0 auto; }
+.ep-ob-panel { margin-bottom:14px; }
+.ep-ob-panel .ep-ob-spaces { display:grid; gap:8px; list-style:none; margin:0; padding:0; }
+.ep-ob-spaces li { display:flex; flex-wrap:wrap; justify-content:space-between; gap:4px 12px; }
+.ep-ob-contacts { display:grid; gap:11px; }
+.ep-ob-contact { display:flex; align-items:flex-end; gap:10px; }
+.ep-ob-contact label { min-width:0; flex:1; }
+.ep-ob-contact button { flex:none; }
+.ep-ob-status:empty { display:none; }
+@media (prefers-reduced-transparency:reduce) { .ep-call-banner { background:#303c50; } }
