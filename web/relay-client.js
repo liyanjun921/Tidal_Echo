@@ -122,6 +122,7 @@ async function settings(){
  emit('settings-open',{});
  const dialog=$('#connectionDialog');$('#relayBase').value=config.base;$('#relaySecret').value='';$('#rememberConnection').checked=!!config.remember;if(!dialog.open)dialog.showModal();
  void window.EmoiModelConnections?.open();
+ void window.EmoiContactMedia?.open();
  if(preview){$('#settingsStatus').textContent='当前为私人界面预览。模型、通知、MiniMax / ElevenLabs 朗读和 MCP 需部署正式服务后连接；请勿在这里填写密钥。生活页的本机保存可以实际使用。';document.querySelectorAll('#connectionForm input,#connectionForm button,#agent-gpt input,#agent-gpt textarea,#agent-gpt button:not([data-plan-open]),#agent-claude input,#agent-claude textarea,#agent-claude button:not([data-plan-open]),#mcpForm input,#mcpForm button,#contextForm input,#contextForm select,#contextForm button,#speechForm input,#speechForm button').forEach(e=>e.disabled=true);return}
  if(!secret)return;
  try{await speechSettings()}catch(e){$('#speechConfigStatus').textContent=e.message}

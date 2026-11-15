@@ -660,6 +660,7 @@ async def lifespan(app: FastAPI):
     init_db()
     emoi_runtime["init"]()
     contacts_runtime["init"]()
+    contact_media_runtime["init"]()
     workspace_runtime["init"]()
     checklist_runtime["init"]()
     cinema_runtime["init"]()
@@ -1156,6 +1157,11 @@ try:
 except ImportError:
     from emoi_contacts import register as register_contacts
 contacts_runtime = register_contacts(app, globals())
+try:
+    from .emoi_contact_media import register as register_contact_media
+except ImportError:
+    from emoi_contact_media import register as register_contact_media
+contact_media_runtime = register_contact_media(app, globals())
 try:
     from .emoi_memory import register as register_memory
 except ImportError:

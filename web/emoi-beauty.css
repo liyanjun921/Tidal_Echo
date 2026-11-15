@@ -107,9 +107,9 @@ body[data-ui-mode=phone][data-phone-screen=legacy] #app {
   overscroll-behavior: none;
 }
 html[data-ep-standalone] body[data-ui-mode=phone][data-phone-screen=home] .emoi-phone-host {
-  position: relative;
-  inset: auto;
-  height: max(var(--ep-visual-height, 100dvh), 100lvh);
+  position: fixed;
+  inset: var(--ep-visual-top, 0px) 0 auto;
+  height: var(--ep-visual-height, 100dvh);
 }
 @media (max-width: 700px) {
   html[data-ep-standalone] body[data-ui-mode=phone] :is(dialog.page-sheet, dialog.settings-sheet) .sheet-head {
@@ -451,7 +451,7 @@ body[data-ui-mode=phone] #emoiPhoneView :is(.ep-record-bar,.ep-im-composer,.ep-i
   position:fixed; inset:0; display:grid; grid-template-rows:auto 1fr auto; gap:16px; margin:0;
   width:100%; height:100%; max-width:none; max-height:none; border:0; color:white;
   padding:max(32px,env(safe-area-inset-top)) 24px max(24px,env(safe-area-inset-bottom));
-  background:linear-gradient(#17233182,#122433c7),var(--emoi-active-wallpaper,var(--wallpaper)) center / cover;
+  background:linear-gradient(#17233182,#122433c7),var(--contact-call-background,var(--emoi-active-wallpaper,var(--wallpaper))) center / cover;
 }
 .ep-call-heading {text-align:center}
 .ep-call-heading p {margin:12px 0;color:#f0f5f7;font-size:14px}
@@ -499,3 +499,20 @@ body[data-ui-mode=phone][data-dark=true] #emoiPhoneView .ep-im-picker { backgrou
   body[data-ui-mode=phone] #emoiPhoneView :is(.ep-im-picker,.ep-record-bar,.ep-voice-capsule),
   body[data-ui-mode=phone] #emoiPhoneView .ep-im-composer::before { -webkit-backdrop-filter:none;backdrop-filter:none; }
 }
+
+
+html[data-ep-standalone]:has(body[data-ui-mode=phone]) {
+  background: var(--emoi-active-wallpaper,var(--wallpaper)) center / cover no-repeat fixed;
+}
+html[data-ep-standalone] body[data-ui-mode=phone] { background: transparent; }
+html[data-ep-standalone] body[data-ui-mode=phone] .ep-home-bottom {
+  padding-bottom: max(32px, calc(env(safe-area-inset-bottom) + 12px));
+}
+html[data-ep-standalone] body[data-ui-mode=phone] .ep-message-nav {
+  bottom: max(28px, calc(env(safe-area-inset-bottom) + 8px));
+}
+.ep-character-art { display:block; width:min(100%,440px); max-height:55dvh; object-fit:contain; border-radius:18px; }
+.ep-album-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(105px,1fr)); gap:10px; margin-top:14px; }
+.ep-album-grid figure { margin:0; min-width:0; }
+.ep-album-grid img { display:block; width:100%; aspect-ratio:1; object-fit:cover; border-radius:14px; }
+.ep-album-grid figcaption { margin-top:4px; overflow-wrap:anywhere; }

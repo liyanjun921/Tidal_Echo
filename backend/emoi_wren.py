@@ -588,6 +588,7 @@ def register(app, relay):
                 usage = result.get('usage') or {}
                 xinchao_delivered = result.get('xinchao_delivered') or []
             msg = None
+            contact_notification = None
             with connection(path) as db:
                 db.execute('BEGIN IMMEDIATE')
                 current, latest = activity(path, room, db), config(db, scope)
@@ -600,6 +601,8 @@ def register(app, relay):
                     stamp = datetime.now(timezone.utc).isoformat()
                     mid = db.execute("INSERT INTO messages(ts,direction,kind,text,meta) VALUES(?,'out','reply',?,?)", (stamp, text, json.dumps(meta, ensure_ascii=False))).lastrowid
                     msg = {'id': mid, 'ts': stamp, 'direction': 'out', 'kind': 'reply', 'text': text, 'meta': meta}
+                    if relay.get("contacts_runtime"):
+                        contact_notification = relay["contacts_runtime"]["store_wake"](db, scope, eid, text, stamp)
                 db.execute('UPDATE emoi_wren_events SET state=?,body=?,usage=?,message_id=?,finished=? WHERE id=?',
                            (action, text, json.dumps(usage), msg['id'] if msg else None, time.time(), eid))
                 if xinchao_delivered:
@@ -637,7 +640,9 @@ def register(app, relay):
                     pass
                 try:
                     await relay['broadcast'](relay['app_subs'], relay['app_payload'](msg))
-                    if not relay['app_subs']:
+                    if contact_notification:
+                        await relay['push_to_all'](contact_notification)
+                    elif not relay['app_subs']:
                         await relay['push_to_all'](relay['notification_from_message'](msg))
                 except Exception:
                     pass

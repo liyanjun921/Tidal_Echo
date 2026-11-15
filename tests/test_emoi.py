@@ -128,6 +128,21 @@ class ModelConnectionTests(unittest.TestCase):
         self.assertEqual(requests[0].url.path, "/v1/models")
         self.assertEqual(requests[0].headers["x-api-key"], payload["key"])
 
+    def test_contact_worldbook_matches_recent_messages_and_parses_media_intent(self):
+        loop.save_config({"agents": {"gpt": self.first}})
+        payload = {"route":"gpt", "contact_id":"contact-one", "name":"测试",
+                   "profile":{"instructions":"用短句", "worldbook":"雨,雪\n关键词条目\n\n*\n常驻条目\n\n花\n无关条目",
+                              "voice_connection":"test-voice"},
+                   "history":[{"author":"human", "text":"外面下雨了"}]}
+        with patch.object(loop, "complete_chat", return_value={"text":"[voice]\n我听到啦"}) as send:
+            result = self.client.post("/loop/contact-reply", json=payload)
+        self.assertEqual(result.json(), {"text":"我听到啦", "voice_reply":True})
+        prompt = send.await_args.args[1][0]["content"]
+        self.assertIn("用短句", prompt)
+        self.assertIn("关键词条目", prompt)
+        self.assertIn("常驻条目", prompt)
+        self.assertNotIn("无关条目", prompt)
+
     def test_contact_subscription_does_not_change_legacy_gpt_configuration(self):
         loop.save_config({"agents": {"gpt": {**self.first, "connection_mode": "api", "subscription_model": "old-plan"}}})
         self.assertEqual(self.client.get(self.root).json()["subscription_model"], "old-plan")

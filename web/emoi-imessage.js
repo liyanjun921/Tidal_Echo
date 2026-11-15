@@ -129,6 +129,11 @@ function openCall(item,initialMode){
  }
  function setMode(next){
   mode=next;dialog.dataset.mode=mode;camera.hidden=mode!=='video';
+  dialog.style.removeProperty('--contact-call-background');
+  const background=item.profile?.[mode+'_background'];
+  if(background&&window.EmoiRelay?.enabled)void window.EmoiRelay.media(background).then(url=>{
+   if(dialog.open&&mode===next)dialog.style.setProperty('--contact-call-background','url("'+url+'")');
+  }).catch(()=>{});
   videoToggle.setAttribute('aria-pressed',String(mode==='video'));
   if(mode==='video')void startCamera();
   else{stopCamera();status.textContent='语音通话 · 联系人未接入通话服务'}
@@ -192,7 +197,10 @@ function messageBubble(msg,members,showName,registerURL){
   const name=document.createElement('small');name.className='ep-im-sender';name.textContent=members.get(msg.contact_id)||'原群成员';row.append(name);
  }
  const bubble=document.createElement('div');bubble.className='ep-im-bubble';
- if(msg.attachment){
+ if(msg.attachment?.kind==='call_invite'){
+  const label=msg.attachment.mode==='video'?'视频通话邀请':'语音通话邀请';
+  bubble.textContent=label+' · '+withoutEmoji(msg.text||'');
+ }else if(msg.attachment){
   bubble.dataset.media=msg.attachment.kind;renderAttachment(bubble,msg.attachment,registerURL);
    if(msg.attachment.kind==='voice'){
    const transcript=document.createElement('details');transcript.className='ep-im-transcript';
@@ -240,7 +248,8 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
  wallpaper.textContent='更换聊天背景';
  options.append(pin,wallpaper);
  if(manage){
-  const more=button('管理群聊','info',()=>{options.close();manage()},'ep-home-control');more.textContent='管理群聊';
+  const label=kind==='group'?'管理群聊':'联系人档案';
+  const more=button(label,'info',()=>{options.close();manage()},'ep-home-control');more.textContent=label;
   options.append(more);
  }
  options.append(closeOptions);root.append(options);
@@ -248,7 +257,7 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
  const actions=document.createElement('div');actions.className='ep-im-actions';
  actions.append(button('视频','video',()=>openCall(item,'video')),button('语音通话','phone',()=>openCall(item,'voice')));
  header.append(back,person,actions);root.append(header);
- if(kind==='contact')void window.EmoiAvatars?.paint(avatar,item.id);
+ void window.EmoiAvatars?.paint(avatar,item.id,item.profile?.avatar);
  const body=document.createElement('main');body.className='ep-im-timeline';body.setAttribute('aria-label','与'+(item.name||'联系人')+'的消息');
  const content=document.createElement('div');content.className='ep-im-content';
  const initial=document.createElement('div');initial.className='ep-im-conversation-start';
@@ -441,7 +450,7 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
  }
  function schedule(){
   clearTimeout(timer);
-  if(isOpen()&&replying)timer=setTimeout(refresh,1800);
+  if(isOpen()&&endpoint)timer=setTimeout(refresh,replying?1800:8000);
  }
  async function refresh(){
   if(!isOpen()||!endpoint||!window.EmoiRelay?.enabled)return;

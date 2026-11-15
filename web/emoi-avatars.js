@@ -35,13 +35,20 @@ async function save(id,file){
  return transaction(id,blob,true);
 }
 const painted=new WeakMap();
-async function paint(element,id){
+async function paint(element,id,attachment){
  if(!element||!id)return;
  try{
-  const blob=await transaction(id,null,false);
-  if(!(blob instanceof Blob)||!element.isConnected)return;
+  const remote=attachment&&window.EmoiRelay?.enabled;
+  let url;
+  if(remote){url=await window.EmoiRelay.media(attachment)}
+  else{
+   const blob=await transaction(id,null,false);
+   if(!(blob instanceof Blob)||!element.isConnected)return;
+   url=URL.createObjectURL(blob);
+  }
+  if(!element.isConnected)return;
   const old=painted.get(element);if(old)URL.revokeObjectURL(old);
-  const url=URL.createObjectURL(blob);painted.set(element,url);
+  if(!remote)painted.set(element,url);
   element.textContent='';const img=document.createElement('img');
   img.src=url;img.alt='';img.className='ep-avatar-image';
   element.append(img);

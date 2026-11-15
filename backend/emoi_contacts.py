@@ -26,8 +26,9 @@ MEDIA_TYPES = {
 }
 MEDIA_TYPES["sticker"] = MEDIA_TYPES["image"]
 MEDIA_LABELS = {"image": "图片", "sticker": "表情包", "voice": "语音消息", "location": "位置"}
-MODEL_ROUTES = {"default", "gpt", "claude", "chatgpt-plan"}
+MODEL_ROUTES = {"default", "gpt", "claude", "chatgpt-plan", "claude-code"}
 API_CONNECTION_ROUTE = re.compile(r"api:[0-9a-f]{32}")
+PICTURE_FIELDS = ("avatar", "character", "voice_background", "video_background", "face_reference")
 UUID_PATTERN = re.compile(r"^[0-9a-fA-F-]{36}$")
 
 
@@ -94,7 +95,39 @@ def init(path):
         """)
         if "attachment" not in {column[1] for column in db.execute("PRAGMA table_info(emoi_v2_messages)")}:
             db.execute("ALTER TABLE emoi_v2_messages ADD COLUMN attachment TEXT")
+        for table in ("emoi_v2_contacts", "emoi_v2_conversations"):
+            if "profile" not in {column[1] for column in db.execute(f"PRAGMA table_info({table})")}:
+                db.execute(f"ALTER TABLE {table} ADD COLUMN profile TEXT NOT NULL DEFAULT '{{}}'")
+        db.executescript("""
+            CREATE TABLE IF NOT EXISTS emoi_photo_albums(id TEXT PRIMARY KEY, name TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS emoi_album_photos(
+                id TEXT PRIMARY KEY, album_id TEXT NOT NULL REFERENCES emoi_photo_albums(id),
+                attachment TEXT NOT NULL, contact_id TEXT, created_at TEXT NOT NULL
+            );
+        """)
         db.execute("UPDATE emoi_v2_messages SET delivery='interrupted' WHERE delivery='replying'")
+
+
+def store_wake_message(db, scope, event, text, stamp):
+    """Mirror a committed Room message into exactly one explicitly bound contact."""
+    targets = db.execute("""
+        SELECT c.id, c.name, v.id AS conversation_id
+        FROM emoi_v2_contacts c JOIN emoi_v2_members m ON m.contact_id=c.id
+        JOIN emoi_v2_conversations v ON v.id=m.conversation_id
+        WHERE c.archived=0 AND v.archived=0 AND v.kind='direct'
+          AND json_extract(c.profile,'$.proactive_enabled')=1
+          AND json_extract(c.profile,'$.desire_scope')=?
+        LIMIT 2
+    """, (scope,)).fetchall()
+    if len(targets) != 1:
+        return None
+    contact = targets[0]
+    ident = str(uuid4())
+    inserted = db.execute("""
+      INSERT OR IGNORE INTO emoi_v2_messages(id,conversation_id,author,contact_id,text,nonce,delivery,created_at)
+      VALUES(?,?,'contact',?,?,?,'generated',?)
+    """, (ident, contact["conversation_id"], contact["id"], text, "wren:" + event, stamp)).rowcount
+    return {"title": contact["name"], "body": "发来一条新消息", "url": "/", "id": ident} if inserted else None
 
 
 def register(app, relay):
@@ -121,7 +154,7 @@ def register(app, relay):
             "model_route": row["model_route"], "memory_namespace": row["memory_namespace"],
             "desire_namespace": row["desire_namespace"], "created_at": row["created_at"],
             "updated_at": row["updated_at"], "connected": False,
-            "memory_connected": False, "desire_connected": False,
+            "memory_connected": False, "desire_connected": False, "profile": json.loads(row["profile"]),
         }
 
     def view_message(row):
@@ -153,6 +186,114 @@ def register(app, relay):
         if kind == "voice" and type(duration) in (int, float) and 0 <= duration <= 120:
             attachment["duration"] = round(duration, 2)
         return attachment
+
+    def saved_picture(value):
+        if value in (None, ""):
+            return None
+        if not isinstance(value, str):
+            raise HTTPException(422, "图片附件无效")
+        return message_attachment({"kind": "image", "id": value})
+
+    def update_profile(body, previous, *, group=False):
+        edits = body.get("profile", {})
+        if not isinstance(edits, dict):
+            raise HTTPException(422, "档案设置格式无效")
+        for field in ("avatar",) if group else PICTURE_FIELDS:
+            if field in edits:
+                previous[field] = saved_picture(edits[field])
+        if not group:
+            for field, limit in (("instructions", 12000), ("worldbook", 24000), ("voice_connection", 60), ("image_connection", 60), ("ob_server", 32)):
+                if field in edits:
+                    previous[field] = clean_text(edits[field], limit)
+            if "desire_scope" in edits:
+                if edits["desire_scope"] not in ("", "gpt", "claude"):
+                    raise HTTPException(422, "欲望空间无效")
+                previous["desire_scope"] = edits["desire_scope"]
+            if "proactive_enabled" in edits:
+                if type(edits["proactive_enabled"]) is not bool:
+                    raise HTTPException(422, "主动消息开关无效")
+                previous["proactive_enabled"] = edits["proactive_enabled"]
+        return json.dumps(previous, ensure_ascii=False)
+
+    def check_wake_binding(db, ident, profile):
+        bound = json.loads(profile)
+        if bound.get("proactive_enabled") and bound.get("desire_scope") and db.execute("""
+            SELECT 1 FROM emoi_v2_contacts WHERE archived=0 AND id<>?
+              AND json_extract(profile,'$.proactive_enabled')=1 AND json_extract(profile,'$.desire_scope')=?
+        """, (ident, bound["desire_scope"])).fetchone():
+            raise HTTPException(409, "这个欲望空间已绑定到另一位联系人")
+
+    @app.get("/emoi/v2/albums")
+    async def list_albums(request: Request):
+        auth(request)
+        with connect(path) as db:
+            albums = [dict(row) for row in db.execute("SELECT * FROM emoi_photo_albums ORDER BY rowid")]
+            photos = [dict(row) for row in db.execute("SELECT * FROM emoi_album_photos ORDER BY rowid DESC")]
+        for photo in photos:
+            photo["attachment"] = json.loads(photo["attachment"])
+        return {"albums": albums, "photos": photos}
+
+    @app.post("/emoi/v2/albums")
+    async def create_album(request: Request):
+        auth(request)
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise HTTPException(422, "相册格式无效")
+        name = clean_text(body.get("name"), 80, True)
+        with connect(path) as db:
+            ident = str(uuid4())
+            db.execute("INSERT INTO emoi_photo_albums VALUES(?,?)", (ident, name))
+        return {"id": ident, "name": name}
+
+    @app.post("/emoi/v2/albums/{album_id}/photos")
+    async def add_photo(album_id: str, request: Request):
+        auth(request)
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise HTTPException(422, "照片格式无效")
+        attachment = saved_picture(body.get("id"))
+        if not attachment:
+            raise HTTPException(422, "请选择图片")
+        person = body.get("contact_id")
+        with connect(path) as db:
+            if not db.execute("SELECT 1 FROM emoi_photo_albums WHERE id=?", (valid_id(album_id),)).fetchone():
+                raise HTTPException(404, "相册不存在")
+            if person:
+                person = contact(db, person)["id"]
+            ident = str(uuid4())
+            db.execute("INSERT INTO emoi_album_photos VALUES(?,?,?,?,?)",
+                       (ident, album_id, json.dumps(attachment), person or None, now()))
+        return {"id": ident}
+
+    @app.post("/emoi/v2/albums/suggest-person")
+    async def suggest_person(request: Request):
+        auth(request)
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise HTTPException(422, "照片格式无效")
+        picture = saved_picture(body.get("id"))
+        binding = body.get("model_route")
+        if not picture or not isinstance(binding, str) or not API_CONNECTION_ROUTE.fullmatch(binding):
+            raise HTTPException(422, "请选择照片与支持视觉的自定义 API")
+        with connect(path) as db:
+            refs = []
+            for row in db.execute("SELECT id, profile FROM emoi_v2_contacts WHERE archived=0 ORDER BY rowid"):
+                photo = json.loads(row["profile"]).get("face_reference")
+                if photo:
+                    refs.append({"id": row["id"], "photo": photo})
+        if not refs or len(refs) > 8:
+            raise HTTPException(422, "请给 1–8 位候选联系人上传脸部参考图")
+        if picture["size"] + sum(entry["photo"]["size"] for entry in refs) > 20 * 1024 * 1024:
+            raise HTTPException(422, "照片和参考图合计不能超过 20 MB")
+        try:
+            async with httpx.AsyncClient(timeout=28, trust_env=False) as client:
+                response = await client.post(relay["loop_base_url"]() + "/loop/album-suggest-person",
+                    json={"binding": binding, "picture": picture, "references": refs})
+                response.raise_for_status()
+                result = response.json().get("contact_id")
+        except (httpx.HTTPError, ValueError):
+            raise HTTPException(502, "视觉模型暂未返回人物建议，请确认接口支持图片输入") from None
+        return {"contact_id": result if any(entry["id"] == result for entry in refs) else None}
 
     def model_members(db, cid):
         return db.execute("""
@@ -186,23 +327,42 @@ def register(app, relay):
                         attachment = entry.pop("attachment")
                         if attachment and entry["id"] == message_id:
                             entry["attachment"] = json.loads(attachment)
+                    profile = json.loads(current["profile"])
+                    # Shared-memory spaces are private to the bound contact.
+                    with connect(path) as db:
+                        direct = conversation(db, cid)["kind"] == "direct"
                     try:
                         response = await client.post(url, json={
                             "route": current["model_route"], "contact_id": current["id"],
                             "name": current["name"], "notes": current["notes"], "history": history,
+                            "profile": {**profile, "ob_server": profile.get("ob_server", "") if direct else ""},
                         })
                         response.raise_for_status()
-                        text = clean_text(response.json().get("text"), 10000, True)
+                        reply = response.json()
+                        text = clean_text(reply.get("text"), 10000, True)
                     except (httpx.HTTPError, ValueError, HTTPException):
                         continue
-                    audio = None
-                    if voice_reply and len(text) <= 900 and relay.get("speech_runtime"):
+                    media = relay.get("contact_media_runtime") or {}
+                    attachment = None
+                    if reply.get("image_prompt") and profile.get("image_connection") and media:
                         try:
-                            data = await asyncio.to_thread(relay["speech_runtime"]["synthesize"], {"text": text})
-                            audio = relay["save_upload_bytes"](data, "reply.mp3", "audio/mpeg")
-                            audio.update(kind="voice", transcript=text)
+                            attachment = await media["image"](profile["image_connection"], reply["image_prompt"], profile.get("face_reference"))
+                        except (HTTPException, OSError, httpx.HTTPError, ValueError):
+                            pass
+                    if attachment is None and len(text) <= 900 and (voice_reply or reply.get("voice_reply") is True):
+                        try:
+                            if profile.get("voice_connection") and media:
+                                data = await asyncio.to_thread(media["voice"], profile["voice_connection"], text)
+                            elif voice_reply and relay.get("speech_runtime"):
+                                data = await asyncio.to_thread(relay["speech_runtime"]["synthesize"], {"text": text})
+                            else:
+                                data = None
+                            if data:
+                                attachment = relay["save_upload_bytes"](data, "reply.mp3", "audio/mpeg")
+                                attachment.update(kind="voice", transcript=text)
                         except (HTTPException, OSError, ValueError):
                             pass
+                    reply_id = str(uuid4())
                     with connect(path) as db:
                         db.execute("BEGIN IMMEDIATE")
                         still_member = db.execute("""
@@ -216,9 +376,22 @@ def register(app, relay):
                         db.execute("""
                           INSERT INTO emoi_v2_messages(id,conversation_id,author,contact_id,text,nonce,delivery,created_at,attachment)
                           VALUES(?,?,'contact',?,?,?,'generated',?,?)
-                        """, (str(uuid4()), cid, current["id"], text, "reply:"+message_id+":"+current["id"], now(),
-                              json.dumps(audio, ensure_ascii=False) if audio else None))
+                        """, (reply_id, cid, current["id"], text, "reply:"+message_id+":"+current["id"], now(),
+                              json.dumps(attachment, ensure_ascii=False) if attachment else None))
                         completed += 1
+                    if direct and profile.get("ob_server"):
+                        with connect(path) as db:
+                            turn = db.execute("SELECT * FROM emoi_v2_messages WHERE id IN (?,?) ORDER BY rowid",
+                                              (message_id, reply_id)).fetchall()
+                        try:
+                            await client.post(relay["loop_base_url"]() + "/loop/contact-archive",
+                                              json={"server": profile["ob_server"], "conversation_id": cid,
+                                                    "messages": [{"message_id": row["id"],
+                                                                  "role": "user" if row["author"] == "human" else "assistant",
+                                                                  "text": row["text"], "created_at": row["created_at"]}
+                                                                 for row in turn]}, timeout=8)
+                        except httpx.HTTPError:
+                            pass
         finally:
             state = "replied" if completed == len(recipients) else "partial" if completed else "model_failed"
             with connect(path) as db:
@@ -234,7 +407,7 @@ def register(app, relay):
         return {
             "id":row["id"],"kind":row["kind"],"title":row["title"],"latest":dict(latest) if latest else None,
             "members":members,"memory_namespace":row["memory_namespace"],
-            "created_at":row["created_at"],"connected":False,
+            "created_at":row["created_at"],"connected":False,"profile":json.loads(row["profile"]),
         }
 
     @app.get("/emoi/v2/contacts")
@@ -255,6 +428,9 @@ def register(app, relay):
         route=clean_text(body.get("model_route",""),100)
         timestamp=now()
         with connect(path) as db:
+            db.execute("BEGIN IMMEDIATE")
+            profile = update_profile(body, {})
+            check_wake_binding(db, cid, profile)
             count=db.execute("SELECT COUNT(*) FROM emoi_v2_contacts WHERE archived=0").fetchone()[0]
             if count>=MAX_CONTACTS:raise HTTPException(409,"contact limit reached")
             try:
@@ -262,6 +438,7 @@ def register(app, relay):
                     (cid,name,notes,route,"contact:"+cid, "desire:contact:"+cid,timestamp,timestamp))
             except sqlite3.IntegrityError:
                 raise HTTPException(409,"contact id already exists") from None
+            db.execute("UPDATE emoi_v2_contacts SET profile=? WHERE id=?", (profile, cid))
             # Each contact begins with an independent direct conversation.
             conv=str(uuid4())
             db.execute("INSERT INTO emoi_v2_conversations(id,kind,title,memory_namespace,created_at,updated_at) VALUES(?,'direct',?,?,?,?)",
@@ -276,13 +453,16 @@ def register(app, relay):
         body=await request.json()
         if not isinstance(body,dict):raise HTTPException(422,"invalid contact")
         with connect(path) as db:
+            db.execute("BEGIN IMMEDIATE")
             old=contact(db,contact_id)
+            profile = update_profile(body, json.loads(old["profile"]))
+            check_wake_binding(db, old["id"], profile)
             name=clean_text(body.get("name",old["name"]),60,True)
             notes=clean_text(body.get("notes",old["notes"]),5000)
             route=clean_text(body.get("model_route",old["model_route"]),100)
             # Never accept arbitrary memory/desire scope changes from the browser.
-            db.execute("UPDATE emoi_v2_contacts SET name=?,notes=?,model_route=?,updated_at=? WHERE id=?",
-                (name,notes,route,now(),old["id"]))
+            db.execute("UPDATE emoi_v2_contacts SET name=?,notes=?,model_route=?,updated_at=?,profile=? WHERE id=?",
+                (name,notes,route,now(),profile,old["id"]))
             return {"contact":view_contact(contact(db,old["id"]))}
 
     @app.delete("/emoi/v2/contacts/{contact_id}")
@@ -323,6 +503,7 @@ def register(app, relay):
                 db.execute("INSERT INTO emoi_v2_conversations(id,kind,title,memory_namespace,created_at,updated_at) VALUES(?,'group',?,?,?,?)",
                     (cid,title,"conversation:"+cid,created,created))
             except sqlite3.IntegrityError:raise HTTPException(409,"duplicate conversation") from None
+            db.execute("UPDATE emoi_v2_conversations SET profile=? WHERE id=?", (update_profile(body, {}, group=True), cid))
             db.executemany("INSERT INTO emoi_v2_members VALUES(?,?)",[(cid,id) for id in ids])
             return {"conversation":view_conversation(db,conversation(db,cid))}
 
@@ -345,7 +526,7 @@ def register(app, relay):
                 ids=[valid_id(mid) for mid in members]
                 if len(set(ids))!=len(ids):raise HTTPException(422,"duplicate members")
                 for id in ids:contact(db,id)
-            db.execute("UPDATE emoi_v2_conversations SET title=?,updated_at=? WHERE id=?",(title,now(),old["id"]))
+            db.execute("UPDATE emoi_v2_conversations SET title=?,updated_at=?,profile=? WHERE id=?",(title,now(),update_profile(body,json.loads(old["profile"]),group=True),old["id"]))
             db.execute("DELETE FROM emoi_v2_members WHERE conversation_id=?",(old["id"],))
             db.executemany("INSERT INTO emoi_v2_members VALUES(?,?)",[(old["id"],id) for id in ids])
             return {"conversation":view_conversation(db,conversation(db,old["id"]))}
@@ -359,6 +540,75 @@ def register(app, relay):
                 raise HTTPException(422,"cannot delete the immutable direct conversation")
             db.execute("UPDATE emoi_v2_conversations SET archived=1,updated_at=? WHERE id=?",(now(),old["id"]))
             return {"archived":True,"id":old["id"]}
+
+    @app.post("/emoi/v2/contacts/{contact_id}/proactive")
+    async def proactive(contact_id: str, request: Request, background: BackgroundTasks):
+        auth(request)
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise HTTPException(422, "主动消息格式无效")
+        text = clean_text(body.get("text"), 9000, True)
+        event = clean_text(body.get("event_id"), 120, True)
+        mode = body.get("mode", "text")
+        if mode not in ("text", "voice", "image", "voice_invite", "video_invite"):
+            raise HTTPException(422, "主动消息类型无效")
+        with connect(path) as db:
+            person = contact(db, contact_id)
+            profile = json.loads(person["profile"])
+            if not profile.get("proactive_enabled"):
+                raise HTTPException(403, "此联系人未启用主动消息")
+            conversation_row = db.execute("""
+              SELECT v.id FROM emoi_v2_conversations v JOIN emoi_v2_members m ON v.id=m.conversation_id
+              WHERE m.contact_id=? AND v.kind='direct' AND v.archived=0
+            """, (person["id"],)).fetchone()
+            if not conversation_row:
+                raise HTTPException(404, "联系人会话不可用")
+            cid = conversation_row["id"]
+            nonce = "proactive:" + event
+            prior = db.execute("SELECT id FROM emoi_v2_messages WHERE conversation_id=? AND nonce=?", (cid, nonce)).fetchone()
+            if prior:
+                return {"id": prior["id"], "duplicate": True}
+            recent = db.execute("""
+               SELECT created_at FROM emoi_v2_messages WHERE conversation_id=? AND nonce LIKE 'proactive:%'
+               ORDER BY rowid DESC LIMIT 1
+            """, (cid,)).fetchone()
+            if recent and (datetime.now(timezone.utc) - datetime.fromisoformat(recent["created_at"])).total_seconds() < 60:
+                raise HTTPException(429, "主动消息过于频繁")
+        media = relay.get("contact_media_runtime") or {}
+        attachment = None
+        if mode == "voice":
+            if not profile.get("voice_connection") or not media or len(text) > 900:
+                raise HTTPException(422, "请先绑定语音接口，单条语音最多 900 字")
+            audio = await asyncio.to_thread(media["voice"], profile["voice_connection"], text)
+            attachment = relay["save_upload_bytes"](audio, "message.mp3", "audio/mpeg")
+            attachment.update(kind="voice", transcript=text)
+        elif mode == "image":
+            if not profile.get("image_connection") or not media:
+                raise HTTPException(422, "请先绑定生图接口")
+            prompt = clean_text(body.get("image_prompt"), 1200, True)
+            try:
+                attachment = await media["image"](profile["image_connection"], prompt, profile.get("face_reference"))
+            except (httpx.HTTPError, ValueError, OSError):
+                raise HTTPException(502, "生图接口暂不可用") from None
+        elif mode in ("voice_invite", "video_invite"):
+            attachment = {"kind": "call_invite", "mode": "video" if mode == "video_invite" else "voice"}
+        with connect(path) as db:
+            db.execute("BEGIN IMMEDIATE")
+            if not json.loads(contact(db, contact_id)["profile"]).get("proactive_enabled"):
+                raise HTTPException(403, "此联系人未启用主动消息")
+            ident = str(uuid4())
+            count = db.execute("""
+               INSERT OR IGNORE INTO emoi_v2_messages(id,conversation_id,author,contact_id,text,nonce,delivery,created_at,attachment)
+               VALUES(?,?,'contact',?,?,?,'generated',?,?)
+            """, (ident, cid, person["id"], text, nonce, now(), json.dumps(attachment) if attachment else None)).rowcount
+            if not count:
+                ident = db.execute("SELECT id FROM emoi_v2_messages WHERE conversation_id=? AND nonce=?",
+                                   (cid, nonce)).fetchone()["id"]
+        if count and relay.get("push_to_all"):
+            background.add_task(relay["push_to_all"], {
+                "title": person["name"], "body": "发来一条新消息", "url": "/", "id": ident,
+            })
+        return {"id": ident, "duplicate": not count}
 
     @app.get("/emoi/v2/conversations/{conversation_id}/messages")
     async def v2_messages(conversation_id:str, request:Request,limit:int=60):
@@ -440,4 +690,4 @@ def register(app, relay):
             background.add_task(generate_replies, conv["id"], mid, recipients, body.get("voice_reply") is True)
         return {"message":view_message(row),"model_dispatched":bool(recipients)}
 
-    return {"init":lambda:init(path)}
+    return {"init":lambda:init(path), "store_wake":store_wake_message}

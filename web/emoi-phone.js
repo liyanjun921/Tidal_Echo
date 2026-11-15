@@ -60,6 +60,7 @@ const apps=[
  {id:'cinema',label:'影院',icon:'cinema',tone:'night'},
  {id:'room',label:'Room',icon:'room',tone:'ocean'},
  {id:'checklist',label:'清单',icon:'checklist',tone:'warm'},
+ {id:'albums',label:'相册',icon:'photo',tone:'mint'},
  {id:'more',label:'应用',icon:'apps',tone:'silver'},
  {id:'settings',label:'设置',icon:'settings',tone:'blue'}
 ];
@@ -72,7 +73,7 @@ let groups=safeRead(GROUPS_KEY).filter(x=>x&&typeof x.id==='string'&&typeof x.na
 const remote={direct:new Map(),latest:new Map()};
 const builtinModelRoutes=[
  ['', '不绑定'],['chatgpt-plan','GPT Work 订阅直连'],
- ['default','默认 API 模型（原有）'],['gpt','GPT（原有房间）'],['claude','Claude API（原有房间）']
+ ['claude-code','Claude Code 直连'],['default','默认 API 模型（原有）'],['gpt','GPT（原有房间）'],['claude','Claude API（原有房间）']
 ];
 let modelConnections=new Map();
 function modelRouteLabel(route){
@@ -85,19 +86,20 @@ window.addEventListener('emoi-model-connections',event=>{
  if(screen==='contact-detail')openContactDetail(detail);
 });
 
-async function remoteSaveContact(person,isNew){
+async function remoteSaveContact(person,isNew,profile=person.pendingProfile){
  if(!window.EmoiRelay?.enabled)return;
  const path=isNew?'/emoi/v2/contacts':'/emoi/v2/contacts/'+encodeURIComponent(person.id);
- const payload={id:person.id,name:person.name,notes:person.notes||'',model_route:person.model_route||''};
+ const payload={id:person.id,name:person.name,notes:person.notes||'',model_route:person.model_route||'',profile};
  const data=await window.EmoiRelay.json(path,isNew?'POST':'PATCH',payload);
- if(data.contact)Object.assign(person,{memory_namespace:data.contact.memory_namespace,desire_namespace:data.contact.desire_namespace});
+ if(data.contact)Object.assign(person,{memory_namespace:data.contact.memory_namespace,desire_namespace:data.contact.desire_namespace,profile:data.contact.profile});
  if(data.conversation_id)remote.direct.set(person.id,data.conversation_id);
 }
-async function remoteSaveGroup(group,isNew){
+async function remoteSaveGroup(group,isNew,profile){
  if(!window.EmoiRelay?.enabled)return;
  try{
    const path=isNew?'/emoi/v2/conversations':'/emoi/v2/conversations/'+encodeURIComponent(group.id);
-   await window.EmoiRelay.json(path,isNew?'POST':'PATCH',{id:group.id,title:group.name,kind:'group',members:group.members});
+   const result=await window.EmoiRelay.json(path,isNew?'POST':'PATCH',{id:group.id,title:group.name,kind:'group',members:group.members,profile});
+   group.profile=result.conversation.profile;
    group.remote=true;return true;
  }catch(e){console.warn('Émoi 群聊同步未完成：',e.message);return false}
 }
@@ -112,16 +114,16 @@ async function syncRemote(){
   // Keep any local work, including unsynced files. Never replace by name.
   for(const c of contacts){
    if(!onServer.has(c.id)||c.pendingSync){
-    try{await remoteSaveContact(c,!onServer.has(c.id));c.pendingSync=false;pushed.add(c.id)}
+    try{await remoteSaveContact(c,!onServer.has(c.id));c.pendingSync=false;delete c.pendingProfile;pushed.add(c.id)}
     catch(error){console.warn('Émoi 联系人同步未完成：',error.message)}
    }
   }
   for(const item of (people.contacts||[])){
    const local=contacts.find(c=>c.id===item.id);
-   const profile={id:item.id,name:item.name,notes:item.notes||'',model_route:item.model_route||'',memory_namespace:item.memory_namespace,desire_namespace:item.desire_namespace};
+   const profile={id:item.id,name:item.name,notes:item.notes||'',model_route:item.model_route||'',memory_namespace:item.memory_namespace,desire_namespace:item.desire_namespace,profile:item.profile};
    if(!local)contacts.push(profile);
    else if(!local.pendingSync&&!pushed.has(local.id))Object.assign(local,{
-    model_route:profile.model_route,memory_namespace:profile.memory_namespace,desire_namespace:profile.desire_namespace
+    model_route:profile.model_route,memory_namespace:profile.memory_namespace,desire_namespace:profile.desire_namespace,profile:profile.profile
    });
   }
   save(CONTACTS_KEY,contacts);
@@ -130,8 +132,8 @@ async function syncRemote(){
     if(conv.kind==='direct')for(const id of conv.members||[])remote.direct.set(id,conv.id);
     if(conv.kind==='group'){
      const local=groups.find(g=>g.id===conv.id);
-     if(local)Object.assign(local,{name:conv.title,members:conv.members||[],remote:true});
-     else groups.push({id:conv.id,name:conv.title,members:conv.members||[],remote:true});
+     if(local)Object.assign(local,{name:conv.title,members:conv.members||[],profile:conv.profile,remote:true});
+     else groups.push({id:conv.id,name:conv.title,members:conv.members||[],profile:conv.profile,remote:true});
     }
   }
   for(const g of groups){if(!(rooms.conversations||[]).some(c=>c.id===g.id))await remoteSaveGroup(g,true)}
@@ -418,7 +420,7 @@ function openHome(){
 }
 function listItem(id,title,subtitle,iconName,handler){
  const b=create('button','ep-list-row');b.type='button';b.dataset.entry=id;
- const ava=create('span','ep-list-avatar');ava.innerHTML=icon(iconName);if(contacts.some(p=>p.id===id))queueMicrotask(()=>window.EmoiAvatars?.paint(ava,id));
+ const ava=create('span','ep-list-avatar');ava.innerHTML=icon(iconName);const person=contacts.find(p=>p.id===id);if(person)queueMicrotask(()=>window.EmoiAvatars?.paint(ava,id,person.profile?.avatar));
  const content=create('span','ep-list-copy');content.append(create('strong','',title),create('small','',subtitle));
  b.append(ava,content);const arrow=create('span','ep-row-chevron');arrow.innerHTML=icon('right');b.append(arrow);b.addEventListener('click',handler);return b;
 }
@@ -526,7 +528,9 @@ function openMessages(){
   for(const thread of matches){
    const row=create('button','ep-message-thread');row.type='button';row.dataset.entry=thread.id;
    const avatar=create('span','ep-thread-avatar',thread.kind==='contact'?thread.name.slice(0,1):undefined);
-   if(thread.kind==='group')avatar.innerHTML=icon('contacts');else void window.EmoiAvatars?.paint(avatar,thread.id);
+   if(thread.kind==='group')avatar.innerHTML=icon('contacts');
+   const item=(thread.kind==='group'?groups:contacts).find(entry=>entry.id===thread.id);
+   queueMicrotask(()=>window.EmoiAvatars?.paint(avatar,thread.id,item?.profile?.avatar));
    const copy=create('span','ep-thread-copy');
    const topLine=create('span','ep-thread-topline');
    topLine.append(create('strong','',thread.name));
@@ -602,7 +606,7 @@ function openContacts(){
 function openContactConversation(id){
  const p=contacts.find(x=>x.id===id);if(!p){openMessages();return}
  setScreen('imessage');const root=view();
- window.EmoiMessageApp?.open(root,{kind:'contact',item:p,conversationId:remote.direct.get(p.id)||p.conversation_id||'',goBack:openMessages});
+ window.EmoiMessageApp?.open(root,{kind:'contact',item:p,conversationId:remote.direct.get(p.id)||p.conversation_id||'',goBack:openMessages,manage:()=>openContactDetail(id)});
 }
 function openGroupConversation(id){
  const g=groups.find(x=>x.id===id);if(!g){openMessages();return}
@@ -624,12 +628,14 @@ function openContactDetail(id){
  const edit=create('button','ep-action-primary','编辑联系人');edit.type='button';edit.onclick=()=>openContactEditor(person.id);body.append(edit);
  const del=create('button','ep-danger-action','删除联系人草稿');del.type='button';del.onclick=()=>{if(!confirm('确认删除这张本机联系人草稿？已有云端数据不会修改。'))return;contacts=contacts.filter(x=>x.id!==id);save(CONTACTS_KEY,contacts);if(window.EmoiRelay?.enabled)void window.EmoiRelay.request('/emoi/v2/contacts/'+encodeURIComponent(id),{method:'DELETE'}).catch(e=>console.warn(e.message));openContacts()};body.append(del);
  root.append(body);
- void window.EmoiAvatars?.paint(avatar,id);
+ void window.EmoiAvatars?.paint(avatar,id,person.profile?.avatar);
+ if(person.profile?.character){const art=create("img","ep-character-art");art.alt=person.name+"的人设图";body.append(art);void window.EmoiRelay.media(person.profile.character).then(src=>{art.src=src}).catch(()=>art.remove())}
 }
 function openGroupDetail(id){
  const g=groups.find(x=>x.id===id);if(!g){openMessages();return}
  setScreen('group-detail');const root=view();root.className='ep-view ep-detail-screen';root.append(header('群聊',()=>openGroupConversation(id)));
  const body=create('div','ep-detail-body');const av=create('div','ep-profile-avatar');av.innerHTML=icon('chat');body.append(av,create('h2','',g.name));
+ queueMicrotask(()=>window.EmoiAvatars?.paint(av,id,g.profile?.avatar));
  const names=g.members.map(id=>contacts.find(x=>x.id===id)?.name).filter(Boolean);
  body.append(create('p','ep-subtitle',names.length?'成员：'+names.join('、'):'尚未添加成员'));
 
@@ -646,14 +652,14 @@ let contactDialog=null;
 function paintContactRoutes(select,value=select.value){
  const add=(parent,id,label)=>{const option=create('option','',label);option.value=id;parent.append(option)};
  select.replaceChildren();
- for(const [id,label] of builtinModelRoutes.slice(0,2))add(select,id,label);
+ for(const [id,label] of builtinModelRoutes.slice(0,3))add(select,id,label);
  if(modelConnections.size){
   const named=create('optgroup');named.label='自定义 API';
   for(const connection of modelConnections.values())add(named,connection.id,connection.name+' · '+connection.model);
   select.append(named);
  }
  const legacy=create('optgroup');legacy.label='原有连接';
- for(const [id,label] of builtinModelRoutes.slice(2))add(legacy,id,label);
+ for(const [id,label] of builtinModelRoutes.slice(3))add(legacy,id,label);
  select.append(legacy);
  if(value&&![...select.options].some(option=>option.value===value))add(select,value,'当前连接（未读取或已移除）');
  select.value=value;
@@ -665,12 +671,27 @@ function openContactEditor(id=null,prefill=null){
  contactDialog=$('#epContactDialog');const form=$('#epContactForm');
  form.reset();form.elements.name.value=p?.name||prefill?.name||'';form.elements.notes.value=p?.notes||prefill?.notes||'';const route=form.elements.model_route;
  paintContactRoutes(route,p?.model_route||'');
+ for(const field of ['instructions','worldbook'])form.elements[field].value=p?.pendingProfile?.[field]??p?.profile?.[field]??'';
+ for(const input of form.querySelectorAll('[data-profile-picture]')){
+  input.disabled=!window.EmoiRelay?.enabled&&input.name!=='avatar';
+  input.title=p?.profile?.[input.name]?'已保存图片':'';
+ }
+ const profile={...p?.profile,...p?.pendingProfile};
+ for(const field of ['voice_connection','image_connection','ob_server']){
+  const select=form.elements[field];
+  select.replaceChildren(new Option('不绑定',''));
+  if(profile[field])select.add(new Option('当前绑定',profile[field],true,true));
+ }
+ form.elements.proactive_enabled.checked=profile.proactive_enabled===true;
+ form.elements.desire_scope.value=profile.desire_scope||'';
+
  const hint=$('#epContactModelStatus');
  hint.textContent=window.EmoiRelay?.enabled?'':'连接服务器后可读取自定义 API。';
  if(window.EmoiRelay?.enabled)void window.EmoiModelConnections?.load().catch(error=>{hint.textContent='读取模型连接失败：'+error.message});
  $('#epContactHeading').textContent=p?'编辑联系人':'添加联系人';
  contactDialog.dataset.editId=p?.id||'';delete contactDialog.dataset.newId;
  contactDialog.showModal();
+ void window.EmoiContactMedia?.bind(form);
 }
 function openGroupEditor(id=null){
  const g=groups.find(x=>x.id===id);
@@ -750,14 +771,26 @@ function openApp(id){
  if(id==='chat')return openMessages();
  if(id==='contacts')return openContacts();
  if(id==='settings')return openSettings();
+ if(id==='albums')return window.EmoiAlbums?.open({root:(setScreen('albums'),view()),header:header('相册',openHome),contacts});
  if(id==='more')return openMore();
  if(id==='checklist')return launchPage('calendar');
  if(id==='room')return launchPage('room');
  return launchPage(id);
 }
 function installDialogs(){
- const c=document.createElement('dialog');c.id='epContactDialog';c.className='ep-edit-dialog';c.innerHTML='<form id="epContactForm"><header><strong id="epContactHeading">添加联系人</strong><button type="button" data-ep-close="contact" aria-label="关闭" autofocus>'+icon('x')+'</button></header><p>每位 AI 都拥有永久独立身份、记忆及欲望命名空间。请先在设置里配置模型，再为联系人选择回复模型。</p><label>联系人姓名<input name="name" type="text" required maxlength="50" autocomplete="off" placeholder="自定义名字"></label><label>角色档案 / 人物简介<textarea name="notes" maxlength="5000" rows="4" placeholder="可以导入人物档案或手动填写"></textarea></label><label>头像（仅存当前设备）<input name="avatar" type="file" accept="image/jpeg,image/png,image/webp"></label><label>回复连接<select name="model_route"><option value="">不绑定</option></select></label><p role="status" id="epContactModelStatus"></p><footer><button type="button" data-ep-close="contact">取消</button><button type="submit">保存联系人</button></footer></form>';
+ const c=document.createElement('dialog');c.id='epContactDialog';c.className='ep-edit-dialog';c.innerHTML='<form id="epContactForm"><header><strong id="epContactHeading">添加联系人</strong><button type="button" data-ep-close="contact" aria-label="关闭" autofocus>'+icon('x')+'</button></header><p>每位 AI 都拥有永久独立身份、记忆及欲望命名空间。请先在设置里配置模型，再为联系人选择回复模型。</p><label>联系人姓名<input name="name" type="text" required maxlength="50" autocomplete="off" placeholder="自定义名字"></label><label>角色档案 / 人物简介<textarea name="notes" maxlength="5000" rows="4" placeholder="可以导入人物档案或手动填写"></textarea></label><label>角色指令<textarea name="instructions" maxlength="12000" rows="3"></textarea></label><label>世界书<textarea name="worldbook" maxlength="24000" rows="5" placeholder="关键词1,关键词2&#10;条目正文&#10;&#10;*&#10;始终载入的条目"></textarea></label><p>条目之间空一行。首行填写关键词，* 表示始终载入。</p><label>回复连接<select name="model_route"><option value="">不绑定</option></select></label><label>生图 API<select name="image_connection"></select></label><label>语音 API<select name="voice_connection"></select></label><label>共享 OB 空间<select name="ob_server"></select></label><p>在设置的 MCP 工具中添加 OB 后可选。绑定后，私聊会检索该空间，支持聊天归档的 OB 也会接收已保存的对话。</p><label class="ep-member"><input name="proactive_enabled" type="checkbox">允许欲望系统投递主动消息</label><label>Room 欲望空间<select name="desire_scope"><option value="">仅外部 Runtime 投递</option><option value="gpt">GPT 私聊空间</option><option value="claude">Claude 私聊空间</option></select></label><p role="status" id="epContactModelStatus"></p><footer><button type="button" data-ep-close="contact">取消</button><button type="submit">保存联系人</button></footer></form>';
  const g=document.createElement('dialog');g.id='epGroupDialog';g.className='ep-edit-dialog';g.innerHTML='<form id="epGroupForm"><header><strong id="epGroupHeading">创建群聊</strong><button type="button" data-ep-close="group" aria-label="关闭" autofocus>'+icon('x')+'</button></header><p>已绑定回复模型的成员会依次回复群消息。</p><label>群聊名称<input name="name" required maxlength="50" placeholder="给群聊起个名字"></label><strong>选择联系人</strong><div id="epGroupMembers" class="ep-member-list"></div><p id="epGroupError" role="status"></p><footer><button type="button" data-ep-close="group">取消</button><button type="submit">保存群聊</button></footer></form>';
+ const artwork=[
+  ['avatar','头像'],['character','人设图'],['voice_background','语音通话背景'],['video_background','视频通话背景'],['face_reference','生图脸部参考']
+ ];
+ for(const [dialog,fields] of [[c,artwork],[g,[['avatar','群聊头像']]]]){
+  const form=dialog.querySelector('form');
+  for(const [name,title] of fields){
+   const label=create('label','',title), input=create('input');
+   input.type='file';input.name=name;input.accept='image/jpeg,image/png,image/webp';input.dataset.profilePicture='';
+   label.append(input);form.insertBefore(label,form.querySelector('footer'));
+  }
+ }
  document.body.append(c,g);
  c.querySelectorAll('[data-ep-close]').forEach(b=>b.onclick=()=>c.close());
  g.querySelectorAll('[data-ep-close]').forEach(b=>b.onclick=()=>g.close());
@@ -772,15 +805,19 @@ function installDialogs(){
   const avatarFile=form.elements.avatar.files?.[0];
   submit.disabled=true;
   try{
+   const profile=Object.fromEntries(['instructions','worldbook','ob_server','image_connection','voice_connection','desire_scope']
+    .map(field=>[field,form.elements[field].value]));
+   profile.proactive_enabled=form.elements.proactive_enabled.checked;
    if(window.EmoiRelay?.enabled&&navigator.onLine!==false){
-    try{await remoteSaveContact(person,false)}
-    catch(error){if(error.status!==404)throw error;await remoteSaveContact(person,true)}
-    person.pendingSync=false;
-   }
+    Object.assign(profile,await window.EmoiAlbums.uploadFields(form));
+    try{await remoteSaveContact(person,false,profile)}
+    catch(error){if(error.status!==404)throw error;await remoteSaveContact(person,true,profile)}
+    person.pendingSync=false;delete person.pendingProfile;
+   }else person.pendingProfile=profile;
    if(old)Object.assign(old,person);else contacts.push(person);
    if(!save(CONTACTS_KEY,contacts))return;
    c.close();
-   if(avatarFile)void window.EmoiAvatars?.save(person.id,avatarFile).then(()=>{
+   if(avatarFile&&person.pendingSync)void window.EmoiAvatars?.save(person.id,avatarFile).then(()=>{
     if(screen==='contact-detail')openContactDetail(person.id);else if(screen==='contacts')openContacts();
    }).catch(err=>alert('头像处理失败：'+err.message));
    id?openContactDetail(id):openContacts();
@@ -799,11 +836,15 @@ function installDialogs(){
   const submit=form.querySelector('[type=submit]');submit.disabled=true;
   if(window.EmoiRelay?.enabled){
    let synced;
-   try{synced=await remoteSaveGroup(group,!existing?.remote)}
+   try{synced=await remoteSaveGroup(group,!existing?.remote,await window.EmoiAlbums.uploadFields(form))}
+   catch(error){$('#epGroupError').textContent=error.message;return}
    finally{submit.disabled=false}
    if(!synced){$('#epGroupError').textContent='群聊同步失败，请确认私人服务器已连接。';return}
   }else{
    submit.disabled=false;
+   const file=form.elements.avatar.files[0];
+   if(file)try{await window.EmoiAvatars.save(group.id,file)}
+   catch(error){$('#epGroupError').textContent=error.message;return}
    if(existing?.remote){$('#epGroupError').textContent='请连接私人服务器后再编辑此群。';return}
   }
   const next=existing?groups.map(item=>item.id===id?group:item):[...groups,group];
@@ -893,7 +934,8 @@ function trackPhoneViewport(){
   keyboard=(editing||keyboard)&&layoutHeight-height>100;
   if(!editing&&!keyboard)restingHeight=height;
   root.toggleAttribute('data-ep-keyboard',keyboard);
-  root.style.setProperty('--ep-visual-height',Math.round(height)+'px');
+  if(keyboard)root.style.setProperty('--ep-visual-height',Math.round(height)+'px');
+  else root.style.removeProperty('--ep-visual-height');
   root.style.setProperty('--ep-visual-top',(keyboard?Math.max(0,viewport.offsetTop):0)+'px');
  }
  function schedule(){if(!frame)frame=requestAnimationFrame(update)}

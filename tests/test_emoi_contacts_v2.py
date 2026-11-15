@@ -142,6 +142,56 @@ class ContactIsolationTests(unittest.TestCase):
         request["attachment"]["latitude"] = 95
         self.assertEqual(self.post(path, request).status_code, 422)
 
+    def test_shared_photos_and_profile_survive_an_edit(self):
+        saved = "att-" + uuid4().hex[:14] + ".png"
+        (self.uploads / saved).write_bytes(b"image fixture")
+        result = self.post("/emoi/v2/contacts", {
+            "name": "角色", "profile": {"avatar": saved, "character": saved, "worldbook": "*\n常驻条目"},
+        }).json()
+        ident = result["contact"]["id"]
+        self.assertEqual(result["contact"]["profile"]["avatar"]["url"], "/uploads/" + saved)
+        changed = self.client.patch("/emoi/v2/contacts/" + ident, headers=self.h, json={"name":"新名"}).json()
+        self.assertEqual(changed["contact"]["profile"], result["contact"]["profile"])
+        album = self.post("/emoi/v2/albums", {"name":"人物相册"}).json()
+        self.assertEqual(self.client.get("/emoi/v2/albums").status_code, 401)
+        response = self.post(f'/emoi/v2/albums/{album["id"]}/photos', {"id": saved, "contact_id": ident})
+        self.assertEqual(response.status_code, 200, response.text)
+        photos = self.client.get("/emoi/v2/albums", headers=self.h).json()["photos"]
+        self.assertEqual(photos[0]["contact_id"], ident)
+
+    def test_room_wake_goes_only_to_opted_in_contact(self):
+        from backend.emoi_contacts import connect, now, store_wake_message
+
+        profile = {"proactive_enabled": True, "desire_scope": "gpt"}
+        bound = self.post("/emoi/v2/contacts", {"name": "指定角色", "profile": profile}).json()
+        other = self.create("其他角色")
+        duplicate = self.post("/emoi/v2/contacts", {"name": "第二个角色", "profile": profile})
+        self.assertEqual(duplicate.status_code, 409)
+        with connect(str(Path(self.tmp.name) / "emoi-v2-test.db")) as db:
+            self.assertIsNone(store_wake_message(db, "claude", "wake-1", "有人在吗", now()))
+            self.assertEqual(store_wake_message(db, "gpt", "wake-1", "有人在吗", now())["title"], "指定角色")
+            self.assertIsNone(store_wake_message(db, "gpt", "wake-1", "有人在吗", now()))
+        for room, expected in ((bound, 1), (other, 0)):
+            rows = self.client.get("/emoi/v2/conversations/" + room["conversation_id"] + "/messages",
+                                   headers=self.h).json()["messages"]
+            self.assertEqual(len(rows), expected)
+
+    def test_proactive_opt_in_and_event_idempotency(self):
+        info = self.create("角色")
+        url = "/emoi/v2/contacts/" + info["contact"]["id"]
+        payload = {"event_id":"fixture-event", "text":"忙完了", "mode":"video_invite"}
+        self.assertEqual(self.post(url + "/proactive", payload).status_code, 403)
+        result = self.client.patch(url, headers=self.h, json={"profile":{"proactive_enabled":True}})
+        self.assertEqual(result.status_code, 200, result.text)
+        sent = self.post(url + "/proactive", payload).json()
+        self.assertFalse(sent["duplicate"])
+        again = self.post(url + "/proactive", payload).json()
+        self.assertEqual(again, {"id": sent["id"], "duplicate": True})
+        route = "/emoi/v2/conversations/" + info["conversation_id"] + "/messages"
+        rows = self.client.get(route, headers=self.h).json()["messages"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["attachment"], {"kind":"call_invite", "mode":"video"})
+
     def test_contact_can_switch_between_named_api_and_subscription(self):
         named = "api:" + uuid4().hex
         new = self.post("/emoi/v2/contacts", {"name": "测试", "model_route": named}).json()

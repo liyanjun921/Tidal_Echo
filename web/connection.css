@@ -21,3 +21,5 @@
 #modelConnectionForm{padding-top:16px;border-top:1px solid var(--line)}
 #modelConnectionForm [role=status],#modelConnections [role=status],#modelConnectionStatus{margin:0}
 #modelConnectionForm[hidden],#modelCatalog[hidden],#modelConnectionForm [role=status]:empty,#modelConnections [role=status]:empty,#modelConnectionStatus:empty{display:none}
+
+#contactMediaForm[hidden], #contactMediaForm label[hidden], .ep-list-scroll form[hidden] { display:none; }
