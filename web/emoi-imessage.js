@@ -68,6 +68,32 @@ const stickerKey='emoi-sticker-collection';
 function stickerIndex(){
  try{return JSON.parse(localStorage.getItem(stickerKey)||'[]')}catch{return []}
 }
+let stickerSync=null;
+function syncStickers(){
+ const relay=window.EmoiRelay;
+ if(!relay?.enabled)return Promise.reject(Error('请先连接 Émoi 服务器'));
+ if(stickerSync)return stickerSync;
+ stickerSync=(async()=>{
+  const {items}=await relay.request('/emoi/v2/stickers/shared',{cache:'no-store'});
+  const shared=new Map(items.map(item=>[item.id,item]));
+  const failures=[];
+  for(const item of stickerIndex()){
+   const id=item.id.slice('sticker:'.length);
+   if(shared.has(id))continue;
+   try{
+    const blob=await mediaStore(item.id);
+    if(!blob||!imageTypes.has(blob.type))throw Error('图片已不在本机');
+    const upload=await relay.upload(new File([blob],'sticker.'+imageTypes.get(blob.type),{type:blob.type}));
+    const entry={id,name:item.name.trim().slice(0,120)||'表情包',pack:(item.pack||'我的表情').slice(0,120)};
+    const stored=upload.url.split('/').pop();
+    await relay.json('/emoi/v2/stickers/shared','POST',{...entry,upload:stored});
+    shared.set(id,{...entry,attachment:{kind:'sticker',url:'/uploads/'+stored,mime:blob.type}});
+   }catch(error){failures.push(item.name+'（'+error.message+'）')}
+  }
+  return {items:[...shared.values()],failures};
+ })().finally(()=>{stickerSync=null});
+ return stickerSync;
+}
 function openStickers(onSelect){
  const managing=!onSelect;
  const {dialog,close}=dialogFor(managing?'表情包管理':'表情包');
@@ -83,37 +109,30 @@ function openStickers(onSelect){
  const add=document.createElement('button');add.type='button';add.className='ep-home-control';
  add.textContent='添加图片或导入 ZIP';add.onclick=()=>file.click();controls.append(add,file);
  const sync=document.createElement('button');sync.type='button';sync.className='ep-home-control';
- sync.textContent='同步已有表情包给 AI';controls.append(sync);
- sync.onclick=async()=>{
-  const relay=window.EmoiRelay;
-  if(!relay?.enabled){status.textContent='请先连接 Émoi 服务器';return}
-  sync.disabled=true;add.disabled=true;
+ sync.textContent='重新同步共用表情包';controls.append(sync);
+ let shared=[];
+ async function updateShared(){
+  if(!window.EmoiRelay?.enabled)return;
+  sync.disabled=true;add.disabled=true;status.textContent='正在读取共用表情包…';
   try{
-   const {ids}=await relay.request('/emoi/v2/stickers/shared');
-   const known=new Set(ids);
-   const items=stickerIndex();
-   let count=0;
-   for(const item of items){
-    const id=item.id.slice('sticker:'.length);
-    if(known.has(id))continue;
-    const blob=await mediaStore(item.id);
-    if(!blob||!imageTypes.has(blob.type))continue;
-    status.textContent='正在同步 '+item.name;
-    const result=await relay.upload(new File([blob],'sticker.'+imageTypes.get(blob.type),{type:blob.type}));
-    await relay.json('/emoi/v2/stickers/shared','POST',{
-     id,name:item.name.trim().slice(0,120)||'表情包',pack:(item.pack||'我的表情').slice(0,120),upload:result.url.split('/').pop()
-    });
-    known.add(id);count++;
-   }
-   status.textContent=count?'已同步 '+count+' 张表情包给 AI':'已同步现有表情包';
-  }catch(e){status.textContent=e.message}
+   const result=await syncStickers();
+   shared=result.items;
+   if(!dialog.open)return;
+   paint();
+   if(result.failures.length)status.textContent='未同步 '+result.failures.length+' 张：'+result.failures.slice(0,3).join('、');
+   else if(managing)status.textContent='你和 AI 共用 '+shared.length+' 张表情包';
+  }catch(e){if(dialog.open)status.textContent=e.message}
   finally{sync.disabled=false;add.disabled=false}
- };
+ }
+ sync.onclick=updateShared;
  const urls=new Set();
  let category='全部';
  function paint(){
   urls.forEach(url=>URL.revokeObjectURL(url));urls.clear();grid.replaceChildren();categories.replaceChildren();
-  const items=stickerIndex();
+  const local=new Map(stickerIndex().map(item=>[item.id,item]));
+  const items=shared.map(item=>({...item,id:'sticker:'+item.id}));
+  const synced=new Set(items.map(item=>item.id));
+  items.push(...[...local.values()].filter(item=>!synced.has(item.id)));
   for(const pack of new Set(['全部',...items.map(item=>item.pack||'我的表情')])){
    const chip=document.createElement('button');chip.type='button';chip.textContent=pack;
    chip.setAttribute('aria-pressed',String(pack===category));chip.onclick=()=>{category=pack;paint()};categories.append(chip);
@@ -124,21 +143,29 @@ function openStickers(onSelect){
   for(const item of matches){
    const tile=document.createElement('button');tile.type='button';tile.setAttribute('aria-label',(managing?'删除 ':'选择 ')+item.name);
    const img=document.createElement('img');img.alt=item.name;img.loading='lazy';tile.append(img);grid.append(tile);
-   void mediaStore(item.id).then(blob=>{
-    if(!tile.isConnected||!blob)return;
-    const url=URL.createObjectURL(blob);urls.add(url);img.src=url;
-    tile.onclick=async()=>{
-     if(managing){
-      if(!confirm('删除表情包「'+item.name+'」？'))return;
-      const next=stickerIndex().filter(row=>row.id!==item.id||row.pack!==item.pack);
-      if(window.EmoiRelay?.enabled&&!next.some(row=>row.id===item.id)){
-       try{await window.EmoiRelay.request('/emoi/v2/stickers/shared/'+item.id.slice('sticker:'.length),{method:'DELETE'})}
-       catch(error){status.textContent=error.message;return}
-      }
-      localStorage.setItem(stickerKey,JSON.stringify(next));paint();
-     }else{onSelect(new File([blob],item.name,{type:blob.type}));dialog.close()}
-    };
-   }).catch(()=>{});
+   const load=item.attachment
+    ?window.EmoiRelay.media(item.attachment)
+    :mediaStore(item.id).then(blob=>{if(!blob||!tile.isConnected)return '';const url=URL.createObjectURL(blob);urls.add(url);return url});
+   void load.then(url=>{if(url&&tile.isConnected)img.src=url}).catch(()=>{});
+   tile.onclick=async()=>{
+    if(managing){
+     if(!confirm('从你和 AI 的共用表情包中删除「'+item.name+'」？'))return;
+     const next=stickerIndex().filter(row=>row.id!==item.id);
+     if(window.EmoiRelay?.enabled){
+      try{
+       await stickerSync;
+       await window.EmoiRelay.request('/emoi/v2/stickers/shared/'+item.id.slice('sticker:'.length),{method:'DELETE'});
+      }catch(error){status.textContent=error.message;return}
+     }
+     shared=shared.filter(row=>'sticker:'+row.id!==item.id);
+     localStorage.setItem(stickerKey,JSON.stringify(next));paint();
+    }else if(item.attachment){
+     onSelect({kind:'sticker',sharedId:item.attachment.url.split('/').pop()});dialog.close();
+    }else{
+     const blob=await mediaStore(item.id);
+     if(blob){onSelect(new File([blob],item.name,{type:blob.type}));dialog.close()}
+    }
+   };
   }
  }
  async function addImage(image,name,pack){
@@ -163,11 +190,12 @@ function openStickers(onSelect){
     }
    }
    if(dialog.open){category='全部';paint();status.textContent='表情包已导入'}
+   await updateShared();
   }catch(error){if(dialog.open){paint();status.textContent=error.message}}
   finally{add.disabled=false}
  };
  dialog.addEventListener('close',()=>urls.forEach(url=>URL.revokeObjectURL(url)),{once:true});
- search.oninput=paint;dialog.append(header,search,categories,controls,status,grid);dialog.showModal();paint();
+ search.oninput=paint;dialog.append(header,search,categories,controls,status,grid);dialog.showModal();paint();void updateShared();
 }
 function button(label,glyph,action,className='ep-im-more'){
  const el=document.createElement('button');el.type='button';el.className=className;
@@ -558,7 +586,7 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
  const photos=filePicker('image'),stickers=filePicker('sticker');
  picker.append(pickerButton('照片','photo',()=>photos.click(),'photo'),photos,
   pickerButton('贴纸','sticker',()=>stickers.click(),'sticker'),stickers,
-  pickerButton('表情包','sticker',()=>{picker.hidden=true;openStickers(file=>setAttachment(file,'sticker'))},'sticker'),
+  pickerButton('表情包','sticker',()=>{picker.hidden=true;openStickers(item=>item.sharedId?setPending(item):setAttachment(item,'sticker'))},'sticker'),
   pickerButton('音频','wave',recordVoice,'audio'));
  const location=pickerButton('位置','location',()=>{
   if(!navigator.geolocation){report('当前浏览器无法获取位置');return}
@@ -696,6 +724,7 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
    const result=await window.EmoiRelay.request(endpoint);
    if(!isOpen())return;
    const incoming=result.messages||[];
+   if(incoming.some(row=>row.attachment?.kind==='call_invite'&&!row.call_state))window.dispatchEvent(new Event('emoi-call-available'));
    const saved=new Map(remoteRows.map(row=>[row.id,row]));
    for(const row of incoming)saved.set(row.id,row);
    remoteRows=[...saved.values()];
@@ -728,6 +757,7 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
    if(endpoint&&window.EmoiRelay?.enabled){
     if(pendingRequest?.text!==text||pendingRequest?.media!==media||pendingRequest?.voice!==voice)pendingRequest={text,media,voice,nonce:crypto.randomUUID()};
     if(media?.kind==='location')pendingRequest.attachment=media;
+    if(media?.sharedId)pendingRequest.attachment={kind:'sticker',id:media.sharedId};
     if(media?.file&&!pendingRequest.attachment){
      const uploaded=await window.EmoiRelay.upload(media.file);
      pendingRequest.attachment={kind:media.kind,id:uploaded.url.split('/').pop(),duration:media.duration};
@@ -767,5 +797,5 @@ function open(root,{kind='contact',item,conversationId,goBack,members=[],manage}
 function latest(kind,id){
  return (local[kind+':'+id]||[]).reduce((recent,row)=>!recent||row.created_at>recent.created_at?row:recent,null);
 }
-window.EmoiMessageApp={startCall:openCall,isInCall:()=>Boolean(activeCall),manageStickers:()=>openStickers(),open,latest,pinned,togglePin};
+window.EmoiMessageApp={startCall:openCall,isInCall:()=>Boolean(activeCall),manageStickers:()=>openStickers(),syncStickers,localMedia:mediaStore,open,latest,pinned,togglePin};
 })();

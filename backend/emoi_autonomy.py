@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import HTTPException
 
-DEFAULTS = dict(idle=False, followup=False, moments=False, calls=False, checkin=False,
+DEFAULTS = dict(idle=False, followup=False, moments=False, moment_photo="auto", calls=False, checkin=False,
                 push=False, reactions=False, like_chance=90, comment_chance=70,
                 comment_delay=120, comment_interval=60, idle_minutes=30, threshold=0, min_wait=15, max_wait=600,
                 min_hours=3, max_hours=48, zone="Asia/Shanghai", quiet=True,
@@ -54,6 +54,8 @@ def settings(body):
         if len(result["zone"]) > 80:
             raise ValueError
         ZoneInfo(result["zone"])
+        if result["moment_photo"] not in ("auto", "text", "image"):
+            raise ValueError
         if result["min_wait"] > result["max_wait"] or result["min_hours"] > result["max_hours"]:
             raise ValueError
     except (ValueError, ZoneInfoNotFoundError):
@@ -116,7 +118,10 @@ def due(db, rule, cid, config, stamp):
 def catalog(db, history):
     entries = [dict(row) for row in db.execute("SELECT id,name,pack FROM emoi_shared_stickers")]
     words = history.casefold()
-    entries.sort(key=lambda item: (-int(item["name"].casefold() in words), item["name"], item["id"]))
+    def relevance(item):
+        name = item["name"].rsplit(".", 1)[0].casefold()
+        return (-int(bool(name) and name in words), item["name"], item["id"])
+    entries.sort(key=relevance)
     return entries[:40]
 
 

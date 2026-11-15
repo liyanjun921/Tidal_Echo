@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 from uuid import UUID, uuid4
 
 import httpx
-from fastapi import BackgroundTasks, HTTPException, Request
+from fastapi import Response, BackgroundTasks, HTTPException, Request
 
 try:
     from . import emoi_autonomy as autonomy, emoi_worldbooks as worldbooks, emoi_stickers as stickers
@@ -287,10 +287,13 @@ def register(app, relay):
         return None
 
     @app.get("/emoi/v2/stickers/shared")
-    async def shared_stickers(request: Request):
+    async def shared_stickers(request: Request, response: Response):
         auth(request)
         with connect(path) as db:
-            return {"ids": [row["id"] for row in db.execute("SELECT id FROM emoi_shared_stickers")]}
+            rows = db.execute("SELECT * FROM emoi_shared_stickers ORDER BY pack,name,id").fetchall()
+        response.headers["Cache-Control"] = "no-store"
+        return {"ids": [row["id"] for row in rows],
+                "items": [{**dict(row), "attachment": json.loads(row["attachment"])} for row in rows]}
 
     @app.post("/emoi/v2/stickers/shared")
     async def share_sticker(request: Request):
@@ -359,7 +362,7 @@ def register(app, relay):
             """, (person["id"], json.dumps(config), stamp, next_post))
         return {"settings": config}
 
-    async def generate_action(person, config, trigger, *, manual=False, moment_text=""):
+    async def generate_action(person, config, trigger, *, manual=False, moment_text="", photo_mode=None):
         cid = person["conversation_id"]
         profile = json.loads(person["profile"])
         with connect(path) as db:
@@ -373,13 +376,17 @@ def register(app, relay):
             catalog = autonomy.catalog(db, recent) if trigger not in ("moment", "reaction") else []
             book_context = worldbooks.context(db, recent, person["id"])
         can_call = config["calls"] and trigger not in ("moment", "reaction")
+        photo_mode = photo_mode or config.get("moment_photo", "auto")
+        if trigger == "moment" and photo_mode == "image" and not profile.get("image_connection"):
+            raise HTTPException(422, "请先为该角色绑定图片生成接口")
         async with httpx.AsyncClient(timeout=90, trust_env=False) as client:
             response = await client.post(relay["loop_base_url"]() + "/loop/contact-reply", json={
                 "route": person["model_route"], "contact_id": person["id"], "name": person["name"],
                 "notes": person["notes"], "history": history, "profile": profile,
                 "local_time": datetime.now(ZoneInfo(config["zone"])).isoformat(timespec="minutes"),
                 "worldbooks": book_context, "stickers": catalog, "can_call": can_call,
-                "initiative": trigger, "checkin": config["checkin"], "manual": manual, "moment_text": moment_text,
+                "initiative": trigger, "checkin": config["checkin"], "manual": manual,
+                "moment_text": moment_text, "moment_photo": photo_mode,
             })
             response.raise_for_status()
             reply = response.json()
@@ -389,8 +396,10 @@ def register(app, relay):
         if trigger == "reaction":
             return text, {}
         if trigger == "moment":
-            reply = {"image_prompt": reply.get("image_prompt")}
+            reply = {"image_prompt": reply.get("image_prompt")} if photo_mode != "text" else {}
         attachment = await action_attachment(profile, reply, text, catalog, can_call)
+        if trigger == "moment" and photo_mode == "image" and not attachment:
+            raise HTTPException(502, "本次未能生成配图，请检查图片接口或选择纯文字")
         mode = "moment" if trigger == "moment" else (
             attachment["mode"] + "_invite" if attachment and attachment["kind"] == "call_invite" else "text"
         )
@@ -407,10 +416,13 @@ def register(app, relay):
             person = direct_recipient(db, contact_id)
             config = get_rule(db, person["id"])
         if mode == "moment":
+            photo_mode = body.get("photo")
+            if photo_mode is not None and photo_mode not in ("auto", "text", "image"):
+                raise HTTPException(422, "无效的配图选项")
             if not relay.get("loop_base_url"):
                 raise HTTPException(503, "模型服务尚未连接")
             try:
-                result = await generate_action(person, config, "moment", manual=True)
+                result = await generate_action(person, config, "moment", manual=True, photo_mode=photo_mode)
             except httpx.HTTPStatusError as error:
                 raise HTTPException(502, f"绑定的模型未能发帖（HTTP {error.response.status_code}）") from None
             except (httpx.RequestError, ValueError):
@@ -716,7 +728,9 @@ def register(app, relay):
                         text = clean_text(reply.get("text"), 10000, True)
                     except (httpx.HTTPError, ValueError, HTTPException):
                         continue
-                    attachment = await action_attachment(profile, reply, text, catalog, can_call, voice_reply)
+                    attachment = await action_attachment(profile, reply, text, catalog, False, voice_reply)
+                    call = reply.get("call") if can_call and reply.get("call") in ("voice", "video") else None
+                    call_id = None
                     score = reply.get("followup_score") if rule["followup"] and not call_mode else None
                     if type(score) is not int or not 0 <= score <= 100:
                         score = None
@@ -731,16 +745,27 @@ def register(app, relay):
                         """, (cid, current["id"])).fetchone()
                         if not still_member:
                             continue
-                        if attachment and attachment["kind"] == "call_invite" and pending_call(db, current["id"]):
-                            attachment = None
+                        if call and get_rule(db, current["id"])["calls"] and not pending_call(db, current["id"]):
+                            call_attachment = {"kind": "call_invite", "mode": call}
+                            if attachment:
+                                result = store_contact_action(
+                                    db, {**dict(current), "conversation_id": cid},
+                                    "call:" + message_id + ":" + current["id"],
+                                    "视频来电" if call == "video" else "语音来电", now(),
+                                    {"mode": call + "_invite", "attachment": call_attachment},
+                                )
+                                call_id = result["id"] if result else None
+                            else:
+                                attachment = call_attachment
+                                call_id = reply_id
                         db.execute("""
                           INSERT INTO emoi_v2_messages(id,conversation_id,author,contact_id,text,nonce,delivery,created_at,attachment,followup_score)
                           VALUES(?,?,'contact',?,?,?,'generated',?,?,?)
                         """, (reply_id, cid, current["id"], text, "reply:"+message_id+":"+current["id"], now(),
                               json.dumps(attachment, ensure_ascii=False) if attachment else None, score))
                         completed += 1
-                    if attachment and attachment["kind"] == "call_invite" and rule["push"]:
-                        await notify_action({"title": current["name"], "body": "应用内来电", "url": "/", "id": reply_id})
+                    if call_id and rule["push"]:
+                        await notify_action({"title": current["name"], "body": "应用内来电", "url": "/", "id": call_id})
                     if direct and profile.get("ob_server"):
                         with connect(path) as db:
                             turn = db.execute("SELECT * FROM emoi_v2_messages WHERE id IN (?,?) ORDER BY rowid",
@@ -979,11 +1004,13 @@ def register(app, relay):
         attachment = json.loads(row["attachment"])
         return {"id": row["id"], "conversation_id": row["conversation_id"],
                 "contact_id": row["contact_id"], "name": row["name"],
-                "mode": attachment["mode"], "created_at": row["created_at"]}
+                "mode": attachment["mode"], "created_at": row["created_at"],
+                "remaining_seconds": max(0, 90 - (datetime.now(timezone.utc) - datetime.fromisoformat(row["created_at"])).total_seconds())}
 
     @app.get("/emoi/v2/call-inbox")
-    async def call_inbox(request: Request):
+    async def call_inbox(request: Request, response: Response):
         auth(request)
+        response.headers["Cache-Control"] = "no-store"
         with connect(path) as db:
             row = db.execute("""
                 SELECT m.*, c.name FROM emoi_v2_messages m
@@ -1017,13 +1044,14 @@ def register(app, relay):
             return None
         with connect(path) as db:
             target = wake_target(db, scope)
+            config = get_rule(db, target["id"]) if target is not None else autonomy.DEFAULTS
         if target is None:
             return None
         profile = json.loads(target["profile"])
         delivery = {"contact_id": target["id"], "mode": mode}
         if mode in ("voice_invite", "video_invite"):
             delivery["attachment"] = {"kind": "call_invite", "mode": mode.removesuffix("_invite")}
-        elif mode == "image" or (mode == "moment" and prompt):
+        elif mode == "image" or (mode == "moment" and prompt and config["moment_photo"] != "text"):
             media = relay.get("contact_media_runtime") or {}
             if not prompt or not profile.get("image_connection") or not media:
                 return delivery if mode == "moment" else None
@@ -1077,14 +1105,15 @@ def register(app, relay):
         if not isinstance(body, dict):
             raise HTTPException(422, "动态格式无效")
         ident = valid_id(body.get("id"))
-        text = clean_text(body.get("text"), 1000, True)
+        attachment = saved_picture(body.get("photo_id"))
+        text = clean_text(body.get("text", ""), 1000, not attachment)
         with connect(path) as db:
-            inserted = db.execute("INSERT OR IGNORE INTO emoi_v2_moments(id,text,created_at) VALUES(?,?,?)",
-                                  (ident, text, now())).rowcount
+            inserted = db.execute("INSERT OR IGNORE INTO emoi_v2_moments(id,text,created_at,attachment) VALUES(?,?,?,?)",
+                                  (ident, text, now(), json.dumps(attachment) if attachment else None)).rowcount
             if inserted:
                 autonomy.enqueue_reactions(db, ident, time.time())
-            row = db.execute("SELECT id,text,created_at AS createdAt FROM emoi_v2_moments WHERE id=?", (ident,)).fetchone()
-        return {"post": dict(row)}
+            row = db.execute("SELECT id,text,created_at AS createdAt,attachment FROM emoi_v2_moments WHERE id=?", (ident,)).fetchone()
+        return {"post": {**dict(row), "attachment": json.loads(row["attachment"]) if row["attachment"] else None}}
 
     @app.delete("/emoi/v2/moments/{moment_id}")
     async def delete_moment(moment_id: str, request: Request):

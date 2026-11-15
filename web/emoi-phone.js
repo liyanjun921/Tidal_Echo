@@ -496,7 +496,7 @@ function openMessageSettings(){
    ['followup','按角色焦虑值追发','checkbox'],['threshold','最低焦虑值（%）','number',0,100],
    ['min_wait','最短等待（秒）','number',15,3600],['max_wait','最长等待（秒）','number',15,3600]]],
   ['朋友圈',[
-   ['moments','允许角色自动发帖','checkbox'],['min_hours','最短发帖间隔（小时）','number',1,168],
+   ['moments','允许角色自动发帖','checkbox'],['moment_photo','角色发帖配图','photo-mode'],['min_hours','最短发帖间隔（小时）','number',1,168],
    ['max_hours','最长发帖间隔（小时）','number',1,168],
    ['reactions','允许角色点赞和评论我的动态','checkbox'],
    ['like_chance','点赞概率（%）','number',0,100],['comment_chance','评论概率（%）','number',0,100],
@@ -518,7 +518,13 @@ function openMessageSettings(){
     const group=create('fieldset');group.append(create('legend','',title));editor.append(group);
     for(const [key,label,type,min,max] of items){
      const row=create('label',type==='checkbox'?'ep-message-rule-check':'',label);
-     const input=create('input');input.type=type;input.required=type!=='checkbox';
+     const input=create(type==='photo-mode'?'select':'input');
+     if(type==='photo-mode'){
+      for(const [value,label] of [['auto','角色自己决定'],['text','只发文字'],['image','每条配图']]){
+       const option=create('option','',label);option.value=value;input.append(option);
+      }
+     }else input.type=type;
+     input.required=type!=='checkbox';
      if(type==='checkbox'){input.checked=settings[key];row.prepend(input)}
      else{
       input.value=settings[key];if(min!==undefined){input.min=min;input.max=max}
@@ -535,7 +541,7 @@ function openMessageSettings(){
     const run=makeButton(label,async()=>{
      run.disabled=true;status.textContent='正在处理…';
      try{
-      await relay.request(path+'/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:kind}),timeout:kind==='moment'?180000:15000});
+      await relay.request(path+'/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:kind,...(kind==='moment'?{photo:fields.moment_photo.value}:{})}),timeout:kind==='moment'?180000:15000});
       if(version===load)status.textContent=kind==='moment'?'已发到朋友圈':'来电已发出';
       if(kind!=='moment')void checkIncomingCalls();
      }catch(e){if(version===load)status.textContent=e.message}
@@ -566,24 +572,65 @@ function openMoments(){
  const status=create('p','ep-thread-empty',connected?'正在读取动态…':'动态保存在当前设备');
  status.setAttribute('role','status');
  const form=create('form','ep-moment-form');form.hidden=true;
- const text=create('textarea');text.placeholder='说点什么…';text.required=true;text.maxLength=1000;
+ const text=create('textarea');text.placeholder='说点什么…';text.maxLength=1000;
  text.setAttribute('aria-label','朋友圈正文');
  const publish=create('button','ep-action-primary','发布');publish.type='submit';
- form.append(text,publish);
- top.append(actionButton('返回桌面','back',openHome,'ep-messages-action'),actionButton('发朋友圈','compose',()=>{
-  form.hidden=!form.hidden;if(!form.hidden)text.focus();
- },'ep-messages-action'));
- let posts=connected?[]:safeRead(MOMENTS_KEY), pendingId=null;
- publish.disabled=connected;
+ const photo=create('input');photo.type='file';photo.accept='image/jpeg,image/png,image/webp,image/gif,image/avif';photo.hidden=true;
+ const mediaPreview=create('div','ep-moment-preview');mediaPreview.hidden=true;
+ const previewImage=create('img');previewImage.alt='配图预览';
+ const removePhoto=actionButton('移除配图','x',()=>setPhoto(null),'ep-moment-photo-remove');
+ mediaPreview.append(previewImage,removePhoto);
+ const tools=create('div','ep-moment-tools');
+ const addPhoto=actionButton('添加配图','photo',()=>photo.click(),'ep-moment-photo-add');
+ addPhoto.append(create('span','','添加配图'));
+ tools.append(addPhoto,publish);
+ form.append(text,photo,mediaPreview,tools);
+ const toggle=actionButton('发朋友圈','compose',()=>{
+  form.hidden=!form.hidden;toggle.setAttribute('aria-expanded',String(!form.hidden));
+  if(!form.hidden)text.focus();
+ },'ep-messages-action');toggle.setAttribute('aria-expanded','false');
+ top.append(actionButton('返回桌面','back',openHome,'ep-messages-action'),toggle);
+ let posts=safeRead(MOMENTS_KEY), pendingId=null, pendingPhoto=null, photoFile=null, previewURL=null;
+ let publishing=false;
+ const localImageURLs=new Set();
+ const cleanup=new MutationObserver(()=>{
+  if(form.isConnected)return;
+  cleanup.disconnect();if(previewURL)URL.revokeObjectURL(previewURL);
+  for(const url of localImageURLs)URL.revokeObjectURL(url);
+ });
+ cleanup.observe(root,{childList:true});
+ function updatePublish(){publish.disabled=publishing||(!text.value.trim()&&!photoFile)}
+ function setPhoto(file){
+  if(previewURL)URL.revokeObjectURL(previewURL);
+  photoFile=file;pendingId=null;pendingPhoto=null;
+  previewURL=file?URL.createObjectURL(file):null;
+  if(previewURL)previewImage.src=previewURL;else previewImage.removeAttribute('src');
+  mediaPreview.hidden=!file;updatePublish();
+ }
+ text.addEventListener('input',()=>{pendingId=null;updatePublish()});
+ photo.onchange=()=>{
+  const file=photo.files?.[0];photo.value='';
+  if(!file)return;
+  if(!photo.accept.split(',').includes(file.type)||!file.size||file.size>8*1024*1024){
+   status.textContent='请选择 8 MB 内的 JPG、PNG、WebP、GIF 或 AVIF 图片';return;
+  }
+  setPhoto(file);status.textContent='';
+ };
+ updatePublish();
  function render(){
-  feed.replaceChildren();
+  for(const url of localImageURLs)URL.revokeObjectURL(url);
+  localImageURLs.clear();feed.replaceChildren();
   if(!posts.length)feed.append(create('p','ep-thread-empty','还没有动态'));
   for(const post of posts){
    const card=create('article','ep-moment-card');
    const meta=create('div','ep-moment-meta');
    const date=create('time','',new Date(post.createdAt).toLocaleString('zh-CN'));date.dateTime=post.createdAt;
-   meta.append(create('strong','',post.author||'我'),date);
-   const remove=create('button','ep-thread-pin','删除');remove.type='button';
+   const person=contacts.find(item=>item.id===post.contact_id);
+   const avatar=create('span','ep-moment-avatar',(post.author||'我').slice(0,1));
+   if(person)queueMicrotask(()=>window.EmoiAvatars?.paint(avatar,person.id,person.profile?.avatar));
+   const byline=create('div','ep-moment-byline');byline.append(create('strong','',post.author||'我'),date);
+   meta.append(avatar,byline);
+   const remove=actionButton('删除动态','x',()=>{},'ep-moment-delete');
    remove.onclick=async()=>{
     if(!confirm('删除这条动态？'))return;
     remove.disabled=true;
@@ -595,10 +642,17 @@ function openMoments(){
     }catch(error){status.textContent=error.message}
     finally{remove.disabled=false}
    };
-   meta.append(remove);card.append(meta,create('p','',window.EmoiRich.withoutEmoji(post.text)));
+   meta.append(remove);card.append(meta);
+   if(post.text)card.append(create('p','ep-moment-copy',window.EmoiRich.withoutEmoji(post.text)));
    if(post.attachment?.kind==='image'){
     const image=create('img','ep-moment-image');image.alt='动态图片';image.loading='lazy';card.append(image);
-    void window.EmoiRelay.media(post.attachment).then(url=>image.src=url).catch(()=>image.remove());
+    const load=post.attachment.localId
+     ?window.EmoiMessageApp.localMedia(post.attachment.localId).then(blob=>{
+       if(!blob||!image.isConnected)return '';
+       const url=URL.createObjectURL(blob);localImageURLs.add(url);return url;
+      })
+     :window.EmoiRelay.media(post.attachment);
+    void load.then(url=>{if(url&&image.isConnected)image.src=url}).catch(()=>image.remove());
    }
    const reactions=post.reactions||[];
    const likes=reactions.filter(item=>item.liked).map(item=>item.name);
@@ -613,36 +667,47 @@ function openMoments(){
   }
  }
  form.onsubmit=async e=>{
-  e.preventDefault();const value=text.value.trim();if(!value||publish.disabled)return;
-  publish.disabled=true;
+  e.preventDefault();
+  const value=text.value.trim(), selected=photoFile;
+  if((!value&&!selected)||publishing)return;
+  publishing=true;updatePublish();text.disabled=true;addPhoto.disabled=true;removePhoto.disabled=true;
   try{
    pendingId??=crypto.randomUUID();
    const draft={id:pendingId,createdAt:new Date().toISOString(),text:value};
+   if(selected&&connected){
+    if(!pendingPhoto)pendingPhoto=(await window.EmoiRelay.upload(selected)).url.split('/').pop();
+    draft.photo_id=pendingPhoto;
+   }else if(selected){
+    const localId='moment:'+draft.id;
+    await window.EmoiMessageApp.localMedia(localId,selected);
+    draft.attachment={kind:'image',localId};
+   }
    const post=connected?{...(await window.EmoiRelay.json('/emoi/v2/moments','POST',draft)).post,remote:true}:draft;
    const next=[post,...posts.filter(item=>item.id!==post.id)];
    if(!connected&&!save(MOMENTS_KEY,next))return;
-   posts=next;pendingId=null;text.value='';form.hidden=true;status.textContent=connected?'':'动态保存在当前设备';render();
+   posts=next;text.value='';setPhoto(null);form.hidden=true;toggle.setAttribute('aria-expanded','false');
+   status.textContent=connected?'':'动态保存在当前设备';render();
   }catch(error){status.textContent=error.message}
-  finally{publish.disabled=false}
+  finally{publishing=false;text.disabled=false;addPhoto.disabled=false;removePhoto.disabled=false;updatePublish()}
  };
  render();list.append(create('h1','','朋友圈'),status,form,feed);
  if(connected){
   let refreshing=false;
   const refresh=async()=>{
-   if(refreshing||screen!=='moments'||!feed.isConnected)return;
+   if(refreshing||publishing||screen!=='moments'||!feed.isConnected)return;
    refreshing=true;
    try{
     const result=await window.EmoiRelay.request('/emoi/v2/moments');
-    if(!feed.isConnected)return;
+    if(!feed.isConnected||publishing)return;
     const next=[...result.posts.map(post=>({...post,remote:true})),...safeRead(MOMENTS_KEY)]
       .sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
     if(JSON.stringify(posts)!==JSON.stringify(next)){posts=next;render()}
     status.textContent='';
    }catch(error){status.textContent=error.message}
-   finally{publish.disabled=false;refreshing=false}
+   finally{refreshing=false}
   };
   queueMicrotask(refresh);
-  const poll=setInterval(()=>{if(!feed.isConnected)clearInterval(poll);else if(!document.hidden&&(!publish.disabled||!posts.length))void refresh()},15000);
+  const poll=setInterval(()=>{if(!feed.isConnected)clearInterval(poll);else if(!document.hidden)void refresh()},15000);
  }
  root.append(top,list,messageNavigation('moments'));
 }
@@ -1111,13 +1176,36 @@ function trackPhoneViewport(){
  document.addEventListener('focusout',schedule);
  update();
 }
-let incomingDialog=null,checkingCalls=false;
+let incomingDialog=null,checkingCalls=false,callAudio=null;
+function unlockCallAudio(){
+ const Audio=window.AudioContext||window.webkitAudioContext;
+ if(!Audio||callAudio?.state==='running')return;
+ try{
+  callAudio??=new Audio();
+  void callAudio.resume().catch(()=>{});
+ }catch{}
+}
+function ringIncomingCall(){
+ if(callAudio?.state!=='running')return;
+ try{
+  for(const delay of [0,.28]){
+   const tone=callAudio.createOscillator(), volume=callAudio.createGain();
+   const start=callAudio.currentTime+delay;
+   tone.frequency.value=520;tone.connect(volume);volume.connect(callAudio.destination);
+   volume.gain.setValueAtTime(.001,start);
+   volume.gain.exponentialRampToValueAtTime(.12,start+.025);
+   volume.gain.exponentialRampToValueAtTime(.001,start+.2);
+   tone.onended=()=>{tone.disconnect();volume.disconnect()};
+   tone.start(start);tone.stop(start+.21);
+  }
+ }catch{}
+}
 async function checkIncomingCalls(){
  const relay=window.EmoiRelay,messageApp=window.EmoiMessageApp;
- if(!relay?.enabled||document.hidden||mode!=='phone'||incomingDialog||checkingCalls||messageApp?.isInCall())return;
+ if(!relay?.enabled||document.hidden||incomingDialog||checkingCalls||messageApp?.isInCall())return;
  checkingCalls=true;
  try{
-  const {invite}=await relay.request('/emoi/v2/call-inbox',{timeout:4000});
+  const {invite}=await relay.request('/emoi/v2/call-inbox',{timeout:4000,cache:'no-store'});
   if(!invite||document.hidden||incomingDialog||messageApp?.isInCall())return;
   if(!contacts.some(contact=>contact.id===invite.contact_id))await syncRemote();
   const person=contacts.find(contact=>contact.id===invite.contact_id);
@@ -1132,6 +1220,7 @@ async function checkIncomingCalls(){
     await relay.json('/emoi/v2/call-inbox/'+encodeURIComponent(invite.id),'PATCH',{action});
     dialog.close();
     if(action==='accept'){
+     if(mode!=='phone')setMode('phone');
      remote.direct.set(person.id,invite.conversation_id);
      openContactConversation(person.id);
      messageApp.startCall(person,invite.mode,'/emoi/v2/conversations/'+encodeURIComponent(invite.conversation_id)+'/messages');
@@ -1145,10 +1234,13 @@ async function checkIncomingCalls(){
   decline.onclick=()=>void answer('decline');accept.onclick=()=>void answer('accept');
   footer.append(decline,accept);dialog.append(heading,copy,footer);document.body.append(dialog);
   dialog.addEventListener('cancel',event=>{event.preventDefault();void answer('decline')});
-  const timeout=setTimeout(()=>{if(dialog.open)dialog.close()},Math.max(0,Date.parse(invite.created_at)+90000-Date.now()));
-  dialog.addEventListener('close',()=>{clearTimeout(timeout);dialog.remove();incomingDialog=null},{once:true});
-  dialog.showModal();
- }catch{}finally{checkingCalls=false}
+  const timeout=setTimeout(()=>{if(dialog.open)dialog.close()},Math.max(0,invite.remaining_seconds!=null?invite.remaining_seconds*1000:Date.parse(invite.created_at)+90000-Date.now()));
+  let ringing;
+  dialog.addEventListener('close',()=>{clearTimeout(timeout);clearInterval(ringing);dialog.remove();incomingDialog=null},{once:true});
+  try{dialog.showModal()}catch(error){clearTimeout(timeout);dialog.remove();incomingDialog=null;throw error}
+  ringIncomingCall();ringing=setInterval(ringIncomingCall,2700);
+ }catch(error){console.debug('Émoi 来电暂不可读取：',error.message)}
+ finally{checkingCalls=false}
 }
 function init(){
  const artButton=$('#emoiSwitchToPhone');
@@ -1165,12 +1257,15 @@ function init(){
  window.addEventListener('emoi-ui-mode',e=>setMode(e.detail?.mode));
  const refreshRegistry=()=>{
   void syncRemote();
+  if(window.EmoiRelay?.enabled)void window.EmoiMessageApp?.syncStickers().catch(()=>{});
   void window.EmoiModelConnections?.load().catch(()=>{});
  };
  window.addEventListener('emoi-connected',()=>{refreshRegistry();void checkIncomingCalls()});
  window.addEventListener('online',refreshRegistry);
- if(window.EmoiRelay?.enabled)refreshRegistry();
- setInterval(()=>void checkIncomingCalls(),5000);
+ if(window.EmoiRelay?.enabled){refreshRegistry();void checkIncomingCalls()}
+ window.addEventListener('emoi-call-available',()=>void checkIncomingCalls());
+ document.addEventListener('pointerdown',unlockCallAudio,{passive:true});
+ setInterval(()=>void checkIncomingCalls(),2500);
  document.addEventListener('visibilitychange',()=>void checkIncomingCalls());
 }
 window.EmoiUiMode={openBeauty(){if(mode!=='phone')setMode('phone');const workspace=$('#workspaceDialog');if(workspace.open)workspace.close();openBeauty()},setMode,getMode:()=>mode,openHome,openApp};

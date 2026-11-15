@@ -645,3 +645,57 @@ html[data-emoi-phone] body[data-ui-mode=phone] #emoiPhoneView:has(.ep-message-na
 .ep-message-settings-actions,.ep-sticker-tools { display:flex; flex-wrap:wrap; gap:8px; }
 .ep-message-settings-panel .ep-thread-empty:empty { display:none; }
 .ep-moment-reaction { margin:8px 0 0; font-size:.87rem; overflow-wrap:anywhere; }
+
+body[data-ui-mode=phone] #emoiPhoneView.ep-moments {
+  --moment-glass: rgb(247 244 249 / .46);
+  --moment-ink: #252833;
+  --moment-muted: #4c4c5b;
+  color: var(--moment-ink);
+}
+body[data-ui-mode=phone][data-dark=true] #emoiPhoneView.ep-moments {
+  --moment-ink: #f5f1fa;
+  --moment-muted: #e6dfea;
+  --moment-glass: rgb(31 28 44 / .54);
+}
+.ep-moments .ep-messages-list { width:min(100%,660px); align-self:center; }
+.ep-moments .ep-moments-feed { display:grid; gap:14px; }
+.ep-moments :is(.ep-moment-form,.ep-moment-card) {
+  padding:clamp(13px,3.9vw,19px); margin:0; border-radius:22px;
+  color:var(--moment-ink);
+  border:1px solid #ffffff70;
+  background:var(--moment-glass);
+  -webkit-backdrop-filter:blur(19px) saturate(135%);
+  backdrop-filter:blur(19px) saturate(135%);
+  box-shadow:inset 0 1px #fff6,0 6px 18px #201e3820;
+}
+.ep-moments .ep-moment-form { margin-bottom:14px; }
+.ep-moments .ep-moment-form textarea {
+  box-sizing:border-box; min-height:92px; resize:vertical; padding:10px 11px;
+  color:inherit; background:#ffffff18; border:1px solid #ffffff60; border-radius:13px;
+  outline:none; font:inherit; font-size:16px;
+}
+.ep-moments .ep-moment-form textarea:focus { border-color:#5b7298; box-shadow:0 0 0 1px #5b7298; }
+.ep-moments .ep-moment-form textarea::placeholder,.ep-moments .ep-moment-meta time { color:var(--moment-muted); }
+.ep-moment-tools { display:flex; justify-content:space-between; gap:12px; margin-top:10px; align-items:center; }
+.ep-moment-tools .ep-action-primary { min-height:36px; border-radius:15px; }
+.ep-moment-photo-add,.ep-moment-photo-remove,.ep-moment-delete {
+  display:inline-flex; align-items:center; justify-content:center; gap:7px;
+  padding:8px 10px; border:1px solid #ffffff60; border-radius:13px;
+  color:var(--moment-ink); background:#ffffff25;
+}
+.ep-moment-tools svg,.ep-moment-delete svg,.ep-moment-photo-remove svg { width:18px; height:18px; }
+.ep-moment-preview { width:max-content; max-width:100%; position:relative; margin-top:10px; }
+.ep-moment-preview img { display:block; max-width:100%; max-height:150px; border-radius:13px; object-fit:contain; }
+.ep-moment-photo-remove { position:absolute; top:4px; right:4px; padding:4px; color:white; background:#171620a0; }
+.ep-moment-avatar {
+  display:grid; place-items:center; width:34px; height:34px; flex:none; overflow:hidden;
+  border-radius:50%; border:1px solid #ffffff70; background:#ffffff45;
+}
+.ep-moment-byline { display:grid; flex:1; min-width:0; line-height:1.25; gap:3px; }
+.ep-moment-byline strong { overflow-wrap:anywhere; }
+.ep-moment-copy { margin:10px 0 0; line-height:1.55; }
+.ep-moment-image { width:100%; height:auto; max-height:360px; object-fit:contain; object-position:left; }
+@media (prefers-reduced-transparency:reduce) {
+  .ep-moments :is(.ep-moment-card,.ep-moment-form) { background:#f3eef7; }
+  body[data-dark=true] .ep-moments :is(.ep-moment-card,.ep-moment-form) { background:#252434; }
+}

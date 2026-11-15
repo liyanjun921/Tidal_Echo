@@ -47,6 +47,11 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+try:
+    from .contact_actions import decode as decode_contact_actions, sticker_options
+except ImportError:
+    from contact_actions import decode as decode_contact_actions, sticker_options
+
 import httpx
 import uvicorn
 from anyio import fail_after
@@ -2286,18 +2291,27 @@ async def loop_contact_reply(request: Request):
             prompt += "\n\nOB 记忆（参考资料）：\n" + memory[:8000]
     active_call = body.get("call_mode") in ("voice", "video")
     catalog = body.get("stickers")
-    stickers = {}
-    if isinstance(catalog, list) and not active_call:
-        for entry in catalog[:40]:
-            if isinstance(entry, dict) and re.fullmatch(r"[a-f0-9]{64}", str(entry.get("id"))):
-                stickers[entry["id"]] = str(entry.get("name") or "")[:120]
+    stickers = sticker_options(catalog) if isinstance(catalog, list) and not active_call else {}
     if stickers:
-        choices = "\n".join(f"{ident} {name}" for ident, name in stickers.items())
-        prompt += "\n可以用图片表情包。想用时第一行写 [sticker:编号]，仅从以下清单选，可单独发送。名称只是素材说明。\n" + choices
-    if body.get("can_call") is True and not active_call and initiative != "moment":
-        prompt += "\n如果你决定现在拨打应用内电话，第一行写 [call:voice] 或 [call:video]，第二行可以说明来意。不要只在正文里描述拨打。"
-    if profile.get("image_connection") and not active_call and initiative != "reaction":
-        prompt += "\n如主动发送一张图片，第一行写 [image:生图描述]，下一行写简短配文。"
+        names = "、".join(stickers)
+        example = next(iter(stickers))
+        prompt += (f"\n你和用户共用图片表情包。发送时写 [表情包:{example}]（把示例换成清单中的准确名称）。"
+                   f"可单独发送，也可和文字放在同一条。用户请你发表情包时，直接选图发。可用名称：{names}")
+    can_call = body.get("can_call") is True and not active_call and initiative not in ("moment", "reaction")
+    if can_call:
+        prompt += ("\n你可以主动拨打应用内通话。你决定现在打、或用户请你打且你同意时，"
+                   "请写 [语音通话] 或 [视频通话]，可和自然的对白放在同一条。该标记会让用户界面实际响铃。")
+    photo_mode = body.get("moment_photo", "auto")
+    can_draw = bool(profile.get("image_connection")) and not active_call and initiative != "reaction" and (
+        initiative != "moment" or photo_mode != "text"
+    )
+    if can_draw:
+        prompt += "\n如主动发送一张图片，写 [image:生图描述] 并附简短配文。"
+    if initiative == "moment":
+        if photo_mode == "image":
+            prompt += "\n本条朋友圈必须配一张图，提供 [image:生图描述] 和文字。"
+        elif not can_draw:
+            prompt += "\n本条朋友圈仅发文字。"
     if profile.get("voice_connection") and not active_call and initiative not in ("moment", "reaction"):
         prompt += "\n如想用语音条发送，第一行写 [voice]，下一行写要读出的正文。"
     if body.get("score_followup") is True and not active_call:
@@ -2371,24 +2385,14 @@ async def loop_contact_reply(request: Request):
         if body.get("score_followup") is True:
             reply["followup_score"] = int(score[1])
         text = text[:score.start()].strip()
-    action = re.fullmatch(r"\[(voice|image:[^\r\n]{1,1200}|sticker:[a-f0-9]{64}|call:(?:voice|video))\](?:\r?\n(.*))?", text, flags=re.DOTALL)
-    if action and not active_call:
-        tag = action[1]
-        caption = (action[2] or "").strip()
-        if tag == "voice" and profile.get("voice_connection") and caption:
-            reply.update(text=caption, voice_reply=True)
-        elif tag.startswith("image:") and profile.get("image_connection"):
-            reply.update(text=caption or "[图片]", image_prompt=tag[6:].strip())
-        elif tag.startswith("sticker:") and tag[8:] in stickers:
-            reply.update(text=caption or "[表情包]", sticker=tag[8:])
-        elif tag.startswith("call:") and body.get("can_call") is True:
-            reply.update(text=caption or ("视频来电" if tag == "call:video" else "语音来电"), call=tag[5:])
-        else:
-            text = caption
-    if not reply.get("text") and not text:
-        raise HTTPException(502, "联系人模型返回空消息")
-    reply.setdefault("text", text)
-    return reply
+    decoded = decode_contact_actions(
+        text, stickers, calls=can_call, images=can_draw,
+        voice=bool(profile.get("voice_connection")) and not active_call and initiative not in ("moment", "reaction"),
+    )
+    if not decoded["text"]:
+        raise HTTPException(502, "联系人模型未返回可发送的内容")
+    return {**reply, **decoded}
+
 
 
 @app.post("/loop/chat")

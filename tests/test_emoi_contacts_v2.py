@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 import httpx
 from backend.emoi_contacts import connect, register
 from backend.emoi_autonomy import DEFAULTS, followup_delay, is_quiet
+from examples.contact_actions import decode, sticker_options
 from datetime import datetime, timezone
 
 
@@ -40,6 +41,16 @@ class ContactIsolationTests(unittest.TestCase):
         self.assertEqual(result.status_code,200,result.text)
         return result.json()
 
+    def test_model_action_formats_and_exact_shared_sticker_names(self):
+        first, second = "a" * 64, "b" * 64
+        options = sticker_options([{"id": first, "name": "抱抱.png"}, {"id": second, "name": "抱抱.webp"}])
+        reply = decode("来接我呀。［表情包：抱抱 (2)］\n【我向你发起了视频通话】", options, calls=True)
+        self.assertEqual(reply, {"call": "video", "sticker": second, "text": "来接我呀。"})
+        self.assertEqual(decode("好呀 [call:voice]", options, calls=True)["call"], "voice")
+        self.assertEqual(decode("【语音通话】", options), {"text": ""})
+        self.assertEqual(decode("抱抱 [表情包:猜测]", options), {"text": "抱抱"})
+        self.assertEqual(decode(f"[sticker:{first}]", options)["sticker"], first)
+
     def test_ai_stickers_and_model_initiated_calls(self):
         created = self.create("甲")
         ident = created["contact"]["id"]
@@ -54,13 +65,17 @@ class ContactIsolationTests(unittest.TestCase):
             "id": sticker, "name": "抱抱", "pack": "日常", "upload": stored,
         })
         self.assertEqual(result.status_code, 200, result.text)
+        library = self.client.get("/emoi/v2/stickers/shared", headers=self.h)
+        self.assertEqual(library.headers["cache-control"], "no-store")
+        self.assertEqual(library.json()["items"][0]["attachment"]["url"], "/uploads/" + stored)
         messages = "/emoi/v2/conversations/" + created["conversation_id"] + "/messages"
 
         async def fake_reply(client, url, *, json, **kwargs):
             self.assertTrue(json["can_call"])
             self.assertEqual(json["stickers"][0]["id"], sticker)
             is_call = json["history"][-1]["text"] == "视频"
-            reply = {"text": "接电话", "call": "video"} if is_call else {"text": "抱抱", "sticker": sticker}
+            raw = "接电话 【表情包：抱抱】【视频通话】" if is_call else "[表情包:抱抱]"
+            reply = decode(raw, sticker_options(json["stickers"]), calls=json["can_call"])
             return httpx.Response(200, json=reply, request=httpx.Request("POST", url))
 
         with patch("httpx.AsyncClient.post", new=fake_reply):
@@ -69,9 +84,13 @@ class ContactIsolationTests(unittest.TestCase):
                 self.assertEqual(sent.status_code, 200, sent.text)
         rows = self.client.get(messages, headers=self.h).json()["messages"]
         self.assertEqual(rows[1]["attachment"]["kind"], "sticker")
-        invite = self.client.get("/emoi/v2/call-inbox", headers=self.h).json()["invite"]
+        inbox = self.client.get("/emoi/v2/call-inbox", headers=self.h)
+        self.assertEqual(inbox.headers["cache-control"], "no-store")
+        invite = inbox.json()["invite"]
         self.assertEqual(invite["mode"], "video")
+        self.assertGreater(invite["remaining_seconds"], 0)
         self.assertEqual(invite["id"], rows[3]["id"])
+        self.assertEqual(rows[4]["attachment"]["url"], rows[1]["attachment"]["url"])
         answer = self.client.patch("/emoi/v2/call-inbox/" + invite["id"], headers=self.h, json={"action":"accept"})
         self.assertEqual(answer.status_code, 200, answer.text)
         self.assertIsNone(self.client.get("/emoi/v2/call-inbox", headers=self.h).json()["invite"])
@@ -86,14 +105,18 @@ class ContactIsolationTests(unittest.TestCase):
             self.assertEqual(json["initiative"], "moment")
             self.assertEqual(json["history"], [])
             self.assertEqual(json["route"], "gpt")
-            return httpx.Response(200, json={"text": "今晚看到了月亮。"}, request=httpx.Request("POST", url))
+            self.assertEqual(json["moment_photo"], "text")
+            return httpx.Response(200, json={"text": "今晚看到了月亮。", "image_prompt": "月亮"}, request=httpx.Request("POST", url))
 
         with patch("httpx.AsyncClient.post", new=fake_reply):
-            result = self.post(endpoint + "/message-rules/run", {"mode": "moment"})
+            result = self.post(endpoint + "/message-rules/run", {"mode": "moment", "photo": "text"})
         self.assertEqual(result.status_code, 200, result.text)
+        required = self.post(endpoint + "/message-rules/run", {"mode": "moment", "photo": "image"})
+        self.assertEqual(required.status_code, 422)
         feed = self.client.get("/emoi/v2/moments", headers=self.h).json()["posts"]
         self.assertEqual(feed[0]["contact_id"], ident)
         self.assertEqual(feed[0]["text"], "今晚看到了月亮。")
+        self.assertIsNone(feed[0]["attachment"])
 
     def test_followup_delay_and_midnight_quiet_window(self):
         config = {**DEFAULTS, "threshold": 20, "quiet_start": "23:00", "quiet_end": "07:00", "zone": "UTC"}
@@ -247,6 +270,16 @@ class ContactIsolationTests(unittest.TestCase):
         self.assertEqual(self.post(path, request).json()["message"]["attachment"], request["attachment"])
         request["attachment"]["latitude"] = 95
         self.assertEqual(self.post(path, request).status_code, 422)
+
+    def test_owner_can_publish_a_photo_without_text(self):
+        path = "/emoi/v2/moments"
+        stored = "att-" + uuid4().hex[:14] + ".png"
+        (self.uploads / stored).write_bytes(b"test photo")
+        result = self.post(path, {"id": str(uuid4()), "photo_id": stored})
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(result.json()["post"]["attachment"]["url"], "/uploads/" + stored)
+        self.assertEqual(self.client.get(path, headers=self.h).json()["posts"][0]["text"], "")
+        self.assertEqual(self.post(path, {"id": str(uuid4()), "photo_id": "https://example.org/img"}).status_code, 422)
 
     def test_shared_photos_and_profile_survive_an_edit(self):
         saved = "att-" + uuid4().hex[:14] + ".png"
