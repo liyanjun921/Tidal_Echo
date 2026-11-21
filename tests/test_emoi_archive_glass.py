@@ -14,9 +14,9 @@ class ArchiveGlassTests(unittest.TestCase):
         html = (WEB / "index.html").read_text(encoding="utf-8")
         self.assertIn('id="chatWallpaperButton"', html)
         self.assertIn('id="pageWallpaperButton"', html)
-        self.assertIn('src="emoi-wallpapers.js"', html)
-        self.assertIn('href="emoi-archive-glass.css"', html)
-        self.assertLess(html.index('src="emoi-wallpapers.js"'), html.index('src="app.js"'))
+        self.assertRegex(html, r'src="emoi-wallpapers\.js(?:\?v=\d+)?"')
+        self.assertRegex(html, r'href="emoi-archive-glass\.css(?:\?v=\d+)?"')
+        self.assertLess(html.index('src="emoi-wallpapers.js'), html.index('src="app.js'))
 
     def test_js_hooks_follow_current_page_and_room(self):
         js = (WEB / "app.js").read_text(encoding="utf-8")

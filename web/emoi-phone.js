@@ -7,10 +7,12 @@
 const MODE_KEY='emoi-ui-mode-v1';
 const CONTACTS_KEY='emoi-ui-contacts-v1';
 const GROUPS_KEY='emoi-ui-groups-v1';
+const HOME_INK_KEY='emoi-home-ink-v1';
 const phone=document.getElementById('emoiPhone');
 if(!phone)return;
 const $=(s,r=document)=>r.querySelector(s);
 const icoPaths={
+  compose:'<path d="M12 4H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-7M10 14l1-4 7-7 3 3-7 7-4 1Z"/>',
   chat:'<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 9 9 0 0 1-4-.95L3 21l1.95-5a9 9 0 1 1 16.05-4.5Z"/>',
   contacts:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   memory:'<path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 3v6h6M7.5 14a5 5 0 0 0 9 2"/><path d="M12 11v4"/>',
@@ -36,6 +38,17 @@ const icoPaths={
   switch:'<rect x="3" y="7" width="18" height="11" rx="5.5"/><circle cx="8.5" cy="12.5" r="3"/>'
 };
 const icon=name=>'<svg viewBox="0 0 24 24" role="presentation" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(icoPaths[name]||icoPaths.more)+'</svg>';
+const launcherGlyphs={
+ chat:'<path d="M12 3.5c-5.1 0-9.2 3.4-9.2 7.9 0 2.4 1.2 4.5 3.3 5.9l-.7 3.1 3.9-1.8c.9.3 1.8.4 2.7.4 5.1 0 9.2-3.4 9.2-7.6 0-4.5-4.1-7.9-9.2-7.9Z"/>',
+ contacts:'<circle cx="12" cy="7.4" r="4"/><path d="M4.1 19.5c0-4 3.4-6.8 7.9-6.8s7.9 2.8 7.9 6.8c0 .8-.5 1.2-1.4 1.2h-13c-.9 0-1.4-.4-1.4-1.2Z"/>',
+ reading:'<path d="M2.8 5.4c3.3-1 6.4-.5 8.4 1v13.3c-2.5-1.6-5.4-2-8.4-1.1Zm18.4 0c-3.3-1-6.4-.5-8.4 1v13.3c2.5-1.6 5.4-2 8.4-1.1Z"/>',
+ more:'<circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>',
+ room:'<path d="m2 11 9.2-8a1.2 1.2 0 0 1 1.6 0l9.2 8-1.8 2-1.2-1v7.5a1 1 0 0 1-1 1h-3.5v-6h-5v6H6a1 1 0 0 1-1-1V12l-1.2 1Z"/>'
+};
+function homeIcon(name){
+ const glyph=launcherGlyphs[name];
+ return glyph?'<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">'+glyph+'</svg>':icon(name);
+}
 const apps=[
  {id:'chat',label:'信息',icon:'chat',tone:'sky'},
  {id:'contacts',label:'通讯录',icon:'contacts',tone:'stone'},
@@ -49,14 +62,13 @@ const apps=[
  {id:'more',label:'更多',icon:'more',tone:'silver'},
  {id:'settings',label:'设置',icon:'settings',tone:'blue'}
 ];
-const dockIds=['chat','contacts','reading','settings'];
+const dockIds=['chat','contacts','more','settings'];
 function safeRead(key){
  try{const value=JSON.parse(localStorage.getItem(key));return Array.isArray(value)?value:[];}catch{return [];}
 }
 let contacts=safeRead(CONTACTS_KEY).filter(x=>x&&typeof x.id==='string'&&typeof x.name==='string');
 let groups=safeRead(GROUPS_KEY).filter(x=>x&&typeof x.id==='string'&&typeof x.name==='string');
-const remote={direct:new Map()};
-const modelInactive='尚未绑定独立模型';
+const remote={direct:new Map(),latest:new Map()};
 async function remoteSaveContact(person,isNew){
  if(!window.EmoiRelay?.enabled)return;
  try{
@@ -73,8 +85,8 @@ async function remoteSaveGroup(group,isNew){
  try{
    const path=isNew?'/emoi/v2/conversations':'/emoi/v2/conversations/'+encodeURIComponent(group.id);
    await window.EmoiRelay.json(path,isNew?'POST':'PATCH',{id:group.id,title:group.name,kind:'group',members:group.members});
-   group.remote=true;save(GROUPS_KEY,groups)
- }catch(e){console.warn('Émoi 群聊草稿同步未完成：',e.message)}
+   group.remote=true;return true;
+ }catch(e){console.warn('Émoi 群聊同步未完成：',e.message);return false}
 }
 async function syncRemote(){
  if(!window.EmoiRelay?.enabled)return;
@@ -94,8 +106,13 @@ async function syncRemote(){
   }
   save(CONTACTS_KEY,contacts);
   for(const conv of rooms.conversations||[]){
+    if(conv.latest)remote.latest.set(conv.id,conv.latest);
     if(conv.kind==='direct')for(const id of conv.members||[])remote.direct.set(id,conv.id);
-    if(conv.kind==='group'&&!groups.some(g=>g.id===conv.id))groups.push({id:conv.id,name:conv.title,members:conv.members||[],remote:true});
+    if(conv.kind==='group'){
+     const local=groups.find(g=>g.id===conv.id);
+     if(local)Object.assign(local,{name:conv.title,members:conv.members||[],remote:true});
+     else groups.push({id:conv.id,name:conv.title,members:conv.members||[],remote:true});
+    }
   }
   for(const g of groups){if(!(rooms.conversations||[]).some(c=>c.id===g.id))await remoteSaveGroup(g,true)}
   save(GROUPS_KEY,groups);
@@ -114,20 +131,43 @@ function actionButton(label,iconName,callback,className='ep-round'){
  const b=create('button',className);b.type='button';b.setAttribute('aria-label',label);b.innerHTML=icon(iconName);b.addEventListener('click',callback);return b;
 }
 function timeText(){return new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false})}
-function dateText(){return new Date().toLocaleDateString('zh-CN',{month:'long',day:'numeric',weekday:'long'})}
 function updateClock(){
+ const now=new Date();
  for(const n of document.querySelectorAll('[data-ep-clock]'))n.textContent=timeText();
- for(const n of document.querySelectorAll('[data-ep-date]'))n.textContent=dateText();
+ for(const n of document.querySelectorAll('[data-ep-date]'))n.textContent=now.toLocaleDateString('zh-CN',{month:'long',year:'numeric'});
+ for(const n of document.querySelectorAll('[data-ep-day]'))n.textContent=now.getDate();
+ for(const n of document.querySelectorAll('[data-ep-weekday]'))n.textContent=now.toLocaleDateString('zh-CN',{weekday:'long'});
+}
+function syncHomeViewport(){
+ document.documentElement.toggleAttribute('data-emoi-home',mode==='phone'&&screen==='home');
 }
 function setMode(next){
  if(next!=='phone'&&next!=='art')return;
- mode=next;document.body.dataset.uiMode=next;
+ mode=next;document.body.dataset.uiMode=next;syncHomeViewport();
  try{localStorage.setItem(MODE_KEY,next)}catch{}
- if(next==='phone'){const menu=$('#moreMenu');if(menu)menu.hidden=true;const drawer=$('#drawerWrap');if(drawer)drawer.hidden=true;const workspace=$('#workspaceDialog');if(workspace?.open)workspace.close();openHome()}else{phone.hidden=true;document.getElementById('app').inert=false;document.getElementById('app').removeAttribute('aria-hidden');}
+ if(next==='phone'){
+  const menu=$('#moreMenu');if(menu)menu.hidden=true;
+  const drawer=$('#drawerWrap');if(drawer)drawer.hidden=true;
+  const workspace=$('#workspaceDialog');if(workspace?.open)workspace.close();
+  try{openHome()}
+  catch(error){
+   console.error('Émoi 桌面启动失败',error);
+   mode='art';document.body.dataset.uiMode=mode;syncHomeViewport();
+   phone.hidden=true;
+   const app=document.getElementById('app');app.inert=false;app.removeAttribute('aria-hidden');
+   const startup=$('#emoiStartup');
+   if(startup){startup.hidden=false;startup.querySelector('span').textContent='桌面未能打开，请重新加载。'}
+   return;
+  }
+ }else{
+  phone.hidden=true;document.getElementById('app').inert=false;document.getElementById('app').removeAttribute('aria-hidden');
+ }
+ const startup=$('#emoiStartup');if(startup)startup.hidden=true;
 }
 function setScreen(next){
+ if(next!=='home'){homeEditing=false;homeSelection=null}
  screen=next;
- document.body.dataset.phoneScreen=next;
+ document.body.dataset.phoneScreen=next;syncHomeViewport();
  phone.hidden=next==='legacy'||mode!=='phone';
  const app=document.getElementById('app');
  app.inert=mode==='phone'&&next!=='legacy';
@@ -145,39 +185,216 @@ function header(title,onBack){
  return el;
 }
 function view(){const v=$('#emoiPhoneView');v.replaceChildren();return v}
+const HOME_LAYOUT_KEY='emoi-home-layout-v1';
+const homeWidgets={
+ calendar:{label:'日历', icon:'calendar', markup:'<span class="ep-widget-month" data-ep-date></span><strong class="ep-widget-day" data-ep-day></strong><span data-ep-weekday></span>'},
+ reading:{label:'共读', icon:'reading', markup:'<strong>书房</strong><span>继续共读</span>'},
+ room:{label:'Room', icon:'room', markup:'<strong>自主空间</strong><span>打开 Room</span>'}
+};
+const widgetId=id=>'widget:'+id;
+const homeApps=apps.filter(app=>!['more','settings'].includes(app.id));
+const initialHomeLayout=[
+ {id:widgetId('calendar'),wide:false},{id:widgetId('reading'),wide:false},
+ ...homeApps.map(({id})=>({id,wide:false}))
+];
+let homeLayout=readHomeLayout();
+let homeEditing=false, homeSelection=null;
+let darkHomeInk=false;
+try{darkHomeInk=localStorage.getItem(HOME_INK_KEY)==='black'}catch{}
+
+
+function readHomeLayout(){
+ try{
+  const stored=JSON.parse(localStorage.getItem(HOME_LAYOUT_KEY));
+  if(!Array.isArray(stored))return initialHomeLayout.slice();
+  const allowed=new Set([...homeApps.map(({id})=>id),...Object.keys(homeWidgets).map(widgetId)]);
+  const items=[];
+  for(const item of stored){
+   if(!allowed.delete(item?.id))continue;
+   items.push({id:item.id,wide:item.wide===true && item.id.startsWith('widget:')});
+  }
+  for(const {id} of homeApps)if(allowed.has(id))items.push({id,wide:false});
+  return items;
+ }catch{return initialHomeLayout.slice()}
+}
+
+function homeTextButton(label,handler){
+ const button=create('button','ep-home-control',label);
+ button.type='button';button.onclick=handler;
+ return button;
+}
+
+function editHome(enabled,selection=null){
+ homeEditing=enabled;homeSelection=selection;
+ openHome();
+ (selection?phone.querySelector('[data-home-id="'+selection+'"]'):null)?.focus({preventScroll:true});
+}
+
+function commitHomeLayout(items,selection){
+ if(!save(HOME_LAYOUT_KEY,items))return;
+ homeLayout=items;
+ editHome(true,selection);
+}
+
+function moveHomeItem(id,index){
+ const items=homeLayout.slice();
+ const current=items.findIndex(item=>item.id===id);
+ if(current<0||current===index||index<0||index>=items.length)return;
+ const [item]=items.splice(current,1);
+ items.splice(index,0,item);
+ commitHomeLayout(items,id);
+}
+
+function openWidgetPicker(){
+ const picker=create('dialog','ep-home-picker');
+ picker.setAttribute('aria-label','添加小组件');
+ picker.append(create('h2','','添加小组件'));
+ for(const [id,{label}] of Object.entries(homeWidgets)){
+  const button=homeTextButton(label,()=>{
+   const key=widgetId(id);
+   picker.close();
+   commitHomeLayout([{id:key,wide:false},...homeLayout],key);
+  });
+  button.disabled=homeLayout.some(item=>item.id===widgetId(id));
+  picker.append(button);
+ }
+ picker.append(homeTextButton('关闭',()=>picker.close()));
+ picker.addEventListener('close',()=>picker.remove(),{once:true});
+ document.body.append(picker);picker.showModal();
+}
+
+function bindHomeGesture(button,id){
+ let press,ignoreClick=false;
+ const clear=()=>{if(press)clearTimeout(press.timer);press=null};
+ button.addEventListener('pointerdown',event=>{
+  if(!event.isPrimary||event.button!==0)return;
+  ignoreClick=false;
+  press={x:event.clientX,y:event.clientY,id:event.pointerId,dragging:false};
+  if(!homeEditing)press.timer=setTimeout(()=>{
+   clear();editHome(true,id);
+  },500);
+  else button.setPointerCapture(event.pointerId);
+ });
+ button.addEventListener('pointermove',event=>{
+  if(!press||press.id!==event.pointerId||Math.hypot(event.clientX-press.x,event.clientY-press.y)<9&&!press.dragging)return;
+  if(!homeEditing){clear();return}
+  press.dragging=true;
+  button.classList.add('ep-home-dragging');
+  const target=document.elementFromPoint(event.clientX,event.clientY)?.closest('[data-home-id]');
+  const grid=button.parentElement;
+  grid.querySelector('.ep-home-drop')?.classList.remove('ep-home-drop');
+  press.target=target?.parentElement===grid&&target!==button?target:null;
+  press.target?.classList.add('ep-home-drop');
+ });
+ function finish(event){
+  if(!press||press.id!==event.pointerId)return;
+  const {dragging,target}=press;
+  clear();
+  button.classList.remove('ep-home-dragging');
+  target?.classList.remove('ep-home-drop');
+  if(!dragging)return;
+  ignoreClick=true;
+  if(event.type==='pointerup'&&target)moveHomeItem(id,homeLayout.findIndex(item=>item.id===target.dataset.homeId));
+ }
+ button.addEventListener('pointerup',finish);
+ button.addEventListener('pointercancel',finish);
+ button.addEventListener('lostpointercapture',finish);
+ button.addEventListener('pointerleave',()=>{if(!homeEditing)clear()});
+ button.addEventListener('contextmenu',event=>event.preventDefault());
+ button.addEventListener('click',event=>{
+  if(ignoreClick&&event.detail){ignoreClick=false;return}
+  if(homeEditing)editHome(true,id);
+  else openApp(id.replace(/^widget:/,''));
+ });
+}
+
 function openHome(){
  setScreen('home');
+ const previousScroll=phone.querySelector('.ep-home-scroll')?.scrollTop||0;
  const root=view();root.className='ep-view ep-home';
- const headerEl=create('header','ep-home-top');
- const title=create('div','ep-home-brand');title.innerHTML='<span class="ep-overline">A PLACE TO KEEP</span><h1>Émoi</h1><small>OURSPACE</small>';
- const actions=create('div','ep-home-top-actions');
- actions.append(actionButton('更换桌面壁纸','photo',()=>window.EmoiWallpapers?.open()));
- actions.append(actionButton('界面设置','settings',openSettings));
- for(const button of actions.children)button.setAttribute('data-ep-optics','');headerEl.append(title,actions);root.append(headerEl);
- const scroll=create('div','ep-home-scroll');
- const card=create('section','ep-hero-widget');card.setAttribute('data-ep-optics','');
- card.innerHTML='<div class="ep-widget-kicker">OUR LITTLE UNIVERSE <span class="ep-widget-serial">01 / 02</span></div><div class="ep-widget-date" data-ep-date></div><div class="ep-widget-clock" data-ep-clock></div><div class="ep-widget-footer"><span class="ep-orbit-glyph" aria-hidden="true"></span><div><strong>每一次相遇，都值得留下。</strong><small>在这里，慢慢记录我们的日常。</small></div></div>';
- card.addEventListener('click',()=>openApp('journal'));
- card.setAttribute('title','打开日记');card.setAttribute('role','button');card.tabIndex=0;
- card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openApp('journal')}});
- scroll.append(card);
- const heading=create('div','ep-app-group-title');heading.append(create('span','','我们的空间'),create('small','','APPLICATIONS'));
- scroll.append(heading);
- const grid=create('div','ep-app-grid');
- for(const a of apps.filter(a=>a.id!=='settings')){
-  const b=create('button','ep-app');b.type='button';b.dataset.epApp=a.id;
-  b.innerHTML='<span class="ep-app-icon tone-'+a.tone+'">'+icon(a.icon)+'</span><span class="ep-app-label"></span>';
-  b.querySelector('.ep-app-label').textContent=a.label;
-  b.addEventListener('click',()=>openApp(a.id));grid.append(b);
+ root.toggleAttribute('data-home-editing',homeEditing);
+ root.dataset.homeInk=darkHomeInk?'black':'white';
+ const top=create('header','ep-home-top');
+ const clock=create('time','ep-desktop-clock');clock.setAttribute('data-ep-clock','');
+ const actions=create('div','ep-home-actions');
+ const wallpaper=actionButton('更换桌面壁纸','photo',()=>window.EmoiWallpapers?.open(),'ep-home-control ep-home-square');
+ wallpaper.setAttribute('data-ep-optics','');
+ const ink=homeTextButton('',()=>{
+  darkHomeInk=!darkHomeInk;
+  try{localStorage.setItem(HOME_INK_KEY,darkHomeInk?'black':'white')}catch{}
+  root.dataset.homeInk=darkHomeInk?'black':'white';
+  updateInkControl();
+ });
+ function updateInkControl(){
+  ink.textContent=darkHomeInk?'白字':'黑字';
+  ink.setAttribute('aria-label',darkHomeInk?'切换为白色图标和文字':'切换为黑色图标和文字');
  }
- scroll.append(grid);
- const caption=create('p','ep-home-caption','THE SMALL THINGS ARE THE BIG THINGS.');
- scroll.append(caption);
- root.append(scroll);
+ updateInkControl();
+ ink.classList.add('ep-home-ink-toggle');
+ ink.setAttribute('data-ep-optics','');
+ actions.append(wallpaper,ink);
+ if(homeEditing)actions.append(homeTextButton('添加小组件',openWidgetPicker));
+ const edit=homeTextButton(homeEditing?'完成':'编辑',()=>{
+  editHome(!homeEditing);
+  phone.querySelector('.ep-home-edit').focus({preventScroll:true});
+ });
+ edit.classList.add('ep-home-edit');edit.setAttribute('aria-pressed',String(homeEditing));
+ actions.append(edit);top.append(clock,actions);root.append(top);
+ if(homeEditing){
+  const bar=create('div','ep-home-editbar');
+  const index=homeLayout.findIndex(item=>item.id===homeSelection);
+  if(index<0)bar.append(create('span','','拖动图标或小组件，也可点选后移动'));
+  else{
+   const selected=homeLayout[index];
+   const widget=homeWidgets[selected.id.split(':')[1]];
+   for(const [label,offset] of [['前移',-1],['后移',1]]){
+    const control=homeTextButton(label,()=>moveHomeItem(selected.id,index+offset));
+    control.disabled=!homeLayout[index+offset];bar.append(control);
+   }
+   if(widget){
+    bar.append(homeTextButton(selected.wide?'缩小':'放大',()=>commitHomeLayout(
+     homeLayout.map(item=>item===selected?{...item,wide:!item.wide}:item),selected.id)));
+    bar.append(homeTextButton('移除',()=>commitHomeLayout(homeLayout.filter(item=>item!==selected),null)));
+   }
+  }
+  root.append(bar);
+ }
+ const scroll=create('div','ep-home-scroll');
+ const grid=create('div','ep-home-grid');
+ for(const {id,wide} of homeLayout){
+  const widget=homeWidgets[id.split(':')[1]];
+  const button=create('button',widget?'ep-home-widget':'ep-app');
+  button.type='button';button.dataset.homeId=id;
+  if(homeEditing)button.setAttribute('aria-pressed',String(homeSelection===id));
+  if(widget){
+   button.dataset.widget=id.split(':')[1];
+   button.toggleAttribute('data-wide',wide);
+   button.setAttribute('data-ep-optics','');
+   button.setAttribute('aria-label',id===widgetId('reading')?'打开共读书房':'打开'+widget.label);
+   button.innerHTML='<span class="ep-widget-copy">'+widget.markup+'</span><span class="ep-widget-glyph">'+icon(widget.icon)+'</span>';
+  }else{
+   const app=homeApps.find(item=>item.id===id);
+   button.dataset.epApp=id;
+   const lens=create('span','ep-app-icon');lens.setAttribute('data-ep-optics','');lens.innerHTML=homeIcon(app.icon);
+   button.append(lens,create('span','ep-app-label',app.label));
+  }
+  bindHomeGesture(button,id);grid.append(button);
+ }
+ scroll.append(grid);root.append(scroll);
+ scroll.scrollTop=previousScroll;
+ const bottom=create('div','ep-home-bottom');
+ const search=actionButton('搜索联系人','search',openContacts,'ep-home-control ep-home-search');
+ search.innerHTML='<span>'+icon('search')+'搜索</span>';
+ search.setAttribute('data-ep-optics','');
  const dock=create('nav','ep-dock');dock.setAttribute('aria-label','常用应用');
- for(const id of dockIds){const a=apps.find(x=>x.id===id);const b=create('button','ep-dock-app');b.type='button';b.setAttribute('aria-label',a.label);
- b.innerHTML='<span class="ep-dock-icon tone-'+a.tone+'">'+icon(a.icon)+'</span>';b.addEventListener('click',()=>openApp(id));dock.append(b)}
- dock.setAttribute('data-ep-optics','');root.append(dock);
+ for(const id of dockIds){
+  const app=apps.find(item=>item.id===id);
+  const button=actionButton(app.label,app.icon,()=>openApp(id),'ep-dock-app');
+  button.innerHTML='<span class="ep-dock-icon" data-ep-optics>'+homeIcon(app.icon)+'</span>';
+  dock.append(button);
+ }
+ dock.setAttribute('data-ep-optics','');
+ bottom.append(search,dock);root.append(bottom);
  updateClock();
 }
 function listItem(id,title,subtitle,iconName,handler){
@@ -187,25 +404,66 @@ function listItem(id,title,subtitle,iconName,handler){
  b.append(ava,content);const arrow=create('span','ep-row-chevron');arrow.innerHTML=icon('right');b.append(arrow);b.addEventListener('click',handler);return b;
 }
 function openMessages(){
- setScreen('messages');const root=view();root.className='ep-view ep-list-screen';root.append(header('信息',openHome));
- const content=create('div','ep-list-scroll');
- const title=create('div','ep-list-intro');title.append(create('small','','MESSAGES'),create('h2','','对话'));
- content.append(title);
- const topActions=create('div','ep-list-actions');
- topActions.append(actionButton('添加联系人','plus',()=>openContactEditor()));
- const addText=create('button','ep-link','新联系人');addText.type='button';addText.onclick=()=>openContactEditor();topActions.append(addText);
- content.append(topActions);
- const list=create('div','ep-list-panel');
- for(const p of contacts)list.append(listItem(p.id,p.name,modelInactive,'contacts',()=>openContactConversation(p.id)));
- for(const g of groups)list.append(listItem(g.id,g.name,'私人群聊 · '+g.members.length+' 位成员','chat',()=>openGroupConversation(g.id)));
- if(!contacts.length&&!groups.length){
-   const empty=create('div','ep-list-empty');empty.innerHTML='<span class="ep-empty-symbol">'+icon('chat')+'</span><strong>还没有联系人</strong><p>这里不会预先替你创建 GPT 或 Claude。<br>添加属于自己的 AI 联系人，再决定如何连接。</p>';
-   list.append(empty);
+ setScreen('messages');
+ const root=view();root.className='ep-view ep-messages';
+ const top=create('header','ep-messages-top');
+ top.append(actionButton('返回桌面','back',openHome,'ep-messages-action'));
+ const compose=actionButton('新信息','compose',openMessageRecipients,'ep-messages-action');
+ top.append(compose);
+ const list=create('div','ep-messages-list');
+ const heading=create('h1','','信息');
+ const search=create('input','ep-messages-search');search.type='search';search.placeholder='搜索';search.setAttribute('aria-label','搜索会话');
+ const rows=create('div','ep-message-threads');
+ const threads=[
+  ...contacts.map(p=>({id:p.id,name:p.name,kind:'contact',remoteId:remote.direct.get(p.id),open:()=>openContactConversation(p.id)})),
+  ...groups.map(g=>({id:g.id,name:g.name,kind:'group',remoteId:g.id,members:g.members.length,open:()=>openGroupConversation(g.id)}))
+ ].map(thread=>{
+  const saved=remote.latest.get(thread.remoteId);
+  const local=window.EmoiMessageApp?.latest(thread.kind,thread.id);
+  return {...thread,last:local && (!saved || local.created_at>=saved.created_at)?local:saved};
+ }).sort((a,b)=>String(b.last?.created_at||'').localeCompare(String(a.last?.created_at||'')));
+ function renderThreads(){
+  const query=search.value.trim().toLowerCase();
+  const matches=threads.filter(thread=>[thread.name,thread.last?.text].some(text=>text?.toLowerCase().includes(query)));
+  rows.replaceChildren();
+  for(const thread of matches){
+   const row=create('button','ep-message-thread');row.type='button';row.dataset.entry=thread.id;
+   const avatar=create('span','ep-thread-avatar',thread.kind==='contact'?thread.name.slice(0,1):undefined);
+   if(thread.kind==='group')avatar.innerHTML=icon('contacts');else void window.EmoiAvatars?.paint(avatar,thread.id);
+   const copy=create('span','ep-thread-copy');
+   const topLine=create('span','ep-thread-topline');
+   topLine.append(create('strong','',thread.name));
+   if(thread.last?.created_at)topLine.append(create('time','',new Date(thread.last.created_at).toLocaleDateString('zh-CN',{month:'numeric',day:'numeric'})));
+   copy.append(topLine,create('span','ep-thread-preview',thread.last?.text||(thread.kind==='group'?thread.members+' 位成员':'新会话')));
+   row.append(avatar,copy);row.onclick=thread.open;rows.append(row);
+  }
+  if(!matches.length)rows.append(create('p','ep-thread-empty',query?'没有匹配的会话':'还没有会话。点右上角写新信息。'));
  }
- content.append(list);
- const btn=create('button','ep-compat-link','打开原有会话（兼容入口）');btn.type='button';btn.addEventListener('click',openLegacy);content.append(btn);
- const group=create('button','ep-quiet-link');group.innerHTML=icon('plus')+' 创建群聊草稿';group.type='button';group.addEventListener('click',openGroupEditor);content.append(group);
- root.append(content);
+ search.addEventListener('input',renderThreads);renderThreads();
+ list.append(heading,search,rows);
+ const legacy=homeTextButton('原有会话',openLegacy);legacy.className='ep-messages-legacy';
+ list.append(legacy);root.append(top,list);
+}
+
+function openMessageRecipients(){
+ const dialog=create('dialog','ep-edit-dialog ep-message-recipients');
+ dialog.setAttribute('aria-label','新信息');
+ const title=create('header','ep-recipients-head');title.append(create('strong','','新信息'),actionButton('关闭','x',()=>dialog.close()));
+ const group=homeTextButton('创建群聊',()=>{
+  dialog.close();
+  if(contacts.length<2){openContacts();return}
+  openGroupEditor();
+ });
+ const recipients=create('div','ep-member-list');
+ for(const p of contacts)recipients.append(listItem(p.id,p.name,'','contacts',()=>{dialog.close();openContactConversation(p.id)}));
+ if(contacts.length<2)recipients.append(create('p','ep-help','创建群聊需要至少两位 AI 联系人。'));
+ const actions=create('div','ep-recipients-actions');
+ const add=homeTextButton('添加联系人',()=>{dialog.close();openContacts();openContactEditor()});
+ const manage=homeTextButton('前往通讯录',()=>{dialog.close();openContacts()});
+ actions.append(add,manage);
+ dialog.append(title,group,recipients,actions);
+ dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+ document.body.append(dialog);dialog.showModal();
 }
 function openContacts(){
  setScreen('contacts');const root=view();root.className='ep-view ep-list-screen';root.append(header('通讯录',openHome));
@@ -232,7 +490,7 @@ function openContacts(){
  toolbar.append(add,upload,file);intro.append(toolbar);content.append(intro);
  const list=create('div','ep-list-panel');
  if(!contacts.length)list.append(create('p','ep-inline-empty','尚未添加联系人。姓名、头像与个人档案都由你决定。'));
- for(const p of contacts)list.append(listItem(p.id,p.name,'个人资料 · 本机草稿','contacts',()=>openContactDetail(p.id)));
+ for(const p of contacts)list.append(listItem(p.id,p.name,p.model_route?'角色档案 · '+p.model_route:'角色档案','contacts',()=>openContactDetail(p.id)));
  content.append(list);
  content.append(create('p','ep-help','联系人首先保存在本设备；连接私人服务器后同步身份和独立命名空间。模型、OB 与欲望系统运行权限仍要分别接通和验收。'));
  root.append(content);
@@ -245,8 +503,8 @@ function openContactConversation(id){
 function openGroupConversation(id){
  const g=groups.find(x=>x.id===id);if(!g){openMessages();return}
  setScreen('imessage');const root=view();
- const names=(g.members||[]).map(id=>contacts.find(x=>x.id===id)?.name).filter(Boolean);
- window.EmoiMessageApp?.open(root,{kind:'group',item:g,contactNames:names,conversationId:g.remote?g.id:'',goBack:openMessages});
+ const members=(g.members||[]).map(id=>contacts.find(x=>x.id===id)).filter(Boolean);
+ window.EmoiMessageApp?.open(root,{kind:'group',item:g,members,conversationId:g.remote?g.id:'',goBack:openMessages,manage:()=>openGroupDetail(id)});
 }
 function openContactDetail(id){
  const person=contacts.find(x=>x.id===id);if(!person){openContacts();return;}
@@ -256,7 +514,8 @@ function openContactDetail(id){
  const avatar=create('div','ep-profile-avatar');avatar.textContent=person.name.slice(0,1).toUpperCase();
  body.append(avatar,create('h2','',person.name),create('p','ep-subtitle',person.notes||'还没有填写人物简介'));
  const status=create('div','ep-status-card');
- status.innerHTML='<span class="ep-status-dot"></span><div><strong>尚未绑定 AI 服务</strong><p>这是可编辑的联系人档案。聊天、记忆和唤醒不会误接到其他联系人。</p></div>';
+ status.append(create('span','ep-status-dot'),create('strong','',
+  ['default','gpt','claude'].includes(person.model_route)?'回复路由 · '+person.model_route:'尚未绑定 AI 服务'));
  body.append(status);
  const edit=create('button','ep-action-primary','编辑联系人');edit.type='button';edit.onclick=()=>openContactEditor(person.id);body.append(edit);
  const del=create('button','ep-danger-action','删除联系人草稿');del.type='button';del.onclick=()=>{if(!confirm('确认删除这张本机联系人草稿？已有云端数据不会修改。'))return;contacts=contacts.filter(x=>x.id!==id);save(CONTACTS_KEY,contacts);if(window.EmoiRelay?.enabled)void window.EmoiRelay.request('/emoi/v2/contacts/'+encodeURIComponent(id),{method:'DELETE'}).catch(e=>console.warn(e.message));openContacts()};body.append(del);
@@ -265,25 +524,34 @@ function openContactDetail(id){
 }
 function openGroupDetail(id){
  const g=groups.find(x=>x.id===id);if(!g){openMessages();return}
- setScreen('group-detail');const root=view();root.className='ep-view ep-detail-screen';root.append(header('群聊草稿',openMessages));
+ setScreen('group-detail');const root=view();root.className='ep-view ep-detail-screen';root.append(header('群聊',()=>openGroupConversation(id)));
  const body=create('div','ep-detail-body');const av=create('div','ep-profile-avatar');av.innerHTML=icon('chat');body.append(av,create('h2','',g.name));
  const names=g.members.map(id=>contacts.find(x=>x.id===id)?.name).filter(Boolean);
  body.append(create('p','ep-subtitle',names.length?'成员：'+names.join('、'):'尚未添加成员'));
- const status=create('p','ep-help','这是本机群聊草稿，并未创建真实的群聊会话或授权共享记忆。');body.append(status);
+
  const edit=create('button','ep-action-primary','编辑群聊');edit.onclick=()=>openGroupEditor(g.id);body.append(edit);
- const del=create('button','ep-danger-action','删除群聊草稿');del.onclick=()=>{if(!confirm('确认删除这份本机群聊草稿？'))return;groups=groups.filter(x=>x.id!==id);save(GROUPS_KEY,groups);if(window.EmoiRelay?.enabled)void window.EmoiRelay.request('/emoi/v2/conversations/'+encodeURIComponent(id),{method:'DELETE'}).catch(e=>console.warn(e.message));openMessages()};body.append(del);root.append(body);
+ const del=create('button','ep-danger-action','归档群聊');del.onclick=async()=>{
+  if(!confirm('确认归档这个群聊？'))return;
+  if(g.remote && !window.EmoiRelay?.enabled){alert('连接私人服务器后才能归档此群');return}
+  try{if(g.remote)await window.EmoiRelay.request('/emoi/v2/conversations/'+encodeURIComponent(id),{method:'DELETE'})}
+  catch(e){alert('归档失败：'+e.message);return}
+  groups=groups.filter(x=>x.id!==id);save(GROUPS_KEY,groups);openMessages();
+ };body.append(del);root.append(body);
 }
 let contactDialog=null;
-let groupDialog=null;
 function openContactEditor(id=null,prefill=null){
  const p=contacts.find(x=>x.id===id);
  if(contactDialog?.open)contactDialog.close();
  contactDialog=$('#epContactDialog');const form=$('#epContactForm');
- form.reset();form.elements.name.value=p?.name||prefill?.name||'';form.elements.notes.value=p?.notes||prefill?.notes||'';form.elements.model_route.value=p?.model_route||'';
+ form.reset();form.elements.name.value=p?.name||prefill?.name||'';form.elements.notes.value=p?.notes||prefill?.notes||'';const route=form.elements.model_route;
+ for(const option of [...route.options])if(option.dataset.legacy)option.remove();
+ if(p?.model_route && ![...route.options].some(option=>option.value===p.model_route)){
+  const option=create('option','',p.model_route+'（旧别名）');option.value=p.model_route;option.dataset.legacy='';route.append(option);
+ }
+ route.value=p?.model_route||'';
  $('#epContactHeading').textContent=p?'编辑联系人':'添加联系人';
  contactDialog.dataset.editId=p?.id||'';
  contactDialog.showModal();
- form.elements.name.focus();
 }
 function openGroupEditor(id=null){
  const g=groups.find(x=>x.id===id);
@@ -291,6 +559,8 @@ function openGroupEditor(id=null){
  if(dlg.open)dlg.close();
  form.reset();form.elements.name.value=g?.name||'';
  dlg.dataset.editId=g?.id||'';
+ $('#epGroupHeading').textContent=g?'编辑群聊':'创建群聊';
+ $('#epGroupError').textContent='';
  const members=$('#epGroupMembers');members.replaceChildren();
  for(const c of contacts){
   const label=create('label','ep-member');
@@ -298,7 +568,7 @@ function openGroupEditor(id=null){
   label.append(input,create('span','',c.name));members.append(label);
  }
  if(!contacts.length)members.append(create('p','ep-help','先添加联系人，才能选择群成员。'));
- dlg.showModal();form.elements.name.focus();
+ dlg.showModal();
 }
 function openSettings(){
  setScreen('settings');const root=view();root.className='ep-view ep-settings';root.append(header('设置',openHome));
@@ -362,8 +632,8 @@ function openApp(id){
  return launchPage(id);
 }
 function installDialogs(){
- const c=document.createElement('dialog');c.id='epContactDialog';c.className='ep-edit-dialog';c.innerHTML='<form id="epContactForm"><header><strong id="epContactHeading">添加联系人</strong><button type="button" data-ep-close="contact" aria-label="关闭">'+icon('x')+'</button></header><p>每位 AI 都拥有永久独立身份、记忆及欲望命名空间。模型绑定仍需另行完成。</p><label>联系人姓名<input name="name" type="text" required maxlength="50" autocomplete="off" placeholder="自定义名字"></label><label>角色档案 / 人物简介<textarea name="notes" maxlength="5000" rows="4" placeholder="可以导入人物档案或手动填写"></textarea></label><label>头像（仅存当前设备）<input name="avatar" type="file" accept="image/jpeg,image/png,image/webp"></label><label>模型接口别名（可留空）<input name="model_route" maxlength="100" autocomplete="off" placeholder="例如：我自己的云端模型"></label><footer><button type="button" data-ep-close="contact">取消</button><button type="submit">保存联系人</button></footer></form>';
- const g=document.createElement('dialog');g.id='epGroupDialog';g.className='ep-edit-dialog';g.innerHTML='<form id="epGroupForm"><header><strong>创建群聊草稿</strong><button type="button" data-ep-close="group" aria-label="关闭">'+icon('x')+'</button></header><p>仅保存群组名称与成员，尚未连接群聊消息和记忆授权。</p><label>群聊名称<input name="name" required maxlength="50" placeholder="给群聊起个名字"></label><strong>选择联系人</strong><div id="epGroupMembers" class="ep-member-list"></div><footer><button type="button" data-ep-close="group">取消</button><button type="submit">保存群聊</button></footer></form>';
+ const c=document.createElement('dialog');c.id='epContactDialog';c.className='ep-edit-dialog';c.innerHTML='<form id="epContactForm"><header><strong id="epContactHeading">添加联系人</strong><button type="button" data-ep-close="contact" aria-label="关闭" autofocus>'+icon('x')+'</button></header><p>每位 AI 都拥有永久独立身份、记忆及欲望命名空间。模型绑定仍需另行完成。</p><label>联系人姓名<input name="name" type="text" required maxlength="50" autocomplete="off" placeholder="自定义名字"></label><label>角色档案 / 人物简介<textarea name="notes" maxlength="5000" rows="4" placeholder="可以导入人物档案或手动填写"></textarea></label><label>头像（仅存当前设备）<input name="avatar" type="file" accept="image/jpeg,image/png,image/webp"></label><label>回复模型<select name="model_route"><option value="">不绑定</option><option value="default">默认模型（API 模型链）</option><option value="gpt">GPT（订阅或 API，跟随 GPT 设置）</option><option value="claude">Claude（跟随 Claude 设置）</option></select></label><footer><button type="button" data-ep-close="contact">取消</button><button type="submit">保存联系人</button></footer></form>';
+ const g=document.createElement('dialog');g.id='epGroupDialog';g.className='ep-edit-dialog';g.innerHTML='<form id="epGroupForm"><header><strong id="epGroupHeading">创建群聊</strong><button type="button" data-ep-close="group" aria-label="关闭" autofocus>'+icon('x')+'</button></header><p>已绑定可用模型的成员会依次回复群消息。</p><label>群聊名称<input name="name" required maxlength="50" placeholder="给群聊起个名字"></label><strong>选择联系人</strong><div id="epGroupMembers" class="ep-member-list"></div><p id="epGroupError" role="status"></p><footer><button type="button" data-ep-close="group">取消</button><button type="submit">保存群聊</button></footer></form>';
  document.body.append(c,g);
  c.querySelectorAll('[data-ep-close]').forEach(b=>b.onclick=()=>c.close());
  g.querySelectorAll('[data-ep-close]').forEach(b=>b.onclick=()=>g.close());
@@ -379,23 +649,72 @@ function installDialogs(){
   }).catch(err=>alert('头像处理失败：'+err.message));
   void remoteSaveContact(person,!id);id?openContactDetail(id):openContacts();
  };
- g.querySelector('form').onsubmit=e=>{
+ g.querySelector('form').onsubmit=async e=>{
   e.preventDefault();const form=e.currentTarget,name=form.elements.name.value.trim();if(!name)return;
   const members=[...form.querySelectorAll('input[name="members"]:checked')].map(x=>x.value);
   const id=g.dataset.editId;
-  if(id){const old=groups.find(x=>x.id===id);if(old)Object.assign(old,{name,members})}
-  else groups.push({id:crypto.randomUUID(),name,members});
-  if(!save(GROUPS_KEY,groups))return;g.close();const saved=groups.find(x=>x.id===(id||groups[groups.length-1]?.id));if(saved)void remoteSaveGroup(saved,!id);id?openGroupDetail(id):openMessages();
+  if(members.length>20||members.length<(id?1:2)){
+   $('#epGroupError').textContent=id?'请选择 1–20 位成员。':'请选择 2–20 位 AI 联系人。';return;
+  }
+  const existing=groups.find(group=>group.id===id);
+  const group={...existing,id:id||crypto.randomUUID(),name,members};
+  const submit=form.querySelector('[type=submit]');submit.disabled=true;
+  if(window.EmoiRelay?.enabled){
+   let synced;
+   try{synced=await remoteSaveGroup(group,!existing?.remote)}
+   finally{submit.disabled=false}
+   if(!synced){$('#epGroupError').textContent='群聊同步失败，请确认私人服务器已连接。';return}
+  }else{
+   submit.disabled=false;
+   if(existing?.remote){$('#epGroupError').textContent='请连接私人服务器后再编辑此群。';return}
+  }
+  const next=existing?groups.map(item=>item.id===id?group:item):[...groups,group];
+  if(!save(GROUPS_KEY,next)&&!group.remote)return;
+  groups=next;
+  if(g.open){g.close();openGroupConversation(group.id)}
+
  };
 }
+function trackPhoneViewport(){
+ const root=document.documentElement;
+ const viewport=window.visualViewport;
+ const touch=matchMedia('(pointer: coarse)');
+ root.toggleAttribute('data-ep-standalone',navigator.standalone===true||matchMedia('(display-mode: standalone)').matches);
+ if(!viewport)return;
+ let frame=0;
+ let unoccludedHeight=0;
+ let width=0;
+ function update(){
+  frame=0;
+  const followsKeyboard=touch.matches&&Math.abs(viewport.scale-1)<.02;
+  const top=followsKeyboard?Math.max(0,viewport.offsetTop):0;
+  root.style.setProperty('--ep-visual-top',top+'px');
+  if(followsKeyboard)root.style.setProperty('--ep-visual-height',viewport.height+'px');
+  else root.style.removeProperty('--ep-visual-height');
+  if(!followsKeyboard){root.removeAttribute('data-ep-keyboard');return}
+  const editing=document.activeElement?.matches('textarea, input, [contenteditable="true"]');
+  if(width!==viewport.width||!editing){
+   width=viewport.width;
+   unoccludedHeight=viewport.height;
+  }
+  const layoutHeight=Math.max(unoccludedHeight,root.clientHeight);
+  root.toggleAttribute('data-ep-keyboard',layoutHeight-viewport.height>100);
+ }
+ function schedule(){if(!frame)frame=requestAnimationFrame(update)}
+ viewport.addEventListener('resize',schedule,{passive:true});
+ viewport.addEventListener('scroll',schedule,{passive:true});
+ window.addEventListener('pageshow',schedule);
+ document.addEventListener('focusin',schedule);
+ document.addEventListener('focusout',schedule);
+ update();
+}
 function init(){
- if(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent))document.documentElement.classList.add('ep-native-device');
  const artButton=$('#emoiSwitchToPhone');
  if(artButton)artButton.addEventListener('click',()=>setMode('phone'));
  const back=document.createElement('button');back.id='epLegacyHome';back.type='button';back.setAttribute('aria-label','返回小手机桌面');
  back.innerHTML=icon('back');back.addEventListener('click',openHome);
  document.querySelector('#app .topbar')?.prepend(back);
- installDialogs();setMode(mode);
+ trackPhoneViewport();installDialogs();setMode(mode);
  updateClock();setInterval(updateClock,60000);
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)updateClock()});
  for(const dlg of ['workspaceDialog','wrenRoom']){

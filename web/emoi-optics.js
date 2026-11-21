@@ -1,138 +1,206 @@
-/* Émoi optical liquid glass. Independent implementation guided by user-supplied PDF.
-   Shared wallpaper source, position-aware sampling, WebGL refraction, disposal + fallback.
-*/
-(()=>{
-'use strict';
-const phone=document.getElementById('emoiPhone');if(!phone)return;
-const reduced=matchMedia('(prefers-reduced-motion: reduce)');
-const forced=matchMedia('(forced-colors: active)');
-const instances=new Map();let bg=null,bgImage=null,bgUrl='',sourceTurn=0,enabled=false,raf=0;
-const VS='#version 300 es\nin vec2 position;\nout vec2 uv;\nvoid main(){uv=(position+1.0)*0.5;gl_Position=vec4(position,0.0,1.0);}';
-const FS='#version 300 es\nprecision highp float;\nin vec2 uv;\nout vec4 outColor;\nuniform sampler2D source;\nuniform vec2 res;\nuniform float radius;\nuniform float phase;\nfloat rounded(vec2 p,vec2 size,float r){vec2 q=abs(p)-size+r;return length(max(q,0.0))+min(max(q.x,q.y),0.0)-r;}\nvoid main(){vec2 p=uv*res;float d=rounded(p-res*0.5,res*0.5,min(radius,min(res.x,res.y)*0.5));float mask=1.0-smoothstep(-0.9,0.9,d);float edge=1.0-smoothstep(-min(res.x,res.y)*0.43,0.0,d);vec2 q=(p-res*0.5)/res;float w=sin(uv.y*8.0+phase*0.48)*cos(uv.x*6.0-phase*0.29);vec2 refraction=q*0.008*(0.18+edge*0.82)+vec2(w,-w)*0.0006*edge;vec3 back=texture(source,clamp(uv+refraction,vec2(0.0),vec2(1.0))).rgb;float line=exp(-pow((d+0.85)/1.6,2.0));float topLeft=pow(max(0.0,(1.0-uv.x)*(1.0-uv.y)),1.8);float bottomRight=pow(max(0.0,uv.x*uv.y),1.6);float glint=line*(topLeft*0.74+bottomRight*0.32);vec3 color=mix(back,vec3(0.97,0.99,1.0),0.065);color=mix(color,vec3(1.0),clamp(glint*0.61,0.0,0.64));float a=mask*(0.42+glint*0.15);outColor=vec4(color,a);}';
-function shader(gl,type,src){
- const sh=gl.createShader(type);gl.shaderSource(sh,src);gl.compileShader(sh);
- if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS)){gl.deleteShader(sh);return null}return sh;
-}
-function setup(gl){
- const v=shader(gl,gl.VERTEX_SHADER,VS),f=shader(gl,gl.FRAGMENT_SHADER,FS);if(!v||!f)return null;
- const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);gl.linkProgram(p);
- gl.deleteShader(v);gl.deleteShader(f);if(!gl.getProgramParameter(p,gl.LINK_STATUS)){gl.deleteProgram(p);return null}
- return p;
-}
-function currentUrl(){
- let value=getComputedStyle(document.documentElement).getPropertyValue('--emoi-active-wallpaper').trim();
- if(!value||value.includes('var('))value=getComputedStyle(document.documentElement).getPropertyValue('--wallpaper').trim();
- const m=value.match(/url\(\s*['"]?([^'")]+)['"]?\s*\)/);
- return m?m[1]:'';
-}
-function drawBackground(){
- const rect=phone.getBoundingClientRect();if(rect.width<20||rect.height<20)return;
- bg=bg||document.createElement('canvas');
- bg.width=Math.round(rect.width);bg.height=Math.round(rect.height);
- const ctx=bg.getContext('2d',{alpha:false});if(!ctx)return;
- const grad=ctx.createLinearGradient(0,0,bg.width,bg.height);
- grad.addColorStop(0,'#f0f7fb');grad.addColorStop(0.48,'#c7dbea');grad.addColorStop(1,'#a1bed7');
- ctx.fillStyle=grad;ctx.fillRect(0,0,bg.width,bg.height);
- if(bgImage&&bgImage.complete&&bgImage.naturalWidth>0){
-  const scale=Math.max(bg.width/bgImage.naturalWidth,bg.height/bgImage.naturalHeight);
-  const width=bgImage.naturalWidth*scale,height=bgImage.naturalHeight*scale;
-  ctx.drawImage(bgImage,(bg.width-width)/2,(bg.height-height)/2,width,height);
- }
- ctx.fillStyle='rgba(238,245,252,.11)';ctx.fillRect(0,0,bg.width,bg.height);
-}
-function loadBackground(){
- const url=currentUrl();if(url===bgUrl&&bg)return;
- bgUrl=url;const turn=++sourceTurn;
- if(!url){bgImage=null;drawBackground();schedule();return}
- const im=new Image();
- im.onload=()=>{if(sourceTurn!==turn)return;bgImage=im;drawBackground();schedule()};
- im.onerror=()=>{if(sourceTurn!==turn)return;bgImage=null;drawBackground();schedule()};
- im.src=url;
- if(!bg){bgImage=null;drawBackground()}
-}
-function attach(target){
- if(instances.has(target))return;
- const canvas=document.createElement('canvas');canvas.className='ep-optical-canvas';canvas.setAttribute('aria-hidden','true');
- const gl=canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:false,antialias:false,depth:false,stencil:false,powerPreference:'low-power'});
- if(!gl)return;
- const program=setup(gl);if(!program)return;
- const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
- gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
- gl.useProgram(program);const loc=gl.getAttribLocation(program,'position');
- gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
- const texture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,texture);
- gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
- gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
- gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
- gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
- const uniforms={source:gl.getUniformLocation(program,'source'),res:gl.getUniformLocation(program,'res'),radius:gl.getUniformLocation(program,'radius'),phase:gl.getUniformLocation(program,'phase')};
- const item={target,canvas,gl,program,buffer,texture,uniforms,visible:true};
- target.prepend(canvas);instances.set(target,item);
- item.resize=new ResizeObserver(schedule);item.resize.observe(target);
- item.observer=new IntersectionObserver(e=>{item.visible=!!e[0]?.isIntersecting;schedule()},{threshold:0,root:phone});item.observer.observe(target);
- canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();dispose(item)},{once:true});
- schedule();
-}
-function dispose(item){
- item.resize?.disconnect();item.observer?.disconnect();
- if(instances.get(item.target)!==item)return;
- instances.delete(item.target);item.target.removeAttribute('data-ep-optics-ready');item.canvas.remove();
- const gl=item.gl;try{gl.deleteTexture(item.texture);gl.deleteBuffer(item.buffer);gl.deleteProgram(item.program)}catch{}
-}
-function draw(item,now){
- if(!bg||!item.visible||!item.target.isConnected)return;
- const rect=item.target.getBoundingClientRect(),parent=phone.getBoundingClientRect();
- const w=Math.round(rect.width),h=Math.round(rect.height);if(w<16||h<16||w>900||h>900)return;
- const scale=Math.min(devicePixelRatio||1,1.5),cw=Math.round(w*scale),ch=Math.round(h*scale);
- const {canvas,gl,program,texture,uniforms}=item;
- if(canvas.width!==cw||canvas.height!==ch){canvas.width=cw;canvas.height=ch}
- const local=document.createElement('canvas');local.width=cw;local.height=ch;
- const ctx=local.getContext('2d');if(!ctx)return;
- const sx=(rect.left-parent.left)*bg.width/parent.width;
- const sy=(rect.top-parent.top)*bg.height/parent.height;
- ctx.drawImage(bg,sx,sy,w*bg.width/parent.width,h*bg.height/parent.height,0,0,cw,ch);
- gl.viewport(0,0,cw,ch);gl.useProgram(program);gl.bindTexture(gl.TEXTURE_2D,texture);
- gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
- gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,local);
- const radius=parseFloat(getComputedStyle(item.target).borderTopLeftRadius)||22;
- gl.uniform1i(uniforms.source,0);gl.uniform2f(uniforms.res,cw,ch);
- gl.uniform1f(uniforms.radius,Math.min(radius,70)*scale);gl.uniform1f(uniforms.phase,now/1000);
- gl.disable(gl.BLEND);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);gl.drawArrays(gl.TRIANGLES,0,6);
- item.target.setAttribute('data-ep-optics-ready','1');
-}
-function schedule(){
- if(raf||!enabled||document.hidden)return;
- raf=requestAnimationFrame(t=>{raf=0;for(const item of [...instances.values()]){
-  if(!item.target.isConnected){dispose(item);continue}
-  draw(item,t);
- }});
-}
-function refresh(){
- const supported=!!document.createElement('canvas').getContext('webgl2');
- enabled=supported&&!reduced.matches&&!forced.matches&&document.body.dataset.uiMode==='phone'&&document.body.dataset.phoneScreen==='home';
- if(!enabled){for(const item of [...instances.values()])dispose(item);return}
- loadBackground();
- const targets=[...phone.querySelectorAll('[data-ep-optics]')].slice(0,7);
- for(const item of [...instances.values()])if(!targets.includes(item.target))dispose(item);
- for(const target of targets)attach(target);
- schedule();
-}
-let debounce;
-const obs=new MutationObserver(mutations=>{
- // Never spin because our own canvas was added.
- if(mutations.every(m=>m.type==='childList'&&[...m.addedNodes].every(n=>n.nodeName==='CANVAS')))return;
- clearTimeout(debounce);debounce=setTimeout(refresh,30);
-});
-function init(){
- obs.observe(phone,{childList:true,subtree:true});
- obs.observe(document.documentElement,{attributes:true,attributeFilter:['style']});
- obs.observe(document.body,{attributes:true,attributeFilter:['data-phone-screen','data-ui-mode']});
- window.addEventListener('resize',()=>{drawBackground();refresh()},{passive:true});
- phone.addEventListener('scroll',schedule,{passive:true,capture:true});
- document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
- reduced.addEventListener?.('change',refresh);forced.addEventListener?.('change',refresh);
- refresh();
-}
-window.EmoiOptics={refresh:()=>{bgUrl='';loadBackground();drawBackground();refresh()},dispose:()=>{obs.disconnect();for(const i of [...instances.values()])dispose(i)}};
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+/* One wallpaper texture and one WebGL context for all home-screen lenses.
+   Draw only when the wallpaper, layout or scroll position changes. */
+(() => {
+  'use strict';
+  const phone = document.getElementById('emoiPhone');
+  if (!phone || matchMedia('(hover: none) and (pointer: coarse)').matches) return;
+  const forced = matchMedia('(forced-colors: active)');
+  const targets = new Map();
+  let image, source, engine, frame = 0;
+
+  const vertex = `
+    attribute vec2 position;
+    varying vec2 uv;
+    void main() {
+      uv = vec2(position.x + 1.0, 1.0 - position.y) * 0.5;
+      gl_Position = vec4(position, 0.0, 1.0);
+    }`;
+  const fragment = `
+    precision highp float;
+    varying vec2 uv;
+    uniform sampler2D wallpaper;
+    uniform vec4 crop;
+    uniform vec2 size;
+    uniform float radius, depth;
+    float roundBox(vec2 p, vec2 halfSize, float r) {
+      vec2 q = abs(p) - halfSize + r;
+      return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+    }
+    void main() {
+      vec2 p = (uv - 0.5) * size;
+      vec2 halfSize = size * 0.5;
+      float r = min(radius, min(halfSize.x, halfSize.y));
+      float d = roundBox(p, halfSize, r);
+      vec2 n = vec2(roundBox(p + vec2(0.5, 0.0), halfSize, r) - d,
+                    roundBox(p + vec2(0.0, 0.5), halfSize, r) - d);
+      n = normalize(n + vec2(0.0001));
+      float bevel = smoothstep(-r * 0.75, -0.8, d);
+      float wave = sin(uv.y * 12.0 + uv.x * 3.0) * cos(uv.x * 8.0);
+      vec2 shift = -n * bevel * bevel * depth
+                   + (uv - 0.5) * 0.55 + vec2(wave, -wave) * (0.12 + 0.4 * bevel);
+      vec3 c = texture2D(wallpaper, crop.xy + (uv + shift / size) * crop.zw).rgb;
+      float light = dot(n, normalize(vec2(-0.65, -1.0)));
+      float rim = (d + 1.1) / 0.72;
+      float shoulder = (d + 3.3) / 1.65;
+      float glint = exp(-rim * rim);
+      float inner = exp(-shoulder * shoulder);
+      c = mix(c * (1.0 - inner * 0.12), vec3(1.0),
+        glint * (0.13 + 0.47 * max(light, 0.0) + 0.16 * max(-light, 0.0)));
+      float opacity = (0.19 + 0.52 * bevel) * (1.0 - smoothstep(-1.2, 0.25, d));
+      gl_FragColor = vec4(c, opacity);
+    }`;
+
+  function createRenderer() {
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl', {alpha: true, premultipliedAlpha: false, depth: false, antialias: false, preserveDrawingBuffer: true});
+    if (!gl) return null;
+    const program = gl.createProgram();
+    for (const [type, code] of [[gl.VERTEX_SHADER, vertex], [gl.FRAGMENT_SHADER, fragment]]) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, code);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) return null;
+      gl.attachShader(program, shader);
+      gl.deleteShader(shader);
+    }
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return null;
+    gl.useProgram(program);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+    const position = gl.getAttribLocation(program, 'position');
+    gl.enableVertexAttribArray(position);
+    gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+    gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    const uniforms = Object.fromEntries(['crop', 'size', 'radius', 'depth'].map(key => [key, gl.getUniformLocation(program, key)]));
+    canvas.addEventListener('webglcontextlost', event => {
+      event.preventDefault();
+      clearLenses();
+    });
+    canvas.addEventListener('webglcontextrestored', () => { engine = undefined; source = undefined; schedule(); });
+    return {canvas, gl, uniforms, uploaded: null};
+  }
+
+  function clearLenses() {
+    for (const [target, layer] of targets) {
+      layer.remove();
+      delete target.dataset.epOpticsReady;
+    }
+    targets.clear();
+  }
+
+  function loadWallpaper(css) {
+    source = css;
+    image = null;
+    clearLenses();
+    const match = /^url\((?:"([^"]+)"|'([^']+)'|([^)]*))\)$/.exec(css);
+    if (!match) return;
+    const incoming = new Image();
+    incoming.onload = () => {
+      if (source !== css) return;
+      image = incoming;
+      schedule();
+    };
+    incoming.src = match[1] || match[2] || match[3];
+  }
+
+  function layout(box) {
+    const scale = Math.max(box.width / image.naturalWidth, box.height / image.naturalHeight);
+    const width = image.naturalWidth * scale, height = image.naturalHeight * scale;
+    return {width, height, left: (box.width - width) / 2, top: (box.height - height) / 2};
+  }
+
+  function render() {
+    if (forced.matches || document.body.dataset.uiMode !== 'phone' || document.body.dataset.phoneScreen !== 'home') {
+      clearLenses();
+      return;
+    }
+    const css = getComputedStyle(phone, '::before').backgroundImage;
+    if (source !== css) loadWallpaper(css);
+    const box = phone.getBoundingClientRect();
+    if (!box.width || !box.height) return;
+    const nodes = [...phone.querySelectorAll('[data-ep-optics]')];
+    if (!image) return;
+    const scene = layout(box);
+    if (engine === undefined) engine = createRenderer();
+    if (!engine || engine.gl.isContextLost()) return;
+    const {canvas, gl, uniforms} = engine;
+    if (engine.uploaded !== image) {
+      try {
+        let texture = image;
+        const scale = Math.min(1, Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE), 2048) / Math.max(image.naturalWidth, image.naturalHeight));
+        if (scale < 1) {
+          texture = document.createElement('canvas');
+          texture.width = Math.max(1, Math.round(image.naturalWidth * scale));
+          texture.height = Math.max(1, Math.round(image.naturalHeight * scale));
+          texture.getContext('2d').drawImage(image, 0, 0, texture.width, texture.height);
+        }
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture);
+      } catch { clearLenses(); return; }
+      engine.uploaded = image;
+    }
+    const active = nodes.map(node => ({node, rect: node.getBoundingClientRect()}))
+      .filter(({rect}) => rect.width > 1 && rect.height > 1 && rect.bottom > box.top && rect.top < box.bottom);
+    for (const [node, layer] of targets) {
+      if (!active.some(item => item.node === node)) {
+        layer.remove();
+        delete node.dataset.epOpticsReady;
+        targets.delete(node);
+      }
+    }
+    if (!active.length) return;
+    const scale = Math.min(devicePixelRatio || 1, 1.5);
+    const width = Math.max(...active.map(({rect}) => Math.ceil(rect.width * scale)));
+    const height = Math.max(...active.map(({rect}) => Math.ceil(rect.height * scale)));
+    if (canvas.width !== width) canvas.width = width;
+    if (canvas.height !== height) canvas.height = height;
+    for (const {node, rect} of active) {
+      const w = Math.ceil(rect.width * scale), h = Math.ceil(rect.height * scale);
+      let layer = targets.get(node);
+      if (!layer) {
+        layer = document.createElement('canvas');
+        layer.className = 'ep-optical-canvas';
+        layer.setAttribute('aria-hidden', 'true');
+        node.prepend(layer);
+        targets.set(node, layer);
+      }
+      if (layer.width !== w) layer.width = w;
+      if (layer.height !== h) layer.height = h;
+      gl.viewport(0, 0, w, h);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.uniform4f(uniforms.crop, (rect.left - box.left - scene.left) / scene.width,
+        (rect.top - box.top - scene.top) / scene.height, rect.width / scene.width, rect.height / scene.height);
+      gl.uniform2f(uniforms.size, rect.width, rect.height);
+      gl.uniform1f(uniforms.radius, parseFloat(getComputedStyle(node).borderTopLeftRadius) || 0);
+      gl.uniform1f(uniforms.depth, Math.min(13, Math.min(rect.width, rect.height) * 0.16));
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      const ctx = layer.getContext('2d');
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(canvas, 0, canvas.height - h, w, h, 0, 0, w, h);
+      node.dataset.epOpticsReady = '1';
+    }
+  }
+
+  function schedule() {
+    if (frame || document.hidden) return;
+    frame = requestAnimationFrame(() => { frame = 0; render(); });
+  }
+
+  const observer = new MutationObserver(mutations => {
+    if (mutations.some(record => record.type === 'attributes' ||
+      [...record.addedNodes, ...record.removedNodes].some(node => node.nodeName !== 'CANVAS'))) schedule();
+  });
+  observer.observe(phone, {childList: true, subtree: true});
+  observer.observe(document.body, {attributes: true, attributeFilter: ['data-ui-mode', 'data-phone-screen', 'data-emoi-wall', 'class']});
+  observer.observe(document.documentElement, {attributes: true, attributeFilter: ['style', 'data-theme']});
+  if (window.ResizeObserver) new ResizeObserver(schedule).observe(phone);
+  window.addEventListener('resize', schedule, {passive: true});
+  phone.addEventListener('scroll', schedule, {passive: true, capture: true});
+  document.addEventListener('visibilitychange', schedule);
+  forced.addEventListener?.('change', schedule);
+  schedule();
 })();

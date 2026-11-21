@@ -11,6 +11,9 @@
 
   const PRESETS = [
     {id:'inherit', name:'跟随全局', caption:'沿用外观设置', value:null},
+    {id:'green-bokeh', name:'夏日流光', caption:'绿意 · 阳光 · 光斑', value:"url('assets/emoi-wallpaper-1.webp')"},
+    {id:'green-window', name:'藤蔓书房', caption:'窗边 · 绿荫 · 午后', value:"url('assets/emoi-wallpaper-2.webp')"},
+    {id:'garden-tram', name:'森系列车', caption:'绿意 · 花影 · 电车', value:"url('assets/emoi-wallpaper-3.webp')"},
     {id:'aura', name:'珍珠蓝光', caption:'液态玻璃 · 雾白蓝', value:"url('assets/emoi-phone-aura.svg')"},
     {id:'archive', name:'植物档案', caption:'雾蓝 · 纸张 · 红线', value:"url('assets/emoi-archive-botanical.svg')"},
     {id:'nocturne', name:'星轨夜色', caption:'深蓝 · 轨道 · 微光', value:"url('assets/emoi-archive-nocturne.svg')"},
@@ -27,10 +30,10 @@
     gpt:'GPT 私聊', claude:'Claude 私聊', group:'三人聊天室'
   };
   const DEFAULTS = {
-    'page:home':'aura', 'page:contacts':'aura', 'page:messages':'aura', 'page:memory':'archive', 'page:reading':'archive', 'page:journal':'archive',
-    'page:cinema':'nocturne', 'page:report':'archive',
-    'page:whisper':'archive', 'page:health':'lily',
-    'page:calendar':'water', 'page:todo':'water'
+    'page:home':'green-window', 'page:contacts':'green-window', 'page:messages':'green-window',
+    'page:memory':'green-window', 'page:reading':'green-window', 'page:journal':'green-window',
+    'page:cinema':'green-window', 'page:report':'green-window', 'page:whisper':'green-window',
+    'page:health':'green-window', 'page:calendar':'green-window', 'page:todo':'green-window'
   };
   const safeRead = (name, fallback) => {
     try {
@@ -60,7 +63,7 @@
     // Respect the older appearance setting when it was changed deliberately.
     const oldTheme = safeRead('emoi-v05-preferences', {}).theme;
     if (oldTheme && oldTheme !== 'water') return 'inherit';
-    return DEFAULTS[key] || (key.startsWith('chat:contact:') || key.startsWith('chat:group:') ? 'aura' : key.startsWith('chat:') ? 'archive' : 'inherit');
+    return DEFAULTS[key] || 'green-window';
   }
   function saveSettings() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); return true; }
@@ -260,7 +263,10 @@
       if (trigger) trigger.addEventListener('click', openPicker);
     }
     const workspace = document.getElementById('workspaceDialog');
-    if (workspace) workspace.addEventListener('close',()=>void activate(lastChat));
+    if (workspace) workspace.addEventListener('close', () => {
+      const {uiMode, phoneScreen} = document.body.dataset;
+      void activate(uiMode === 'phone' && ['home', 'settings'].includes(phoneScreen) ? 'page:home' : lastChat);
+    });
     void activate(activeContext);
   }
 

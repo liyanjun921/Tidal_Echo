@@ -16,16 +16,15 @@ body[data-ui-mode=phone] .wall{background-image:radial-gradient(circle at 30% 25
 body[data-ui-mode=phone] #app{display:none}
 body[data-ui-mode=phone] .emoi-phone-host{
  display:flex;flex-direction:column;position:fixed;z-index:6;
- inset:0;margin:auto;width:407px;max-width:calc(100vw - 30px);
- height:min(862px,calc(var(--viewport) - 28px));
- border:7px solid #263241;border-radius:49px;overflow:hidden;isolation:isolate;
- background:#dce9f5;
- box-shadow:inset 0 0 0 1px #ffffffa3,0 22px 75px rgba(20,43,71,.27),0 0 0 1px #ffffff6b;
+ inset:0;margin:0;width:100%;max-width:none;
+ height:100dvh;height:var(--viewport,100dvh);
+ border:0;border-radius:0;overflow:hidden;isolation:isolate;
+ background:#dce9f5;box-shadow:none;
  color:var(--ep-ink);font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans CJK SC','Segoe UI',sans-serif;
 }
 body[data-ui-mode=phone] .emoi-phone-host::before{
  content:"";position:absolute;inset:0;z-index:-2;pointer-events:none;
- background-image:radial-gradient(ellipse at 82% 2%,rgba(251,252,255,.54),transparent 41%),linear-gradient(165deg,rgba(217,233,245,.18),rgba(234,242,250,.43)),var(--emoi-active-wallpaper,url('assets/water-light.webp'));
+ background-image:radial-gradient(ellipse at 82% 2%,rgba(251,252,255,.54),transparent 41%),linear-gradient(165deg,rgba(217,233,245,.18),rgba(234,242,250,.43)),var(--emoi-active-wallpaper,url('assets/emoi-wallpaper-2.webp'));
  background-size:cover;background-position:center;transform:scale(1.01);
 }
 body[data-ui-mode=phone] .emoi-phone-host::after{
@@ -34,11 +33,10 @@ body[data-ui-mode=phone] .emoi-phone-host::after{
 }
 body[data-ui-mode=phone][data-phone-screen=legacy] #app{
  display:flex;position:fixed;z-index:6;
- inset:0;margin:auto;width:407px;max-width:calc(100vw - 30px);
- height:min(862px,calc(var(--viewport) - 28px));border:7px solid #263241;
- border-radius:49px;overflow:hidden;
- background:#eff5fb;
- box-shadow:0 22px 75px rgba(20,43,71,.27),0 0 0 1px #ffffff73;
+ inset:0;margin:0;width:100%;max-width:none;
+ height:100dvh;height:var(--viewport,100dvh);
+ border:0;border-radius:0;overflow:hidden;
+ background:#eff5fb;box-shadow:none;
 }
 body[data-ui-mode=phone][data-phone-screen=legacy] .emoi-phone-host{display:none}
 body[data-ui-mode=phone][data-phone-screen=legacy] #epLegacyHome{
@@ -55,19 +53,6 @@ body[data-ui-mode=phone][data-phone-screen=legacy] #app .message-bubble{font-siz
 body[data-ui-mode=phone][data-phone-screen=legacy] #app .compose-area{width:100%;padding:4px 9px 19px}
 body[data-ui-mode=phone][data-phone-screen=legacy] #app .composer{border-radius:28px}
 body[data-ui-mode=phone][data-phone-screen=legacy] #app .model-pill{display:none}
-.ep-statusbar{
- flex:none;position:relative;z-index:6;display:flex;align-items:center;justify-content:space-between;
- width:100%;height:45px;padding:6px 27px 0;font-size:14px;letter-spacing:.01em;font-weight:650;
- color:#213b58;text-shadow:0 1px 1px #ffffff8a;pointer-events:none;
-}
-.ep-statusbar .ep-status-island{
- position:absolute;top:9px;left:50%;transform:translateX(-50%);
- width:94px;height:24px;border-radius:18px;background:#26374aaa;
- box-shadow:inset 0 1px 1px #121c2d45,0 1px 1px #fff5;
-}
-.ep-statusbar .ep-status-right{display:flex;gap:5px;align-items:center}
-.ep-status-right svg{height:17px;width:18px;stroke-width:1.8}
-.ep-status-right .ep-battery{width:23px}
 .ep-view{display:flex;flex:1;min-height:0;min-width:0;flex-direction:column}
 .ep-home{position:relative;overflow:hidden}
 .ep-home-top{display:flex;justify-content:space-between;align-items:flex-start;padding:12px 23px 4px;flex:none}
@@ -151,7 +136,6 @@ body[data-ui-mode=phone][data-phone-screen=legacy] #app .model-pill{display:none
 .ep-dock-app{display:grid;place-items:center;flex:1;height:59px;padding:0}
 .ep-dock-icon{height:53px;width:53px;border-radius:17px;box-shadow:inset 0 1px 1px #fff9,0 5px 11px #54708e1c}
 .ep-dock-icon svg{width:26px;height:26px}
-.ep-home-indicator{position:relative;z-index:7;display:block;flex:none;width:112px;height:4px;border-radius:99px;margin:0 auto 9px;background:rgba(39,63,85,.54);box-shadow:0 1px 0 #fff8;pointer-events:none}
 .ep-page-header{
  display:grid;grid-template-columns:43px 1fr 43px;align-items:center;flex:none;
  padding:10px 16px 9px;min-height:58px;border-bottom:1px solid rgba(255,255,255,.52);
@@ -270,9 +254,6 @@ body[data-ui-mode=phone] #workspaceDialog .page-foot{font-size:9px}
  body[data-ui-mode=phone][data-phone-screen=legacy] #app{
    width:100vw;max-width:none;height:var(--viewport);border:none;border-radius:0;box-shadow:none;
  }
- .ep-statusbar{height:calc(36px + env(safe-area-inset-top,0px));padding:env(safe-area-inset-top,0px) 25px 0}
- .ep-statusbar .ep-status-island{top:calc(4px + env(safe-area-inset-top,0px))}
- .ep-home-indicator{margin-bottom:max(6px,env(safe-area-inset-bottom,0px))}
  .ep-home-top{padding-top:10px}
  .ep-dock{margin-bottom:10px}
  body[data-ui-mode=phone] #workspaceDialog.page-sheet{height:100dvh;width:100vw;max-width:100vw;border:none;border-radius:0}
@@ -304,10 +285,49 @@ body[data-ui-mode=phone] #workspaceDialog .page-foot{font-size:9px}
  .ep-app-icon,.ep-dock,.ep-hero-widget,.ep-list-panel{border:1px solid CanvasText}
 }
 
-/* Actual iOS/Android already have a native status bar. Keep the safe area
-   but never draw fabricated signal or battery indicators over the real one. */
-.ep-native-device body[data-ui-mode=phone] .ep-statusbar{height:max(12px,env(safe-area-inset-top,0px));padding:0}
-.ep-native-device body[data-ui-mode=phone] .ep-statusbar>*{visibility:hidden}
 @media(max-width:600px){
  .ep-native-device body[data-ui-mode=phone] .emoi-phone-host .ep-home-top{padding-top:18px}
+}
+
+.ep-startup {
+ position:fixed;z-index:20;inset:0;display:flex;flex-direction:column;
+ align-items:center;justify-content:center;gap:12px;
+ background:#eef3f7;color:#203a4c;text-align:center;padding:24px;
+}
+.ep-startup[hidden] { display:none; }
+.ep-startup strong { font-size:26px; }
+.ep-startup a { color:#175d99; padding:8px 12px; }
+
+.ep-message-recipients {
+ padding: 18px 20px;
+}
+.ep-recipients-head,
+.ep-recipients-actions {
+ display: flex;align-items: center;justify-content: space-between;gap: 8px;flex-wrap: wrap;
+}
+.ep-recipients-head { margin-bottom: 12px; }
+.ep-recipients-head .ep-round { flex: none; }
+.ep-message-recipients .ep-help { color:#526b81;text-shadow:none; }
+@media (max-width: 599px) {
+ body[data-ui-mode=phone] .ep-edit-dialog[open] {
+  --ep-sheet-safe-top: max(12px, env(safe-area-inset-top));
+  position: fixed;
+  inset: var(--ep-visual-top, 0px) 0 auto;
+  width: 100%;
+  height: auto;
+  max-height: calc(var(--ep-visual-height, 100dvh) - var(--ep-sheet-safe-top) - 12px);
+  margin: var(--ep-sheet-safe-top) 0 0;
+  border-radius: 24px;
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+  overscroll-behavior: contain;
+ }
+ html[data-ep-standalone] body[data-ui-mode=phone] .ep-edit-dialog[open] {
+  --ep-sheet-safe-top: max(56px, calc(env(safe-area-inset-top) + 8px));
+ }
+ html[data-ep-keyboard] body[data-ui-mode=phone] .ep-edit-dialog[open] {
+  --ep-sheet-safe-top: 8px;
+  padding-bottom: 8px;
+ }
+ body[data-ui-mode=phone] .ep-message-recipients[open] { padding: 16px 18px; }
+ body[data-ui-mode=phone] .ep-edit-dialog :is(input, textarea, select) { font-size: 16px; }
 }
